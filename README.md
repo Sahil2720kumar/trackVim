@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Here's the complete project summary:
 
-## Getting Started
+---
 
-First, run the development server:
+## TrackVim — Tech Stack Summary
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### Framework & Language
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **Next.js 15** (App Router) — fullstack framework, server components, API routes
+- **TypeScript** — type safety across the entire codebase
+- **React 19** — UI layer
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Database
 
-## Learn More
+- **Neon** — serverless Postgres, edge-compatible
+- **Drizzle ORM** — type-safe queries, migrations
+- **drizzle-kit** — migration CLI (`drizzle-kit push`, `drizzle-kit generate`)
+- **drizzle-zod** — auto-generate Zod schemas from Drizzle tables
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Auth
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Clerk** — authentication, sessions, role management (owner / trainer / member stored in `publicMetadata`)
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Server State & Data Fetching
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **TanStack React Query** — client-side fetching, caching, background refetch, mutations
+- **React Query Devtools** — dev-only query inspector
+
+---
+
+### Validation & Forms
+
+- **Zod** — schema validation on API routes and forms
+- **React Hook Form** — form state management, minimal re-renders
+- **@hookform/resolvers** — connects RHF with Zod via `zodResolver`
+
+---
+
+### UI & Styling
+
+- **Tailwind CSS** — utility-first styling
+- **shadcn/ui** — component library (Nova preset — Lucide + Geist)
+- **Lucide React** — icons
+- **clsx + tailwind-merge** — conditional class merging
+- **class-variance-authority** — variant-based component styling
+- **Geist font** — sans + mono via `next/font/google`
+
+---
+
+### QR System
+
+- **qrcode.react** — generates QR code per member (UUID-based)
+- **jsqr** — decodes QR from webcam frame on scanner page
+
+---
+
+### Tables
+
+- **TanStack React Table** — headless table for members, attendance, payment lists
+
+---
+
+### Date & Time
+
+- **date-fns** — date formatting, expiry checks, attendance grouping
+
+---
+
+### Notifications
+
+- **Sonner** — toast notifications (`toast.success`, `toast.error`)
+
+---
+
+### Dev Tools
+
+- **ESLint + eslint-config-next** — linting
+- **Prettier + prettier-plugin-tailwindcss** — formatting, auto-sorts Tailwind classes
+
+---
+
+### Hosting & Deployment
+
+- **Vercel** — deployment, edge network, pairs natively with Next.js + Neon
+
+---
+
+### What is NOT included (intentional MVP cuts)
+
+- No payment gateway — cash is marked manually by owner
+- No push notifications / email
+- No PDF invoice generation
+- No exercise library in v1 — sessions are type (leg/push/pull) + notes only
+- No bulk member import
+
+---
