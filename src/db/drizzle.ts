@@ -1,6 +1,11 @@
 import { config } from "dotenv";
 import { drizzle } from 'drizzle-orm/neon-http';
 
-config({ path: ".env.local" }); // or .env.local
+config({ path: ".env.local" });
 
-export const db = drizzle(process.env.DATABASE_URL!);
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error('Missing environment variable: DATABASE_URL');
+}
+
+export const db = drizzle(databaseUrl);
