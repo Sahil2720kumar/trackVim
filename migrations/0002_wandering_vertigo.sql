@@ -1,0 +1,3 @@
+ALTER TABLE "gyms" ADD CONSTRAINT "gyms_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "gyms" ADD CONSTRAINT "gyms_subscription_id_gym_subscriptions_id_fk" FOREIGN KEY ("subscription_id") REFERENCES "public"."gym_subscriptions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_gym_id_gyms_id_fk" FOREIGN KEY ("gym_id") REFERENCES "public"."gyms"("id") ON DELETE set null ON UPDATE no action;
