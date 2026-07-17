@@ -24,7 +24,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const parsed = bodySchema.safeParse(await req.json());
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Invalid input" },
@@ -58,10 +65,12 @@ export async function POST(req: Request) {
       notify: true,
     });
 
-    return NextResponse.json({ invitation }, { status: 201 });
+    return NextResponse.json({ message: "Invitation sent" }, { status: 201 });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to send invitation";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[invite-trainer] Clerk invitation failed:", err);
+    return NextResponse.json(
+      { error: "Failed to send invitation" },
+      { status: 500 }
+    );
   }
 }
