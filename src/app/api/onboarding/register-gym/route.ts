@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, isNull, and } from "drizzle-orm";
 import { db } from "@/db/drizzle";
 import { users, gyms } from "@/db/schema";
 import { generateGymCode } from "@/lib/roles";
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Invalid input" },
-      { status: 400 }
+      { status: 400 },
     );
   }
   const { name, address } = parsed.data;
@@ -38,11 +38,10 @@ export async function POST(req: Request) {
   if (dbUser.role) {
     return NextResponse.json(
       { error: "You've already completed onboarding" },
-      { status: 409 }
+      { status: 409 },
     );
   }
 
-  // Fix 1: retry logic around the INSERT itself (atomic, no pre-check race)
   const MAX_ATTEMPTS = 5;
   let gym: typeof gyms.$inferSelect | undefined;
 
@@ -50,56 +49,71 @@ export async function POST(req: Request) {
     try {
       const code = generateGymCode();
 
-      // Fix 2: wrap DB writes in a transaction so they succeed or fail together
       gym = await db.transaction(async (tx) => {
         const [inserted] = await tx
           .insert(gyms)
           .values({ name, address, code, ownerId: dbUser.id })
           .returning();
 
-        await tx
+        const [updated] = await tx
           .update(users)
           .set({ role: "owner", gymId: inserted.id, updatedAt: new Date() })
-          .where(eq(users.id, dbUser.id));
+          .where(and(eq(users.id, dbUser.id), isNull(users.role)))
+          .returning({ id: users.id });
+
+        if (!updated) {
+          throw tx.rollback();
+        }
 
         return inserted;
       });
 
-      break; // insert succeeded, exit retry loop
-
+      break;
     } catch (err: any) {
       const isUniqueViolation = err?.code === "23505";
 
       if (!isUniqueViolation) {
-        // Not a collision — some other DB error, bail out
         console.error("[register-gym] DB error:", err);
-        return NextResponse.json({ error: "Failed to create gym" }, { status: 500 });
+        return NextResponse.json(
+          { error: "Failed to create gym" },
+          { status: 500 },
+        );
       }
 
       if (attempt === MAX_ATTEMPTS - 1) {
-        // Ran out of attempts
-        console.error("[register-gym] Could not generate a unique gym code after", MAX_ATTEMPTS, "attempts");
-        return NextResponse.json({ error: "Could not generate a unique gym code, please try again" }, { status: 500 });
+        console.error(
+          "[register-gym] Could not generate a unique gym code after",
+          MAX_ATTEMPTS,
+          "attempts",
+        );
+        return NextResponse.json(
+          { error: "Could not generate a unique gym code, please try again" },
+          { status: 500 },
+        );
       }
-
-      // Unique collision — loop with a fresh code
     }
   }
 
   if (!gym) {
-    return NextResponse.json({ error: "Failed to create gym" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create gym" },
+      { status: 500 },
+    );
   }
 
-  // Fix 3: Clerk failure doesn't strand the user — DB is source of truth
   try {
     const client = await clerkClient();
     await client.users.updateUserMetadata(userId, {
       publicMetadata: { role: "owner", gymId: gym.id },
     });
   } catch (err) {
-    // Log for reconciliation but don't fail the request
-    // DB already has role: "owner" — middleware can fall back to that
-    console.error("[register-gym] Clerk metadata sync failed for userId:", userId, "gymId:", gym.id, err);
+    console.error(
+      "[register-gym] Clerk metadata sync failed for userId:",
+      userId,
+      "gymId:",
+      gym.id,
+      err,
+    );
   }
 
   return NextResponse.json({ gym }, { status: 201 });
