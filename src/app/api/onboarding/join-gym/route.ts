@@ -5,10 +5,12 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/drizzle";
 import { users, gyms } from "@/db/schema";
 
+
 const bodySchema = z.object({
   code: z.string().trim().min(4).max(12),
-  role: z.enum(["trainer", "member"]),
 });
+
+const JOIN_CODE_ROLE = "member" as const;
 
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -23,7 +25,8 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const { code, role } = parsed.data;
+  const { code } = parsed.data;
+  const role = JOIN_CODE_ROLE;
 
   const [dbUser] = await db
     .select()

@@ -6,7 +6,7 @@ import { db } from "@/db/drizzle";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-// npm install svix
+
 
 export async function POST(req: Request) {
   const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
@@ -42,9 +42,24 @@ export async function POST(req: Request) {
 
   switch (event.type) {
     case "user.created": {
-      const { id, email_addresses, first_name, last_name, username } = event.data;
+      const { id, email_addresses, first_name, last_name, public_metadata,username } =
+        event.data;
       const email = email_addresses?.[0]?.email_address ?? "";
       const name = [first_name, last_name].filter(Boolean).join(" ") || null;
+
+      // If this user was created by accepting an owner's trainer invitation,
+      // Clerk has already copied that invitation's publicMetadata
+      // ({ role: "trainer", gymId }) onto the user by the time this webhook
+      // fires. Trust it — the owner set it server-side when creating the
+      // invitation, the client never had a chance to supply it. A plain
+      // self-serve signup has no publicMetadata yet, so role/gymId stay
+      // null and the user goes through /onboarding as normal.
+      const invitedRole = public_metadata?.role as
+        | "trainer"
+        | "owner"
+        | "member"
+        | undefined;
+      const invitedGymId = public_metadata?.gymId as string | undefined;
 
       const existing = await db
         .select({ id: users.id })
@@ -58,7 +73,8 @@ export async function POST(req: Request) {
           email,
           name,
           username,
-          // role + gymId intentionally left null; set during onboarding
+          role: invitedRole ?? null,
+          gymId: invitedGymId ?? null,
         });
       }
       break;

@@ -1,18 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
-import type { Role } from "@/lib/roles";
 import { useAuth } from "@clerk/nextjs";
 
+// Joining via a shared gym code always makes you a "member" — trainers are
+// added by the gym owner via an invitation, never through this form.
 export default function JoinGymPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const role = (searchParams.get("role") as Role) ?? "member";
   const { getToken } = useAuth();
 
   const [code, setCode] = useState("");
@@ -33,7 +32,7 @@ export default function JoinGymPage() {
       const res = await fetch("/api/onboarding/join-gym", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: code.trim().toUpperCase(), role }),
+        body: JSON.stringify({ code: code.trim().toUpperCase() }),
       });
 
       const data = await res.json();
@@ -44,12 +43,7 @@ export default function JoinGymPage() {
       }
 
       await getToken({ skipCache: true });
-      router.push(
-        `/${role}/dashboard`.replace(
-          "dashboard",
-          role === "member" ? "home" : "dashboard",
-        ),
-      );
+      router.push("/member/home");
       router.refresh();
     } catch {
       setError("Network error. Please try again.");

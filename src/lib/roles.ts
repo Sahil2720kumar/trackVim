@@ -1,15 +1,14 @@
 export type Role = "owner" | "trainer" | "member";
 
+// Trainer is intentionally excluded from self-serve selection. Trainer role
+// is only ever granted via an owner-issued invitation (see
+// /api/owner/invite-trainer), so it can't be chosen here or forged through
+// the join-gym form.
 export const ROLES: { value: Role; label: string; description: string }[] = [
   {
     value: "owner",
     label: "Gym Owner",
     description: "I run a gym and want to manage members, trainers, and plans.",
-  },
-  {
-    value: "trainer",
-    label: "Trainer",
-    description: "I train members at a gym that's already on TrackVim.",
   },
   {
     value: "member",

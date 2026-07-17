@@ -15,6 +15,13 @@
       "when": 1784223551580,
       "tag": "0001_lowly_dakota_north",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784265706828,
+      "tag": "0002_wandering_vertigo",
+      "breakpoints": true
     }
   ]
 }

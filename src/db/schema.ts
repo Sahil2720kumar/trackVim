@@ -37,7 +37,7 @@ export const users = pgTable("users", {
   name: text("name"),
   username: text("username").unique(),
   role: roleEnum("role"), // null until onboarding completes
-  gymId: uuid("gym_id"), // references gyms.id, null until onboarding completes
+  gymId: uuid("gym_id").references(() => gyms.id, { onDelete: "set null" }), // null until onboarding completes
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -47,14 +47,19 @@ export const gyms = pgTable("gyms", {
   name: text("name").notNull(),
   code: text("code").notNull().unique(), // invite code trainers/members join with
   address: text("address"),
-  ownerId: uuid("owner_id").notNull(), // references users.id
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "restrict" }), // prevent deleting a user who owns a gym
 
   // --- Razorpay subscription access gate ---
   subscriptionStatus: gymAccessStatusEnum("subscription_status")
     .notNull()
     .default("trial"),
   trialEndsAt: timestamp("trial_ends_at"),
-  subscriptionId: uuid("subscription_id"), // references gymSubscriptions.id, nullable — current active one
+  subscriptionId: uuid("subscription_id").references(
+    () => gymSubscriptions.id,
+    { onDelete: "set null" }
+  ), // nullable — current active subscription; cleared if subscription is deleted
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

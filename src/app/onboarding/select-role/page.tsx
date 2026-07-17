@@ -12,8 +12,9 @@ export default function SelectRolePage() {
 
   function handleContinue() {
     if (!role) return;
-    const nextRoute = role === "owner" ? "register-gym" : "join-gym";
-    router.push(`/onboarding/${nextRoute}?role=${role}`);
+    router.push(
+      role === "owner" ? "/onboarding/register-gym" : "/onboarding/join-gym",
+    );
   }
 
   return (
