@@ -54,6 +54,14 @@ export async function POST(req: Request) {
   }
 
   const client = await clerkClient();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+  if (!appUrl) {
+    return NextResponse.json(
+      { error: "Application URL is not configured" },
+      { status: 500 }
+    );
+  }
 
   try {
     const invitation = await client.invitations.createInvitation({
@@ -61,7 +69,7 @@ export async function POST(req: Request) {
       publicMetadata: { role: "trainer", gymId: owner.gymId },
       // Clerk includes invitation emails in every plan tier, including free.
       // See https://clerk.com/docs for current invitation flow options.
-      redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/sign-up`,
+      redirectUrl: new URL("/sign-up", appUrl).toString(),
       notify: true,
     });
 

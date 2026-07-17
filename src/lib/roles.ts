@@ -17,7 +17,7 @@ export const ROLES: { value: Role; label: string; description: string }[] = [
   },
 ];
 
-/** Generates a short, human-friendly gym invite code, e.g. "FIT-7K2Q" */
+/** Generates a 6-character human-friendly gym invite code, e.g. "Q8K7PW". */
 export function generateGymCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous chars
   let code = "";

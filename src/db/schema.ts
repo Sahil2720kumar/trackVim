@@ -62,6 +62,7 @@ export const gyms = pgTable("gyms", {
   ), // nullable — current active subscription; cleared if subscription is deleted
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const subscriptionPlans = pgTable("subscription_plans", {
@@ -73,13 +74,14 @@ export const subscriptionPlans = pgTable("subscription_plans", {
   features: jsonb("features"), // { maxTrainers: 5, maxMembers: 200, ... }
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const gymSubscriptions = pgTable("gym_subscriptions", {
   id: uuid("id").primaryKey().defaultRandom(),
   gymId: uuid("gym_id")
     .notNull()
-    .references(() => gyms.id),
+    .references(() => gyms.id, { onDelete: "cascade" }), // cascade: subscription records are owned by the gym
   planId: uuid("plan_id")
     .notNull()
     .references(() => subscriptionPlans.id),
@@ -97,7 +99,7 @@ export const paymentLogs = pgTable("payment_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
   gymSubscriptionId: uuid("gym_subscription_id")
     .notNull()
-    .references(() => gymSubscriptions.id),
+    .references(() => gymSubscriptions.id, { onDelete: "cascade" }), // cascade: logs are owned by the subscription
   razorpayPaymentId: text("razorpay_payment_id"),
   razorpayEvent: text("razorpay_event").notNull(), // 'subscription.charged' | 'subscription.halted' etc.
   amountInr: integer("amount_inr"),

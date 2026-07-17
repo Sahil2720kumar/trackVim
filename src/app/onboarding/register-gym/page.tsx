@@ -34,7 +34,6 @@ export default function RegisterGymPage() {
       });
 
       const data = await res.json();
-      console.log("data from register gym", data);
 
       if (!res.ok) {
         setError(data.error ?? "Something went wrong. Please try again.");

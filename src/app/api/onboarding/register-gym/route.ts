@@ -42,32 +42,65 @@ export async function POST(req: Request) {
     );
   }
 
-  // Ensure a unique invite code (retry a few times on collision)
-  let code = generateGymCode();
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const existing = await db
-      .select({ id: gyms.id })
-      .from(gyms)
-      .where(eq(gyms.code, code))
-      .limit(1);
-    if (existing.length === 0) break;
-    code = generateGymCode();
+  // Fix 1: retry logic around the INSERT itself (atomic, no pre-check race)
+  const MAX_ATTEMPTS = 5;
+  let gym: typeof gyms.$inferSelect | undefined;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      const code = generateGymCode();
+
+      // Fix 2: wrap DB writes in a transaction so they succeed or fail together
+      gym = await db.transaction(async (tx) => {
+        const [inserted] = await tx
+          .insert(gyms)
+          .values({ name, address, code, ownerId: dbUser.id })
+          .returning();
+
+        await tx
+          .update(users)
+          .set({ role: "owner", gymId: inserted.id, updatedAt: new Date() })
+          .where(eq(users.id, dbUser.id));
+
+        return inserted;
+      });
+
+      break; // insert succeeded, exit retry loop
+
+    } catch (err: any) {
+      const isUniqueViolation = err?.code === "23505";
+
+      if (!isUniqueViolation) {
+        // Not a collision — some other DB error, bail out
+        console.error("[register-gym] DB error:", err);
+        return NextResponse.json({ error: "Failed to create gym" }, { status: 500 });
+      }
+
+      if (attempt === MAX_ATTEMPTS - 1) {
+        // Ran out of attempts
+        console.error("[register-gym] Could not generate a unique gym code after", MAX_ATTEMPTS, "attempts");
+        return NextResponse.json({ error: "Could not generate a unique gym code, please try again" }, { status: 500 });
+      }
+
+      // Unique collision — loop with a fresh code
+    }
   }
 
-  const [gym] = await db
-    .insert(gyms)
-    .values({ name, address, code, ownerId: dbUser.id })
-    .returning();
+  if (!gym) {
+    return NextResponse.json({ error: "Failed to create gym" }, { status: 500 });
+  }
 
-  await db
-    .update(users)
-    .set({ role: "owner", gymId: gym.id, updatedAt: new Date() })
-    .where(eq(users.id, dbUser.id));
-
-  const client = await clerkClient();
-  await client.users.updateUserMetadata(userId, {
-    publicMetadata: { role: "owner", gymId: gym.id },
-  });
+  // Fix 3: Clerk failure doesn't strand the user — DB is source of truth
+  try {
+    const client = await clerkClient();
+    await client.users.updateUserMetadata(userId, {
+      publicMetadata: { role: "owner", gymId: gym.id },
+    });
+  } catch (err) {
+    // Log for reconciliation but don't fail the request
+    // DB already has role: "owner" — middleware can fall back to that
+    console.error("[register-gym] Clerk metadata sync failed for userId:", userId, "gymId:", gym.id, err);
+  }
 
   return NextResponse.json({ gym }, { status: 201 });
 }

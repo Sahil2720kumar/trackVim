@@ -1,14 +1,16 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
 export default async function RootPage() {
-  const { userId, sessionClaims } = await auth();
+  const { userId } = await auth();
 
   if (!userId) {
     redirect("/sign-in");
   }
 
-  const role = sessionClaims?.publicMetadata?.role as
+  // currentUser() always returns fresh data from Clerk — no stale cache issue
+  const user = await currentUser();
+  const role = user?.publicMetadata?.role as
     | "owner"
     | "trainer"
     | "member"
@@ -18,7 +20,6 @@ export default async function RootPage() {
     redirect("/onboarding/select-role");
   }
 
-  console.log("role from index", role);
   switch (role) {
     case "owner":
       redirect("/owner/dashboard");

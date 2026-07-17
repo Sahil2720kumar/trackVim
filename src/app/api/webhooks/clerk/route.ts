@@ -4,9 +4,7 @@ import { NextResponse } from "next/server";
 import type { WebhookEvent } from "@clerk/nextjs/server";
 import { db } from "@/db/drizzle";
 import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
-
-
+import { eq, sql } from "drizzle-orm";
 
 export async function POST(req: Request) {
   const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
@@ -42,41 +40,44 @@ export async function POST(req: Request) {
 
   switch (event.type) {
     case "user.created": {
-      const { id, email_addresses, first_name, last_name, public_metadata,username } =
+      const { id, email_addresses, first_name, last_name, public_metadata, username } =
         event.data;
       const email = email_addresses?.[0]?.email_address ?? "";
       const name = [first_name, last_name].filter(Boolean).join(" ") || null;
 
-      // If this user was created by accepting an owner's trainer invitation,
-      // Clerk has already copied that invitation's publicMetadata
-      // ({ role: "trainer", gymId }) onto the user by the time this webhook
-      // fires. Trust it — the owner set it server-side when creating the
-      // invitation, the client never had a chance to supply it. A plain
-      // self-serve signup has no publicMetadata yet, so role/gymId stay
-      // null and the user goes through /onboarding as normal.
-      const invitedRole = public_metadata?.role as
-        | "trainer"
-        | "owner"
-        | "member"
-        | undefined;
-      const invitedGymId = public_metadata?.gymId as string | undefined;
+      // Fix 1: validate metadata at runtime instead of blind casting.
+      // Only accept role === "trainer" (owners and members go through
+      // onboarding themselves; a trainer is the only role an owner can
+      // pre-assign via invitation publicMetadata).
+      const rawRole = public_metadata?.role;
+      const rawGymId = public_metadata?.gymId;
 
-      const existing = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.clerkId, id))
-        .limit(1);
+      const invitedRole: "trainer" | null =
+        rawRole === "trainer" ? "trainer" : null;
 
-      if (existing.length === 0) {
-        await db.insert(users).values({
+      // gymId must be a non-empty string; reject anything else
+      const invitedGymId: string | null =
+        invitedRole === "trainer" &&
+        typeof rawGymId === "string" &&
+        rawGymId.trim().length > 0
+          ? rawGymId.trim()
+          : null;
+
+      // Fix 2: single conflict-ignore insert instead of select-then-insert.
+      // If Clerk delivers this webhook twice, the second insert is a no-op
+      // and we still return 200 so Clerk stops retrying.
+      await db
+        .insert(users)
+        .values({
           clerkId: id,
           email,
           name,
           username,
-          role: invitedRole ?? null,
-          gymId: invitedGymId ?? null,
-        });
-      }
+          role: invitedRole,
+          gymId: invitedGymId,
+        })
+        .onConflictDoNothing({ target: users.clerkId });
+
       break;
     }
 

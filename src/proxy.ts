@@ -1,18 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";import { NextResponse } from "next/server";
 
-/**
- * NOTE ON FILE NAME
- * Next.js only auto-runs middleware from a file literally named `middleware.ts`
- * (at the project root or inside `src/`). If you keep this file as `proxy.ts`,
- * rename/re-export it as `src/middleware.ts`, e.g.:
- *
- *   // src/middleware.ts
- *   export { default, config } from "./proxy";
- *
- * Otherwise Next.js will silently never run this and none of the route
- * protection below will apply.
- */
-
 const isPublicRoute = createRouteMatcher([
   "/",
   "/sign-in(.*)",
