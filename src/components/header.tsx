@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -15,8 +14,16 @@ import {
   CreditCard,
   ChevronRight,
   Building2,
+  CalendarDays,
+  Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  matchBreadcrumbRoute,
+  ownerBreadcrumbRoutes,
+  type BreadcrumbRoute,
+} from "@/lib/breadcrumbs-config";
+import { useBreadcrumbOverride } from "@/providers/BreadcrumbProvider";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -33,40 +40,27 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { SidebarToggle } from "./sidebar";
 
 // ── Breadcrumb ──────────────────────────────────────────────────────────────
-const getBreadcrumbs = (pathname: string) => {
-  const segments = pathname.split("/").filter(Boolean);
-  const breadcrumbs: { label: string; href: string }[] = [];
+import type { BreadcrumbItem } from "@/config/breadcrumbs-config";
 
-  let currentPath = "";
-  for (const segment of segments) {
-    currentPath += `/${segment}`;
-    const label = segment
-      .split("-")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
-    breadcrumbs.push({ label, href: currentPath });
-  }
-  return breadcrumbs;
-};
+interface BreadcrumbProps {
+  items: BreadcrumbItem[];
+}
 
-const Breadcrumb = ({ pathname }: { pathname: string }) => {
-  const breadcrumbs = getBreadcrumbs(pathname);
-
+const Breadcrumb = ({ items }: BreadcrumbProps) => {
   return (
-    <div className="flex items-center gap-1.5 text-xs">
-      {breadcrumbs.map((crumb, idx) => (
-        <div key={idx} className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1.5 text-[13px] overflow-x-auto whitespace-nowrap scrollbar-none">
+      {items.map((crumb, idx) => (
+        <div key={idx} className="flex items-center gap-1.5 flex-shrink-0">
           {idx > 0 && (
-            <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
+            <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
           )}
           <span
             className={cn(
-              "transition-colors",
-              idx === breadcrumbs.length - 1
-                ? "text-foreground font-medium"
+              "transition-colors duration-150",
+              crumb.isActive
+                ? "text-indigo-600 dark:text-indigo-400 font-medium"
                 : "text-muted-foreground hover:text-foreground cursor-pointer",
             )}
           >
@@ -78,19 +72,37 @@ const Breadcrumb = ({ pathname }: { pathname: string }) => {
   );
 };
 
+// ── Sidebar Toggle ───────────────────────────────────────────────────────────
+interface SidebarToggleProps {
+  onClick?: () => void;
+}
+
+const SidebarToggle = ({ onClick }: SidebarToggleProps) => {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={onClick}
+      className="h-9 w-9 rounded-xl hover:bg-accent/60 transition-colors duration-200"
+      aria-label="Toggle sidebar"
+    >
+      <Menu className="h-5 w-5 text-foreground" />
+    </Button>
+  );
+};
+
 // ── Gym Switcher ─────────────────────────────────────────────────────────────
 interface Gym {
   id: string;
   name: string;
-  icon?: string;
   location?: string;
 }
 
 const mockGyms: Gym[] = [
-  { id: "1", name: "PowerFlex Gym", icon: "💪", location: "Downtown" },
-  { id: "2", name: "Iron House", icon: "🏋️", location: "Westside" },
-  { id: "3", name: "Fitness Factory", icon: "⚙️", location: "North Park" },
-  { id: "4", name: "Alpha Gym", icon: "🎯", location: "East End" },
+  { id: "1", name: "PowerFlex Gym", location: "Downtown" },
+  { id: "2", name: "Iron House", location: "Westside" },
+  { id: "3", name: "Fitness Factory", location: "North Park" },
+  { id: "4", name: "Alpha Gym", location: "East End" },
 ];
 
 const GymSwitcher = () => {
@@ -103,14 +115,12 @@ const GymSwitcher = () => {
         <Button
           variant="outline"
           className={cn(
-            "gap-2 h-9 px-3 border-border/60 bg-background/50 hover:bg-accent/60 transition-all duration-200",
+            "gap-2 h-9 px-3 rounded-xl border-border/60 bg-background/50 hover:bg-accent/60 transition-all duration-200",
             open && "ring-2 ring-indigo-500/20 border-indigo-300/50",
           )}
         >
-          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-sm">
-            {selectedGym.icon}
-          </div>
-          <span className="hidden sm:inline text-sm font-medium max-w-[120px] truncate">
+          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+          <span className="hidden sm:inline text-sm font-medium max-w-[140px] truncate">
             {selectedGym.name}
           </span>
           <ChevronDown
@@ -146,13 +156,18 @@ const GymSwitcher = () => {
               >
                 <div
                   className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-lg text-lg flex-shrink-0",
+                    "flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0",
                     isSelected
                       ? "bg-white/20"
                       : "bg-muted group-hover:bg-background",
                   )}
                 >
-                  {gym.icon}
+                  <Building2
+                    className={cn(
+                      "h-4 w-4",
+                      isSelected ? "text-white" : "text-muted-foreground",
+                    )}
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p
@@ -200,7 +215,7 @@ const ThemeToggle = () => {
   }, []);
 
   if (!mounted) {
-    return <div className="h-9 w-9 rounded-lg" />;
+    return <div className="h-9 w-9 rounded-xl" />;
   }
 
   return (
@@ -208,13 +223,13 @@ const ThemeToggle = () => {
       variant="ghost"
       size="icon"
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="h-9 w-9 rounded-lg hover:bg-accent/70 transition-all duration-200"
+      className="h-9 w-9 rounded-xl hover:bg-accent/60 transition-colors duration-200"
       aria-label="Toggle theme"
     >
       {theme === "dark" ? (
         <Sun className="h-4 w-4 text-amber-500" />
       ) : (
-        <Moon className="h-4 w-4" />
+        <Moon className="h-4 w-4 text-muted-foreground" />
       )}
     </Button>
   );
@@ -281,19 +296,21 @@ const NotificationMenu = () => {
         <Button
           variant="ghost"
           size="icon"
-          className="relative h-9 w-9 rounded-lg hover:bg-accent/70 transition-all duration-200"
+          className="relative h-9 w-9 rounded-xl hover:bg-accent/60 transition-colors duration-200"
           aria-label="Notifications"
         >
-          <Bell className="h-4 w-4" />
+          <Bell className="h-4 w-4 text-muted-foreground" />
           {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white ring-2 ring-background">
+            <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-background">
               {unreadCount}
             </span>
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[360px] p-0">
-        {/* ✅ FIX: DropdownMenuLabel must be inside DropdownMenuGroup */}
+      <DropdownMenuContent
+        align="end"
+        className="w-[calc(100vw-1.5rem)] max-w-[360px] p-0"
+      >
         <DropdownMenuGroup>
           <DropdownMenuLabel>
             <div className="flex items-center justify-between px-1 py-1.5">
@@ -318,7 +335,7 @@ const NotificationMenu = () => {
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           {mockNotifications.map((notif) => (
-            <DropdownMenuItem key={notif.id}>
+            <DropdownMenuItem key={notif.id} className="cursor-pointer">
               <div className="flex items-start gap-3 py-0.5 w-full">
                 <div
                   className={cn(
@@ -352,7 +369,7 @@ const NotificationMenu = () => {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>
+          <DropdownMenuItem className="cursor-pointer">
             <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium w-full text-center py-0.5">
               View all notifications
             </span>
@@ -372,8 +389,8 @@ interface UserMenuProps {
 }
 
 const UserMenu = ({
-  userName = "John Doe",
-  userEmail = "john@example.com",
+  userName = "Sahil Kumar",
+  userEmail = "sahil@trackvim.com",
   userRole = "Owner",
   userImage = undefined,
 }: UserMenuProps) => {
@@ -388,7 +405,7 @@ const UserMenu = ({
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="gap-2.5 pl-2 pr-3 h-9 rounded-lg hover:bg-accent/70 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+          className="gap-2.5 pl-2 pr-3 h-9 rounded-xl hover:bg-accent/60 transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-indigo-500/40"
         >
           <Avatar className="h-7 w-7 ring-2 ring-indigo-500/20">
             <AvatarImage src={userImage} alt={userName} />
@@ -397,7 +414,9 @@ const UserMenu = ({
             </AvatarFallback>
           </Avatar>
           <div className="hidden md:flex flex-col items-start">
-            <span className="text-sm font-medium leading-tight">{userName}</span>
+            <span className="text-sm font-medium leading-tight">
+              {userName}
+            </span>
             <span className="text-[11px] text-muted-foreground capitalize leading-tight">
               {userRole}
             </span>
@@ -406,7 +425,6 @@ const UserMenu = ({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60 p-1.5">
-        {/* ✅ FIX: DropdownMenuLabel must be inside DropdownMenuGroup */}
         <DropdownMenuGroup>
           <DropdownMenuLabel>
             <div className="flex items-center gap-3 px-1 py-1">
@@ -432,22 +450,22 @@ const UserMenu = ({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>
+          <DropdownMenuItem className="cursor-pointer">
             <User className="h-4 w-4 mr-2 text-muted-foreground" />
             <span>Profile</span>
           </DropdownMenuItem>
-          <DropdownMenuItem>
+          <DropdownMenuItem className="cursor-pointer">
             <Settings className="h-4 w-4 mr-2 text-muted-foreground" />
             <span>Settings</span>
           </DropdownMenuItem>
-          <DropdownMenuItem>
+          <DropdownMenuItem className="cursor-pointer">
             <CreditCard className="h-4 w-4 mr-2 text-muted-foreground" />
             <span>Billing</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>
+          <DropdownMenuItem className="cursor-pointer">
             <LogOut className="h-4 w-4 mr-2 text-rose-500" />
             <span className="text-rose-600 dark:text-rose-500 font-medium">
               Sign Out
@@ -461,6 +479,10 @@ const UserMenu = ({
 
 // ── Main Header ──────────────────────────────────────────────────────────────
 interface HeaderProps {
+  /** Rarely needed — overrides the auto-derived title for this render. */
+  title?: string;
+  /** Route → breadcrumb config. Defaults to the owner route map. */
+  breadcrumbRoutes?: BreadcrumbRoute[];
   userName?: string;
   userEmail?: string;
   userRole?: string;
@@ -469,8 +491,10 @@ interface HeaderProps {
 }
 
 export function Header({
-  userName = "John Doe",
-  userEmail = "john@example.com",
+  title,
+  breadcrumbRoutes = ownerBreadcrumbRoutes,
+  userName = "Sahil Kumar",
+  userEmail = "sahil@trackvim.com",
   userRole = "Owner",
   userImage = undefined,
   onSidebarToggle,
@@ -478,6 +502,7 @@ export function Header({
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const { overrideLabel } = useBreadcrumbOverride();
 
   useEffect(() => {
     setMounted(true);
@@ -486,46 +511,77 @@ export function Header({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const currentPage =
+  // Dashboard is the root/landing screen — it only ever shows its own
+  // title, never a breadcrumb trail, even if a route match exists.
+  const isDashboard =
+    pathname === "/" ||
+    pathname === "/dashboard" ||
+    pathname === "/owner" ||
+    pathname === "/owner/dashboard";
+
+  // Look up the current path against the breadcrumb config. Returns null
+  // if nothing matches (e.g. a page not yet added to the map).
+  const matchedItems = !isDashboard
+    ? matchBreadcrumbRoute(pathname, breadcrumbRoutes)
+    : null;
+
+  // If a dynamic page has called useBreadcrumbOverride() to set a real
+  // entity name (e.g. a member's name), swap it in for the last crumb.
+  const breadcrumbItems =
+    matchedItems && overrideLabel
+      ? matchedItems.map((item, idx) =>
+          idx === matchedItems.length - 1
+            ? { ...item, label: overrideLabel }
+            : item,
+        )
+      : matchedItems;
+
+  const showBreadcrumbs =
+    mounted && !isDashboard && breadcrumbItems && breadcrumbItems.length > 0;
+
+  // Page heading: explicit title prop > last breadcrumb label > derived
+  // from the URL segment > "Dashboard" as the final fallback.
+  const derivedTitle =
     pathname
       .split("/")
       .pop()
       ?.replace(/-/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase()) || "Dashboard";
 
+  const currentPage =
+    title ??
+    (isDashboard
+      ? "Dashboard"
+      : (breadcrumbItems?.[breadcrumbItems.length - 1]?.label ?? derivedTitle));
+
   return (
     <header
       className={cn(
-        "fixed top-0 right-0 left-0 z-40 h-[64px] transition-all duration-300 md:left-[232px]",
+        "fixed top-0 right-0 left-0 z-40 transition-all duration-300 md:left-[232px]",
         scrolled
           ? "border-b border-border/60 bg-background/90 backdrop-blur-xl shadow-sm"
           : "border-b border-border/40 bg-background/80 backdrop-blur-md",
       )}
     >
-      <div className="flex h-full items-center justify-between px-4 md:px-6">
+      <div className="flex items-center justify-between gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-3 md:py-4">
         {/* Left */}
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
           {onSidebarToggle && <SidebarToggle onClick={onSidebarToggle} />}
-          <div className="hidden md:flex flex-col gap-0.5 min-w-0">
-            <h1 className="text-base font-semibold text-foreground leading-tight truncate">
+          <div className="flex flex-col gap-1 min-w-0">
+            <h1 className="text-base sm:text-lg font-semibold tracking-tight text-foreground leading-none truncate pb-2">
               {currentPage}
             </h1>
-            {mounted && <Breadcrumb pathname={pathname} />}
-          </div>
-          <div className="md:hidden">
-            <h1 className="text-base font-semibold text-foreground">
-              {currentPage}
-            </h1>
+            {showBreadcrumbs && <Breadcrumb items={breadcrumbItems!} />}
           </div>
         </div>
 
         {/* Right */}
-        <div className="flex items-center gap-1.5">
-          <GymSwitcher />
-          <div className="hidden sm:block h-5 w-px bg-border/60 mx-1" />
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
           <ThemeToggle />
           <NotificationMenu />
-          <div className="hidden md:block h-5 w-px bg-border/60 mx-1" />
+          <div className="hidden sm:block h-6 w-px bg-border/60 mx-1 sm:mx-1.5" />
+          <GymSwitcher />
+          <div className="hidden md:block h-6 w-px bg-border/60 mx-1.5" />
           <UserMenu
             userName={userName}
             userEmail={userEmail}

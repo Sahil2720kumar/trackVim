@@ -78,18 +78,19 @@ const navigationConfig: NavConfig = {
         { icon: <></>, label: "Add New Plan", href: "/owner/plans/new" },
       ],
     },
-    {
-      icon: <CalendarCheck className="h-5 w-5" />,
-      label: "Attendance",
-      children: [
-        { icon: <></>, label: "Attendance", href: "/owner/attendance" },
-      ],
-    },
+    // {
+    //   icon: <CalendarCheck className="h-5 w-5" />,
+    //   label: "Attendance",
+    //   children: [
+    //     { icon: <></>, label: "Attendance", href: "/owner/attendance" },
+    //   ],
+    // },
     {
       icon: <CreditCard className="h-5 w-5" />,
       label: "Payments",
       children: [
         { icon: <></>, label: "All Payments", href: "/owner/payments" },
+        { icon: <></>, label: "Add New Payment", href: "/owner/payments/new" },
       ],
     },
     {
@@ -158,31 +159,29 @@ const ChildNavLink = ({
     <Link href={item.href} onClick={onClose}>
       <div
         className={cn(
-          "flex items-center gap-3 px-4 py-2 ml-5 rounded-lg transition-all duration-150 cursor-pointer group relative",
+          "flex items-center gap-3 px-4 py-2 ml-5 rounded-sm transition-all duration-150 cursor-pointer group relative",
           isActive
-            ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/30"
+            ? "text-primary bg-primary/10"
             : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
         )}
       >
         {/* Active bar */}
         {isActive && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-0.5 rounded-full bg-indigo-500" />
+          <span className="absolute left-0 top-1/2 -translate-y-1/2  w-0.5 rounded-full bg-primary" />
         )}
         {/* Dot indicator */}
         <span
           className={cn(
             "w-1.5 h-1.5 rounded-full flex-shrink-0 transition-all duration-150",
             isActive
-              ? "bg-indigo-600 dark:bg-indigo-400 scale-110"
+              ? "bg-primary scale-110"
               : "bg-muted-foreground/30 group-hover:bg-muted-foreground/60",
           )}
         />
         <span
           className={cn(
             "text-sm",
-            isActive
-              ? "font-semibold text-indigo-600 dark:text-indigo-400"
-              : "font-normal",
+            isActive ? "font-semibold text-primary" : "font-normal",
           )}
         >
           {item.label}
@@ -222,7 +221,7 @@ const SidebarItem = ({
             className={cn(
               "w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-sm transition-all duration-150 cursor-pointer select-none group",
               isHighlighted
-                ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300"
+                ? "bg-primary/10 text-primary"
                 : "text-foreground hover:bg-accent/60",
             )}
           >
@@ -231,7 +230,7 @@ const SidebarItem = ({
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 transition-all duration-150",
                   isHighlighted
-                    ? "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400"
+                    ? "bg-primary/15 text-primary"
                     : "text-muted-foreground group-hover:text-foreground bg-transparent group-hover:bg-accent/50",
                 )}
               >
@@ -240,14 +239,14 @@ const SidebarItem = ({
               <span
                 className={cn(
                   " text-sm font-medium ",
-                  isHighlighted ? "text-indigo-700 dark:text-indigo-300" : "",
+                  isHighlighted ? "text-primary" : "",
                 )}
               >
                 {item.label}
               </span>
 
               {item.badge && item.badge > 0 && (
-                <span className="mr-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1.5 text-[10px] font-bold text-white">
+                <span className="mr-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
                   {item.badge}
                 </span>
               )}
@@ -284,7 +283,7 @@ const SidebarItem = ({
               className={cn(
                 "flex h-10 w-10 items-center justify-center rounded-xl cursor-pointer transition-all duration-150",
                 isHighlighted
-                  ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/30"
+                  ? "bg-primary text-primary-foreground shadow-sm shadow-primary/30"
                   : "text-muted-foreground hover:bg-accent/70 hover:text-foreground",
               )}
             >
@@ -312,7 +311,7 @@ const SidebarItem = ({
                 className={cn(
                   "flex h-10 w-10 items-center justify-center rounded-xl cursor-pointer transition-all duration-150",
                   isActive
-                    ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/30"
+                    ? "bg-primary text-primary-foreground shadow-sm shadow-primary/30"
                     : "text-muted-foreground hover:bg-accent/70 hover:text-foreground",
                 )}
               >
@@ -334,7 +333,7 @@ const SidebarItem = ({
         className={cn(
           "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 cursor-pointer group",
           isActive
-            ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300"
+            ? "bg-primary/10 text-primary"
             : "text-foreground hover:bg-accent/60",
         )}
       >
@@ -342,7 +341,7 @@ const SidebarItem = ({
           className={cn(
             "flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 transition-all duration-150",
             isActive
-              ? "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400"
+              ? "bg-primary/15 text-primary"
               : "text-muted-foreground group-hover:text-foreground bg-transparent group-hover:bg-accent/50",
           )}
         >
@@ -351,13 +350,13 @@ const SidebarItem = ({
         <span
           className={cn(
             "flex-1 text-sm font-medium",
-            isActive ? "text-indigo-700 dark:text-indigo-300" : "",
+            isActive ? "text-primary" : "",
           )}
         >
           {item.label}
         </span>
         {item.badge && item.badge > 0 && (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1.5 text-[10px] font-bold text-white">
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
             {item.badge}
           </span>
         )}
@@ -420,9 +419,9 @@ export function Sidebar({
             {/* Collapse toggle (only desktop pointer-events allowed) */}
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="flex items-center justify-center h-9 w-9 rounded-xl flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 shadow-md shadow-indigo-500/25 pointer-events-none md:pointer-events-auto"
+              className="flex items-center justify-center h-9 w-9 rounded-xl flex-shrink-0 bg-primary hover:bg-primary/90 transition-all duration-200 shadow-md shadow-primary/25 pointer-events-none md:pointer-events-auto"
             >
-              <span className="text-white font-bold text-base leading-none">
+              <span className="text-primary-foreground font-bold text-base leading-none">
                 T
               </span>
             </button>
@@ -431,7 +430,7 @@ export function Sidebar({
                 <span className="font-bold text-foreground text-sm leading-tight">
                   TrackVim
                 </span>
-                <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium capitalize">
+                <span className="text-xs text-primary font-medium capitalize">
                   {role} portal
                 </span>
               </div>
@@ -490,21 +489,21 @@ export function Sidebar({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl cursor-pointer text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all duration-150">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl cursor-pointer text-destructive hover:bg-destructive/10 transition-all duration-150">
                     <LogOut className="h-5 w-5" />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent
                   side="right"
-                  className="font-medium text-rose-600"
+                  className="font-medium text-destructive"
                 >
                   Sign Out
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           ) : (
-            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 cursor-pointer text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 group">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg text-rose-500 bg-rose-50 dark:bg-rose-950/30 flex-shrink-0">
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 cursor-pointer text-destructive hover:bg-destructive/10 group">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg text-destructive bg-destructive/10 flex-shrink-0">
                 <LogOut className="h-4 w-4" />
               </span>
               <span className="text-sm font-medium">Sign Out</span>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { RoleCard } from "@/components/onboarding/role-card";
+import { RoleCard } from "@/components/onboarding/RoleCard";
 import { ROLES, type Role } from "@/lib/roles";
 
 export default function SelectRolePage() {

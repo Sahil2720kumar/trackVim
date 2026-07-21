@@ -1,7 +1,7 @@
 "use client";
 
-import { Sidebar } from "@/components/sidebar";
-import { Header } from "@/components/header";
+import { Sidebar } from "@/components/Sidebar";
+import { Header } from "@/components/Header";
 import { ReactNode, useState } from "react";
 
 interface TrainerLayoutProps {
@@ -26,9 +26,7 @@ export default function TrainerLayout({ children }: TrainerLayoutProps) {
         <Header onSidebarToggle={() => setIsMobileSidebarOpen((v) => !v)} />
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto pt-[64px]">
-          {children}
-        </main>
+        <main className="flex-1 overflow-auto pt-[64px]">{children}</main>
       </div>
     </div>
   );

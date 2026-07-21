@@ -2,10 +2,10 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Inter, Merriweather, JetBrains_Mono } from "next/font/google";
-import { ReactQueryProviders } from "@/providers/reactQueryProvider";
+import { ReactQueryProviders } from "@/providers/ReactQueryProvider";
 import { Toaster } from "sonner";
 import "./globals.css";
-import { ThemeProvider } from "@/providers/themeProvider";
+import { ThemeProvider } from "@/providers/ThemeProvider";
 
 const fontSans = Inter({
   subsets: ["latin"],

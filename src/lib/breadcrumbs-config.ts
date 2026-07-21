@@ -1,0 +1,177 @@
+export interface BreadcrumbItem {
+  label: string;
+  href: string;
+  isActive?: boolean;
+}
+
+export interface BreadcrumbRoute {
+  /** Route pattern using :param for dynamic segments, e.g. "/owner/members/:id" */
+  pattern: string;
+  items: BreadcrumbItem[];
+}
+
+/**
+ * Ordered list of route → breadcrumb mappings.
+ *
+ * IMPORTANT: order matters. More specific / literal routes must come
+ * before dynamic ones that could also match the same segment count —
+ * e.g. "/owner/members/new" must be listed before "/owner/members/:id",
+ * otherwise "new" would get swallowed by the :id param.
+ */
+export const ownerBreadcrumbRoutes: BreadcrumbRoute[] = [
+  {
+    pattern: "/owner/dashboard",
+    items: [{ label: "Home", href: "/owner/dashboard" }],
+  },
+  {
+    pattern: "/owner/members",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Members", href: "/owner/members" },
+      { label: "All Members", href: "/owner/members", isActive: true },
+    ],
+  },
+  {
+    pattern: "/owner/members/new",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Members", href: "/owner/members" },
+      { label: "All Members", href: "/owner/members" },
+      { label: "Add New Member", href: "/owner/members/new", isActive: true },
+    ],
+  },
+  {
+    pattern: "/owner/members/:id/attendance",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Members", href: "/owner/members" },
+      { label: "All Members", href: "/owner/members" },
+      { label: "Member Details", href: "/owner/members/:id" },
+      {
+        label: "Attendance",
+        href: "/owner/members/:id/attendance",
+        isActive: true,
+      },
+    ],
+  },
+  {
+    pattern: "/owner/members/:id/payments",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Members", href: "/owner/members" },
+      { label: "All Members", href: "/owner/members" },
+      { label: "Member Details", href: "/owner/members/:id" },
+      {
+        label: "Payments",
+        href: "/owner/members/:id/payments",
+        isActive: true,
+      },
+    ],
+  },
+  {
+    pattern: "/owner/members/:id",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Members", href: "/owner/members" },
+      { label: "All Members", href: "/owner/members" },
+      { label: "Member Details", href: "/owner/members/:id", isActive: true },
+    ],
+  },
+  {
+    pattern: "/owner/trainers",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Trainers", href: "/owner/trainers" },
+      { label: "All Trainers", href: "/owner/trainers", isActive: true },
+    ],
+  },
+  {
+    pattern: "/owner/trainers/new",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Trainers", href: "/owner/trainers" },
+      { label: "All Trainers", href: "/owner/trainers" },
+      { label: "Add New Trainer", href: "/owner/trainers/new", isActive: true },
+    ],
+  },
+  {
+    pattern: "/owner/trainers/:id",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Trainers", href: "/owner/trainers" },
+      { label: "All Trainers", href: "/owner/trainers" },
+      { label: "Trainer Details", href: "/owner/trainers/:id", isActive: true },
+    ],
+  },
+  {
+    pattern: "/owner/plans",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Plans", href: "/owner/plans" },
+      { label: "All Plans", href: "/owner/plans", isActive: true },
+    ],
+  },
+  {
+    pattern: "/owner/plans/new",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Plans", href: "/owner/plans" },
+      { label: "All Plans", href: "/owner/plans" },
+      { label: "Add New Plan", href: "/owner/plans/new", isActive: true },
+    ],
+  },
+  {
+    pattern: "/owner/attendance",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Attendance", href: "/owner/attendance", isActive: true },
+    ],
+  },
+  {
+    pattern: "/owner/payments",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Payments", href: "/owner/payments" },
+      { label: "All Payments", href: "/owner/payments", isActive: true },
+    ],
+  },
+  {
+    pattern: "/owner/payments/:id",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Payments", href: "/owner/payments" },
+      { label: "Payment Details", href: "/owner/payments/:id", isActive: true },
+    ],
+  },
+  {
+    pattern: "/owner/settings",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Settings", href: "/owner/settings", isActive: true },
+    ],
+  },
+];
+
+/**
+ * Matches a real pathname (e.g. "/owner/members/42/attendance") against
+ * the route patterns above (e.g. "/owner/members/:id/attendance") and
+ * returns the matching breadcrumb items, or null if nothing matches.
+ */
+export function matchBreadcrumbRoute(
+  pathname: string,
+  routes: BreadcrumbRoute[] = ownerBreadcrumbRoutes,
+): BreadcrumbItem[] | null {
+  for (const route of routes) {
+    const patternSegments = route.pattern.split("/");
+    const pathSegments = pathname.split("/");
+
+    if (patternSegments.length !== pathSegments.length) continue;
+
+    const isMatch = patternSegments.every((seg, i) =>
+      seg.startsWith(":") ? true : seg === pathSegments[i],
+    );
+
+    if (isMatch) return route.items;
+  }
+  return null;
+}

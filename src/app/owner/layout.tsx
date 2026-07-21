@@ -1,7 +1,7 @@
 "use client";
 
-import { Sidebar } from "@/components/sidebar";
-import { Header } from "@/components/header";
+import { Sidebar } from "@/components/Sidebar";
+import { Header } from "@/components/Header";
 import { ReactNode, useState } from "react";
 
 interface OwnerLayoutProps {
@@ -12,7 +12,7 @@ export default function OwnerLayout({ children }: OwnerLayoutProps) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex min-h-screen bg-background">
       {/* Sidebar – always visible on desktop, drawer on mobile */}
       <Sidebar
         role="owner"
@@ -21,12 +21,12 @@ export default function OwnerLayout({ children }: OwnerLayoutProps) {
       />
 
       {/* Main content area */}
-      <div className="flex flex-1 flex-col overflow-hidden md:ml-[232px]">
+      <div className="relative flex min-w-0 flex-1 flex-col px-4 lg:px-10">
         {/* Header – receives toggle to open sidebar on mobile */}
         <Header onSidebarToggle={() => setIsMobileSidebarOpen((v) => !v)} />
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto pt-[64px]">{children}</main>
+        <main className="flex-1 pt-16">{children}</main>
       </div>
     </div>
   );
