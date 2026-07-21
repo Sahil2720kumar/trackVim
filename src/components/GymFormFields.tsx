@@ -68,6 +68,12 @@ export const FormInputWithUnit = ({
         {unit}
       </span>
     </div>
+    {error && (
+      <span className="text-xs text-destructive flex items-center gap-1">
+        <AlertCircle className="w-3 h-3" />
+        {error.message}
+      </span>
+    )}
   </div>
 );
 

@@ -21,6 +21,12 @@ import {
   methodOptions,
   statusOptions,
 } from "@/mock/payments";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 
 type PaymentsTableProps = {
   initialPayments: Payment[];
@@ -38,7 +44,6 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
   const [methodFilter, setMethodFilter] = useState("All Methods");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const filterPanelRef = useRef<HTMLDivElement>(null);
 
   // Row action menu state (which row's menu is open)
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
@@ -46,15 +51,9 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
 
   const itemsPerPage = 5;
 
-  // Close popovers on outside click
+  // Close action menu on outside click (Popover manages its own outside-click)
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (
-        filterPanelRef.current &&
-        !filterPanelRef.current.contains(e.target as Node)
-      ) {
-        setShowFilterPanel(false);
-      }
       if (
         actionMenuRef.current &&
         !actionMenuRef.current.contains(e.target as Node)
@@ -222,111 +221,107 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Filter Button + Popover */}
-            <div className="relative" ref={filterPanelRef}>
-              <button
-                onClick={() => setShowFilterPanel((v) => !v)}
-                className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors relative"
-              >
-                <Filter className="w-4 h-4" />
-                <span className="hidden xs:inline">Filters</span>
-                {activeFilterCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-
-              {showFilterPanel && (
-                <div className="absolute right-0 mt-2 w-72 max-w-[85vw] bg-card border border-border rounded-lg shadow-lg p-4 z-20">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold text-foreground">
-                      Advanced filters
-                    </h4>
-                    <button
-                      onClick={() => setShowFilterPanel(false)}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">
-                        Membership Plan
-                      </label>
-                      <select
-                        value={planFilter}
-                        onChange={(e) => {
-                          setPlanFilter(e.target.value);
-                          setCurrentPage(1);
-                        }}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                      >
-                        {planOptions.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">
-                        Payment Method
-                      </label>
-                      <select
-                        value={methodFilter}
-                        onChange={(e) => {
-                          setMethodFilter(e.target.value);
-                          setCurrentPage(1);
-                        }}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                      >
-                        {methodOptions.map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">
-                        Date Range
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="date"
-                          value={dateFrom}
-                          onChange={(e) => {
-                            setDateFrom(e.target.value);
-                            setCurrentPage(1);
-                          }}
-                          className="w-full px-2 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                        />
-                        <input
-                          type="date"
-                          value={dateTo}
-                          onChange={(e) => {
-                            setDateTo(e.target.value);
-                            setCurrentPage(1);
-                          }}
-                          className="w-full px-2 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={resetAdvancedFilters}
-                      className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-                    >
-                      Reset filters
-                    </button>
-                  </div>
+            <Popover open={showFilterPanel} onOpenChange={setShowFilterPanel}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="relative">
+                  <Filter className="w-4 h-4" />
+                  <span className="hidden xs:inline">Filters</span>
+                  {activeFilterCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 max-w-[85vw] p-4" align="end">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-foreground">
+                    Advanced filters
+                  </h4>
+                  <button
+                    onClick={() => setShowFilterPanel(false)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              )}
-            </div>
+
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Membership Plan
+                    </label>
+                    <select
+                      value={planFilter}
+                      onChange={(e) => {
+                        setPlanFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      {planOptions.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Payment Method
+                    </label>
+                    <select
+                      value={methodFilter}
+                      onChange={(e) => {
+                        setMethodFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      {methodOptions.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Date Range
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => {
+                          setDateFrom(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className="w-full px-2 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                      />
+                      <input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => {
+                          setDateTo(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className="w-full px-2 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={resetAdvancedFilters}
+                    className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
+                  >
+                    Reset filters
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             {/* Export Button */}
             <button

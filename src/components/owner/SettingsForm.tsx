@@ -1,23 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
   Building2,
   Check,
   Copy,
+  Dumbbell,
   FileText,
   Image as ImageIcon,
   Info,
+  Layers,
+  Plus,
   Settings as SettingsIcon,
+  Trash2,
   Upload,
   X,
   BadgeIndianRupee,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Tooltip,
@@ -38,6 +43,15 @@ import { bigSquareButton } from "@/lib/styles";
 // ---------------------------------------------------------------------
 // Validation schema
 // ---------------------------------------------------------------------
+const equipmentItemSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, "Equipment name is required"),
+  quantity: z
+    .string()
+    .min(1, "Quantity is required")
+    .regex(/^\d+$/, "Enter a whole number"),
+});
+
 const settingsSchema = z
   .object({
     gymName: z.string().min(1, "Gym name is required"),
@@ -72,6 +86,29 @@ const settingsSchema = z
     stateCode: z.string().optional(),
     placeOfSupply: z.string().optional(),
     sacCode: z.string().optional(),
+
+    // Facilities & Equipment
+    numberOfFloors: z
+      .string()
+      .min(1, "Required")
+      .regex(/^\d+$/, "Enter a whole number"),
+    numberOfRooms: z
+      .string()
+      .min(1, "Required")
+      .regex(/^\d+$/, "Enter a whole number"),
+    hasWashroom: z.boolean(),
+    washroomCount: z.string().optional(),
+    hasSaunaRoom: z.boolean(),
+    saunaRoomCount: z.string().optional(),
+    hasSteamRoom: z.boolean(),
+    steamRoomCount: z.string().optional(),
+    hasShowerRoom: z.boolean(),
+    showerRoomCount: z.string().optional(),
+    hasLockerRoom: z.boolean(),
+    lockerRoomCount: z.string().optional(),
+    amenities: z.array(z.string()).default([]),
+    equipment: z.array(equipmentItemSchema).default([]),
+    facilityNotes: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.gstRegistered) return;
@@ -118,6 +155,53 @@ const SAC_CODE_OPTIONS = [
   { value: "999714 (Other Services)", label: "999714 (Other Services)" },
 ];
 
+// Amenities / offerings a gym can advertise to prospective members
+const AMENITY_OPTIONS = [
+  "Personal Training",
+  "Group Classes",
+  "Cardio Zone",
+  "Free Weights Area",
+  "CrossFit Zone",
+  "Yoga Studio",
+  "Swimming Pool",
+  "Nutrition Counseling",
+  "Juice Bar",
+  "Parking",
+  "WiFi",
+  "Air Conditioning",
+  "Childcare",
+  "Physiotherapy",
+];
+
+// Room-type toggles: label, the boolean field, and its paired count field
+const ROOM_TYPES: {
+  label: string;
+  boolField: keyof SettingsFormData;
+  countField: keyof SettingsFormData;
+}[] = [
+  { label: "Washroom", boolField: "hasWashroom", countField: "washroomCount" },
+  {
+    label: "Sauna Room",
+    boolField: "hasSaunaRoom",
+    countField: "saunaRoomCount",
+  },
+  {
+    label: "Steam Room",
+    boolField: "hasSteamRoom",
+    countField: "steamRoomCount",
+  },
+  {
+    label: "Shower Room",
+    boolField: "hasShowerRoom",
+    countField: "showerRoomCount",
+  },
+  {
+    label: "Locker Room",
+    boolField: "hasLockerRoom",
+    countField: "lockerRoomCount",
+  },
+];
+
 const GYM_JOIN_CODE = "Q8K7PW"; // permanent, not editable via the form
 
 const defaultValues: SettingsFormData = {
@@ -149,6 +233,27 @@ const defaultValues: SettingsFormData = {
   stateCode: "18",
   placeOfSupply: "Assam",
   sacCode: "999713 (Fitness Services)",
+
+  numberOfFloors: "2",
+  numberOfRooms: "6",
+  hasWashroom: true,
+  washroomCount: "4",
+  hasSaunaRoom: true,
+  saunaRoomCount: "1",
+  hasSteamRoom: false,
+  steamRoomCount: "",
+  hasShowerRoom: true,
+  showerRoomCount: "6",
+  hasLockerRoom: true,
+  lockerRoomCount: "2",
+  amenities: ["Personal Training", "Group Classes", "Cardio Zone", "Parking"],
+  equipment: [
+    { id: crypto.randomUUID(), name: "Treadmill", quantity: "8" },
+    { id: crypto.randomUUID(), name: "Dumbbells (5-50 kg set)", quantity: "1" },
+    { id: crypto.randomUUID(), name: "Squat Rack", quantity: "4" },
+  ],
+  facilityNotes:
+    "Free trial day available. Towels provided. Parking is on a first-come basis.",
 };
 
 // Give the <form> a stable id so buttons rendered OUTSIDE this component
@@ -167,16 +272,24 @@ export default function SettingsForm() {
     watch,
     reset,
     setValue,
+    control,
     formState: { errors, isDirty },
   } = useForm<SettingsFormData>({
     resolver: zodResolver(settingsSchema),
     defaultValues,
   });
 
+  const {
+    fields: equipmentFields,
+    append: appendEquipment,
+    remove: removeEquipment,
+  } = useFieldArray({ control, name: "equipment" });
+
   const gstRegistered = watch("gstRegistered");
   const gymName = watch("gymName");
   const gymShortName = watch("gymShortName");
   const businessName = watch("businessName");
+  const amenities = watch("amenities");
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(GYM_JOIN_CODE);
@@ -217,6 +330,19 @@ export default function SettingsForm() {
 
   const removeLogo = () => setLogoImage(null);
 
+  const toggleAmenity = (value: string, checked: boolean) => {
+    const current = amenities || [];
+    if (checked) {
+      setValue("amenities", [...current, value], { shouldDirty: true });
+    } else {
+      setValue(
+        "amenities",
+        current.filter((a) => a !== value),
+        { shouldDirty: true },
+      );
+    }
+  };
+
   const initials = (gymShortName || gymName || "")
     .split(" ")
     .map((n) => n[0])
@@ -234,6 +360,8 @@ export default function SettingsForm() {
     !!watch("businessPhone"),
     !gstRegistered || !!watch("gstin"),
     !!logoImage,
+    !!watch("numberOfFloors") && !!watch("numberOfRooms"),
+    equipmentFields.length > 0,
   ];
   const completionPercent = Math.round(
     (completionChecks.filter(Boolean).length / completionChecks.length) * 100,
@@ -435,6 +563,187 @@ export default function SettingsForm() {
               Recommended size: 512 × 512 pixels.
             </p>
           </div>
+        </SectionCard>
+
+        {/* Gym Facilities & Equipment */}
+        <SectionCard title="Gym Facilities & Equipment" icon={Dumbbell}>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Help prospective members choose your gym wisely — list your space,
+            rooms, equipment, and anything else that sets you apart.
+          </p>
+
+          {/* Floors & Rooms */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormInput
+              label="Number of Floors"
+              placeholder="e.g., 2"
+              required
+              {...register("numberOfFloors")}
+              error={errors.numberOfFloors}
+            />
+            <FormInput
+              label="Number of Rooms"
+              placeholder="e.g., 6"
+              required
+              {...register("numberOfRooms")}
+              error={errors.numberOfRooms}
+            />
+          </div>
+
+          {/* Room types with counts */}
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-muted-foreground" />
+              <p className="text-sm font-semibold text-foreground">
+                Room Types
+              </p>
+            </div>
+            <div className="space-y-2">
+              {ROOM_TYPES.map((room) => {
+                const isEnabled = watch(room.boolField) as boolean;
+                return (
+                  <div
+                    key={room.label}
+                    className="flex items-center gap-3 rounded-lg border border-border p-3"
+                  >
+                    <Switch
+                      checked={isEnabled}
+                      onCheckedChange={(checked) =>
+                        setValue(room.boolField, checked, {
+                          shouldDirty: true,
+                        })
+                      }
+                    />
+                    <span className="flex-1 text-sm font-medium text-foreground">
+                      {room.label}
+                    </span>
+                    {isEnabled && (
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="Qty"
+                        className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm text-right"
+                        {...register(room.countField)}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Amenities / What you offer */}
+          <div className="space-y-3 pt-2">
+            <p className="text-sm font-semibold text-foreground">
+              Amenities &amp; What You Offer
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {AMENITY_OPTIONS.map((amenity) => (
+                <label
+                  key={amenity}
+                  className="flex items-center gap-2 rounded-lg border border-border p-2.5 cursor-pointer"
+                >
+                  <Checkbox
+                    checked={amenities?.includes(amenity)}
+                    onCheckedChange={(checked) =>
+                      toggleAmenity(amenity, checked === true)
+                    }
+                  />
+                  <span className="text-sm text-foreground">{amenity}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Equipment list */}
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-foreground">Equipment</p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="gap-1.5"
+                onClick={() =>
+                  appendEquipment({
+                    id: crypto.randomUUID(),
+                    name: "",
+                    quantity: "",
+                  })
+                }
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Equipment
+              </Button>
+            </div>
+
+            {equipmentFields.length === 0 ? (
+              <p className="text-xs text-muted-foreground rounded-lg border border-dashed border-border p-4 text-center">
+                No equipment added yet. Click &quot;Add Equipment&quot; to list
+                what your gym has.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {equipmentFields.map((field, index) => (
+                  <div key={field.id} className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        placeholder="Equipment name (e.g., Treadmill)"
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        {...register(`equipment.${index}.name` as const)}
+                      />
+                      {errors.equipment?.[index]?.name && (
+                        <p className="text-xs text-destructive mt-1">
+                          {errors.equipment[index]?.name?.message}
+                        </p>
+                      )}
+                    </div>
+                    <div className="w-24">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="Qty"
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-right"
+                        {...register(`equipment.${index}.quantity` as const)}
+                      />
+                      {errors.equipment?.[index]?.quantity && (
+                        <p className="text-xs text-destructive mt-1">
+                          {errors.equipment[index]?.quantity?.message}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeEquipment(index)}
+                      className="text-destructive hover:text-destructive shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Other information for members */}
+          <FormTextarea
+            label="Other Information for Members"
+            placeholder="Anything else that helps members choose your gym wisely — trial policies, towel/locker service, parking, timings, rules, etc."
+            rows={4}
+            {...register("facilityNotes")}
+          />
+
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertTitle>Shown to prospective members</AlertTitle>
+            <AlertDescription>
+              This section appears on your gym&apos;s public profile in the
+              TrackVim app so members can compare gyms before joining.
+            </AlertDescription>
+          </Alert>
         </SectionCard>
 
         {/* Business Information */}
@@ -647,11 +956,7 @@ export default function SettingsForm() {
           >
             Reset Changes
           </Button>
-          <Button
-            type="submit"
-            disabled={!isDirty}
-            className={bigSquareButton}
-          >
+          <Button type="submit" disabled={!isDirty} className={bigSquareButton}>
             Save Changes
           </Button>
         </div>
@@ -697,6 +1002,20 @@ export default function SettingsForm() {
               <SummaryRow
                 label="GST Status"
                 value={gstRegistered ? "Registered" : "Not Registered"}
+                border={false}
+              />
+            </div>
+
+            {/* Facilities Summary */}
+            <div className="space-y-2.5 pt-2 border-t border-border">
+              <p className="text-sm font-semibold text-foreground pb-1">
+                Facilities Summary
+              </p>
+              <SummaryRow label="Floors" value={watch("numberOfFloors")} />
+              <SummaryRow label="Rooms" value={watch("numberOfRooms")} />
+              <SummaryRow
+                label="Equipment Items"
+                value={String(equipmentFields.length)}
                 border={false}
               />
             </div>

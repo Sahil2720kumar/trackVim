@@ -15,6 +15,12 @@ import {
 } from "lucide-react";
 import { type Plan } from "@/mock/plans";
 import { bigSquareButton } from "@/lib/styles";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 
 type PlansGridProps = {
   initialPlans: Plan[];
@@ -29,25 +35,18 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [durationFilter, setDurationFilter] = useState("All Durations");
   const [priceFilter, setPriceFilter] = useState("All Prices");
-  const filterPanelRef = useRef<HTMLDivElement>(null);
 
   // Card action menu state (which card's menu is open)
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
 
   // Add plan modal state
-  const [showAddModal, setShowAddModal] = useState(false);
+
   const [newPlan, setNewPlan] = useState({ name: "", price: "" });
 
-  // Close popovers on outside click
+  // Close action menu on outside click (Popover handles its own outside-click)
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (
-        filterPanelRef.current &&
-        !filterPanelRef.current.contains(e.target as Node)
-      ) {
-        setShowFilterPanel(false);
-      }
       if (
         actionMenuRef.current &&
         !actionMenuRef.current.contains(e.target as Node)
@@ -157,32 +156,6 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
     setOpenActionMenuId(null);
   };
 
-  const handleAddPlan = () => {
-    if (!newPlan.name.trim() || !newPlan.price.trim()) return;
-
-    const plan: Plan = {
-      id: Math.max(0, ...plans.map((p) => p.id)) + 1,
-      name: newPlan.name,
-      badge: null,
-      price: Number(newPlan.price) || 0,
-      duration: "Month",
-      description: "",
-      features: [],
-      planDetails: {
-        duration: "1 Month",
-        members: 0,
-        joiningFee: 0,
-        renewalPeriod: "Monthly",
-      },
-      stats: { revenue: 0, renewals: 0, newMembers: 0 },
-      status: "Active",
-    };
-
-    setPlans((prev) => [plan, ...prev]);
-    setShowAddModal(false);
-    setNewPlan({ name: "", price: "" });
-  };
-
   const getStatusColor = (status: string) =>
     status === "Active"
       ? "bg-green-100 text-green-700"
@@ -215,76 +188,72 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Filter Button + Popover */}
-            <div className="relative" ref={filterPanelRef}>
-              <button
-                onClick={() => setShowFilterPanel((v) => !v)}
-                className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors relative"
-              >
-                <Filter className="w-4 h-4" />
-                <span className="hidden xs:inline">Filters</span>
-                {activeFilterCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-
-              {showFilterPanel && (
-                <div className="absolute right-0 mt-2 w-64 max-w-[85vw] bg-card border border-border rounded-lg shadow-lg p-4 z-20">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold text-foreground">
-                      Advanced filters
-                    </h4>
-                    <button
-                      onClick={() => setShowFilterPanel(false)}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">
-                        Duration
-                      </label>
-                      <select
-                        value={durationFilter}
-                        onChange={(e) => setDurationFilter(e.target.value)}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                      >
-                        <option>All Durations</option>
-                        <option>Monthly</option>
-                        <option>Quarterly</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">
-                        Price
-                      </label>
-                      <select
-                        value={priceFilter}
-                        onChange={(e) => setPriceFilter(e.target.value)}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                      >
-                        <option>All Prices</option>
-                        <option>Under ₹1000</option>
-                        <option>₹1000 - ₹3000</option>
-                        <option>Above ₹3000</option>
-                      </select>
-                    </div>
-
-                    <button
-                      onClick={resetAdvancedFilters}
-                      className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-                    >
-                      Reset filters
-                    </button>
-                  </div>
+            <Popover open={showFilterPanel} onOpenChange={setShowFilterPanel}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="relative">
+                  <Filter className="w-4 h-4" />
+                  <span className="hidden xs:inline">Filters</span>
+                  {activeFilterCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 max-w-[85vw] p-4" align="end">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-foreground">
+                    Advanced filters
+                  </h4>
+                  <button
+                    onClick={() => setShowFilterPanel(false)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              )}
-            </div>
+
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Duration
+                    </label>
+                    <select
+                      value={durationFilter}
+                      onChange={(e) => setDurationFilter(e.target.value)}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option>All Durations</option>
+                      <option>Monthly</option>
+                      <option>Quarterly</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Price
+                    </label>
+                    <select
+                      value={priceFilter}
+                      onChange={(e) => setPriceFilter(e.target.value)}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option>All Prices</option>
+                      <option>Under ₹1000</option>
+                      <option>₹1000 - ₹3000</option>
+                      <option>Above ₹3000</option>
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={resetAdvancedFilters}
+                    className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
+                  >
+                    Reset filters
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             {/* Export Button */}
             <button
@@ -296,10 +265,7 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
             </button>
 
             {/* Add Plan Button */}
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium"
-            >
+            <button className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium">
               <Plus className="w-4 h-4" />
               <span className="sm:hidden">Add</span>
               <span className="hidden sm:inline">New Plan</span>
@@ -507,73 +473,6 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
           </div>
         )}
       </div>
-
-      {/* Add New Plan Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-lg w-full max-w-md p-5 sm:p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground">
-                Add new plan
-              </h3>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  Plan name
-                </label>
-                <input
-                  type="text"
-                  value={newPlan.name}
-                  onChange={(e) =>
-                    setNewPlan((p) => ({ ...p, name: e.target.value }))
-                  }
-                  placeholder="e.g. Elite Plan"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  Price (₹)
-                </label>
-                <input
-                  type="number"
-                  value={newPlan.price}
-                  onChange={(e) =>
-                    setNewPlan((p) => ({ ...p, price: e.target.value }))
-                  }
-                  placeholder="e.g. 2000"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 mt-6">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddPlan}
-                disabled={!newPlan.name.trim() || !newPlan.price.trim()}
-                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Save plan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

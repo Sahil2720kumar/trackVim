@@ -22,16 +22,20 @@ export function RoleCard({
   return (
     <button
       type="button"
+      aria-pressed={selected}
       onClick={() => onSelect(value)}
       className={cn(
         "flex w-full items-center justify-between gap-3 rounded-3xl border bg-card p-5 text-left transition-colors",
         selected
           ? "border-primary ring-1 ring-primary"
-          : "border-border hover:border-primary/40"
+          : "border-border hover:border-primary/40",
       )}
     >
       <div>
-        <p className="font-bold text-foreground" style={{ fontFamily: "Archivo-Bold" }}>
+        <p
+          className="font-bold text-foreground"
+          style={{ fontFamily: "Archivo-Bold" }}
+        >
           {label}
         </p>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
@@ -39,7 +43,7 @@ export function RoleCard({
       <ChevronRight
         className={cn(
           "h-5 w-5 shrink-0",
-          selected ? "text-primary" : "text-muted-foreground"
+          selected ? "text-primary" : "text-muted-foreground",
         )}
       />
     </button>

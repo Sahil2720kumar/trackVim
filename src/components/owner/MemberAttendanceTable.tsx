@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
   Search,
   Filter,
   Download,
-  X,
   CheckCircle,
   XCircle,
   Clock,
@@ -13,6 +12,12 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   type AttendanceRecord,
   attendanceStatusOptions,
@@ -65,21 +70,6 @@ export function MemberAttendanceTable({
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [monthFilter, setMonthFilter] = useState("All Months");
   const [yearFilter, setYearFilter] = useState("All Years");
-  const filterPanelRef = useRef<HTMLDivElement>(null);
-
-  // Close popover on outside click
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (
-        filterPanelRef.current &&
-        !filterPanelRef.current.contains(e.target as Node)
-      ) {
-        setShowFilterPanel(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const filteredRecords = useMemo(() => {
     return initialRecords.filter((record) => {
@@ -88,12 +78,13 @@ export function MemberAttendanceTable({
         record.notes.toLowerCase().includes(searchQuery.toLowerCase()) ||
         record.checkIn.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesStatus =
-        !selectedStatus || record.status === selectedStatus;
+      const matchesStatus = !selectedStatus || record.status === selectedStatus;
 
       const matchesMonth =
         monthFilter === "All Months" ||
-        record.date.toLowerCase().includes(monthFilter.toLowerCase().slice(0, 3));
+        record.date
+          .toLowerCase()
+          .includes(monthFilter.toLowerCase().slice(0, 3));
 
       const matchesYear =
         yearFilter === "All Years" || record.date.includes(yearFilter);
@@ -102,10 +93,16 @@ export function MemberAttendanceTable({
     });
   }, [initialRecords, searchQuery, selectedStatus, monthFilter, yearFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredRecords.length / ITEMS_PER_PAGE),
+  );
   const safePage = Math.min(currentPage, totalPages);
   const startIdx = (safePage - 1) * ITEMS_PER_PAGE;
-  const paginatedRecords = filteredRecords.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+  const paginatedRecords = filteredRecords.slice(
+    startIdx,
+    startIdx + ITEMS_PER_PAGE,
+  );
 
   const activeFilterCount =
     (monthFilter !== "All Months" ? 1 : 0) +
@@ -118,7 +115,14 @@ export function MemberAttendanceTable({
   };
 
   const handleExport = () => {
-    const headers = ["Date", "Check In", "Check Out", "Duration", "Status", "Notes"];
+    const headers = [
+      "Date",
+      "Check In",
+      "Check Out",
+      "Duration",
+      "Status",
+      "Notes",
+    ];
     const rows = filteredRecords.map((r) => [
       r.date,
       r.checkIn,
@@ -176,87 +180,80 @@ export function MemberAttendanceTable({
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Filter Button + Popover */}
-            <div className="relative" ref={filterPanelRef}>
-              <button
-                onClick={() => setShowFilterPanel((v) => !v)}
-                className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors relative"
-              >
-                <Filter className="w-4 h-4" />
-                <span className="hidden xs:inline">Filters</span>
-                {activeFilterCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-
-              {showFilterPanel && (
-                <div className="absolute right-0 mt-2 w-64 max-w-[85vw] bg-card border border-border rounded-lg shadow-lg p-4 z-20">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold text-foreground">
-                      Advanced filters
-                    </h4>
-                    <button
-                      onClick={() => setShowFilterPanel(false)}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">
-                        Month
-                      </label>
-                      <select
-                        value={monthFilter}
-                        onChange={(e) => {
-                          setMonthFilter(e.target.value);
-                          setCurrentPage(1);
-                        }}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                      >
-                        <option value="All Months">All Months</option>
-                        {attendanceMonthOptions.map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">
-                        Year
-                      </label>
-                      <select
-                        value={yearFilter}
-                        onChange={(e) => {
-                          setYearFilter(e.target.value);
-                          setCurrentPage(1);
-                        }}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                      >
-                        <option value="All Years">All Years</option>
-                        {attendanceYearOptions.map((y) => (
-                          <option key={y} value={y}>
-                            {y}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <button
-                      onClick={resetAdvancedFilters}
-                      className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-                    >
-                      Reset filters
-                    </button>
-                  </div>
+            <Popover open={showFilterPanel} onOpenChange={setShowFilterPanel}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="relative gap-2 px-3 sm:px-4 py-2 h-auto text-sm font-normal"
+                >
+                  <Filter className="w-4 h-4" />
+                  <span className="hidden xs:inline">Filters</span>
+                  {activeFilterCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64" align="end">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-foreground">
+                    Advanced filters
+                  </h4>
                 </div>
-              )}
-            </div>
+
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Month
+                    </label>
+                    <select
+                      value={monthFilter}
+                      onChange={(e) => {
+                        setMonthFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="All Months">All Months</option>
+                      {attendanceMonthOptions.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Year
+                    </label>
+                    <select
+                      value={yearFilter}
+                      onChange={(e) => {
+                        setYearFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="All Years">All Years</option>
+                      {attendanceYearOptions.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={resetAdvancedFilters}
+                    className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
+                  >
+                    Reset filters
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             {/* Export Button */}
             <button
@@ -337,7 +334,9 @@ export function MemberAttendanceTable({
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                       {record.duration}
                     </td>
-                    <td className="px-6 py-4">{getStatusBadge(record.status)}</td>
+                    <td className="px-6 py-4">
+                      {getStatusBadge(record.status)}
+                    </td>
                     <td className="px-6 py-4 text-sm text-muted-foreground max-w-[200px] truncate">
                       {record.notes}
                     </td>
@@ -377,15 +376,21 @@ export function MemberAttendanceTable({
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                   <div>
-                    <p className="font-medium text-foreground mb-0.5">Check In</p>
+                    <p className="font-medium text-foreground mb-0.5">
+                      Check In
+                    </p>
                     <p>{record.checkIn}</p>
                   </div>
                   <div>
-                    <p className="font-medium text-foreground mb-0.5">Check Out</p>
+                    <p className="font-medium text-foreground mb-0.5">
+                      Check Out
+                    </p>
                     <p>{record.checkOut}</p>
                   </div>
                   <div>
-                    <p className="font-medium text-foreground mb-0.5">Duration</p>
+                    <p className="font-medium text-foreground mb-0.5">
+                      Duration
+                    </p>
                     <p>{record.duration}</p>
                   </div>
                 </div>
@@ -405,7 +410,8 @@ export function MemberAttendanceTable({
           <p className="text-sm text-muted-foreground">
             Showing{" "}
             <span className="font-medium text-foreground">
-              {startIdx + 1}–{Math.min(startIdx + ITEMS_PER_PAGE, filteredRecords.length)}
+              {startIdx + 1}–
+              {Math.min(startIdx + ITEMS_PER_PAGE, filteredRecords.length)}
             </span>{" "}
             of{" "}
             <span className="font-medium text-foreground">
@@ -470,7 +476,8 @@ export function MemberAttendanceTable({
       {/* Record count when single page */}
       {totalPages <= 1 && filteredRecords.length > 0 && (
         <p className="text-sm text-muted-foreground px-1">
-          {filteredRecords.length} record{filteredRecords.length !== 1 ? "s" : ""}
+          {filteredRecords.length} record
+          {filteredRecords.length !== 1 ? "s" : ""}
         </p>
       )}
     </div>

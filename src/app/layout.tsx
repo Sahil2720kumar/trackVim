@@ -6,6 +6,7 @@ import { ReactQueryProviders } from "@/providers/ReactQueryProvider";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { ThemeProvider } from "@/providers/ThemeProvider";
+import { BreadcrumbOverrideProvider } from "@/providers/BreadcrumbProvider";
 
 const fontSans = Inter({
   subsets: ["latin"],
@@ -45,8 +46,10 @@ export default function RootLayout({
         >
           <ClerkProvider afterSignOutUrl="/sign-in">
             <ReactQueryProviders>
-              <Toaster position="top-right" richColors />
-              {children}
+              <BreadcrumbOverrideProvider>
+                <Toaster position="top-right" richColors />
+                {children}
+              </BreadcrumbOverrideProvider>
             </ReactQueryProviders>
           </ClerkProvider>
         </ThemeProvider>

@@ -81,8 +81,10 @@ export function PieChartCard({
             labelLine={false}
             label={
               showSliceLabels
-                ? ({ name, percent }) =>
-                    `${name} ${(percent * 100).toFixed(0)}%`
+                ? ({ name, value }: { name?: string; value?: number }) => {
+                    const pct = computedTotal ? ((value ?? 0) / computedTotal) * 100 : 0;
+                    return `${name ?? ""} ${pct.toFixed(0)}%`;
+                  }
                 : undefined
             }
           >

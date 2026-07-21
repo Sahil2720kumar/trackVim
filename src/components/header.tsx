@@ -42,7 +42,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 // ── Breadcrumb ──────────────────────────────────────────────────────────────
-import type { BreadcrumbItem } from "@/config/breadcrumbs-config";
+import type { BreadcrumbItem } from "@/lib/breadcrumbs-config";
 
 interface BreadcrumbProps {
   items: BreadcrumbItem[];
@@ -105,9 +105,24 @@ const mockGyms: Gym[] = [
   { id: "4", name: "Alpha Gym", location: "East End" },
 ];
 
-const GymSwitcher = () => {
+interface GymSwitcherProps {
+  multiGym?: boolean;
+}
+
+const GymSwitcher = ({ multiGym = false }: GymSwitcherProps) => {
   const [selectedGym, setSelectedGym] = useState<Gym>(mockGyms[0]);
   const [open, setOpen] = useState(false);
+
+  if (!multiGym) {
+    return (
+      <div className="flex items-center gap-2 h-9 px-3 rounded-xl border border-border/60 bg-background/50/30 text-muted-foreground select-none">
+        <Building2 className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
+        <span className="hidden sm:inline text-sm font-medium max-w-[140px] truncate text-foreground">
+          {selectedGym.name}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -223,13 +238,13 @@ const ThemeToggle = () => {
       variant="ghost"
       size="icon"
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="h-9 w-9 rounded-xl hover:bg-accent/60 transition-colors duration-200"
+      className="h-11 w-11 rounded-xl hover:bg-accent/60 transition-colors duration-200"
       aria-label="Toggle theme"
     >
       {theme === "dark" ? (
-        <Sun className="h-4 w-4 text-amber-500" />
+        <Sun className="w-5 h-5 text-amber-500 cursor-pointer" />
       ) : (
-        <Moon className="h-4 w-4 text-muted-foreground" />
+        <Moon className="w-5 h-5 text-muted-foreground cursor-pointer" />
       )}
     </Button>
   );
@@ -299,7 +314,7 @@ const NotificationMenu = () => {
           className="relative h-9 w-9 rounded-xl hover:bg-accent/60 transition-colors duration-200"
           aria-label="Notifications"
         >
-          <Bell className="h-4 w-4 text-muted-foreground" />
+          <Bell className="w-5 h-5 text-muted-foreground" />
           {unreadCount > 0 && (
             <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-background">
               {unreadCount}
@@ -488,6 +503,7 @@ interface HeaderProps {
   userRole?: string;
   userImage?: string;
   onSidebarToggle?: () => void;
+  multiGym?: boolean;
 }
 
 export function Header({
@@ -498,6 +514,7 @@ export function Header({
   userRole = "Owner",
   userImage = undefined,
   onSidebarToggle,
+  multiGym = false,
 }: HeaderProps) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
@@ -580,7 +597,7 @@ export function Header({
           <ThemeToggle />
           <NotificationMenu />
           <div className="hidden sm:block h-6 w-px bg-border/60 mx-1 sm:mx-1.5" />
-          <GymSwitcher />
+          <GymSwitcher multiGym={multiGym} />
           <div className="hidden md:block h-6 w-px bg-border/60 mx-1.5" />
           <UserMenu
             userName={userName}

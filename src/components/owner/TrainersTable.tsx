@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
   Users,
   Search,
@@ -8,12 +8,23 @@ import {
   Download,
   Plus,
   MoreHorizontal,
-  X,
   Trash2,
   Eye,
   Pencil,
   Calendar,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   type Trainer,
   specializationOptions,
@@ -38,11 +49,9 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
   const [specializationFilter, setSpecializationFilter] = useState(
     "All Specializations",
   );
-  const filterPanelRef = useRef<HTMLDivElement>(null);
 
-  // Row action menu state
+  // Row action menu state (open id, used to control which DropdownMenu is open)
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
-  const actionMenuRef = useRef<HTMLDivElement>(null);
 
   // Add trainer modal state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -54,26 +63,6 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
   });
 
   const itemsPerPage = 5;
-
-  // Close popovers on outside click
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (
-        filterPanelRef.current &&
-        !filterPanelRef.current.contains(e.target as Node)
-      ) {
-        setShowFilterPanel(false);
-      }
-      if (
-        actionMenuRef.current &&
-        !actionMenuRef.current.contains(e.target as Node)
-      ) {
-        setOpenActionMenuId(null);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   // Filter and search logic
   const filteredTrainers = useMemo(() => {
@@ -270,65 +259,58 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Filter Button + Popover */}
-            <div className="relative" ref={filterPanelRef}>
-              <button
-                onClick={() => setShowFilterPanel((v) => !v)}
-                className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors relative"
-              >
-                <Filter className="w-4 h-4" />
-                <span className="hidden xs:inline">Filters</span>
-                {activeFilterCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-
-              {showFilterPanel && (
-                <div className="absolute left-0 md:left-auto md:right-0 mt-2 w-64 max-w-[85vw] bg-card border border-border rounded-lg shadow-lg p-4 z-20">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold text-foreground">
-                      Advanced filters
-                    </h4>
-                    <button
-                      onClick={() => setShowFilterPanel(false)}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">
-                        Specialization
-                      </label>
-                      <select
-                        value={specializationFilter}
-                        onChange={(e) => {
-                          setSpecializationFilter(e.target.value);
-                          setCurrentPage(1);
-                        }}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                      >
-                        {specializationOptions.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <button
-                      onClick={resetAdvancedFilters}
-                      className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-                    >
-                      Reset filters
-                    </button>
-                  </div>
+            <Popover open={showFilterPanel} onOpenChange={setShowFilterPanel}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="relative gap-2 px-3 sm:px-4 py-2 h-auto text-sm font-normal"
+                >
+                  <Filter className="w-4 h-4" />
+                  <span className="hidden xs:inline">Filters</span>
+                  {activeFilterCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64" align="start" sideOffset={8}>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-foreground">
+                    Advanced filters
+                  </h4>
                 </div>
-              )}
-            </div>
+
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Specialization
+                    </label>
+                    <select
+                      value={specializationFilter}
+                      onChange={(e) => {
+                        setSpecializationFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      {specializationOptions.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={resetAdvancedFilters}
+                    className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
+                  >
+                    Reset filters
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             {/* Export Button */}
             <button
@@ -507,46 +489,39 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
                     </td>
 
                     <td className="px-6 py-4 relative">
-                      <button
-                        onClick={() =>
-                          setOpenActionMenuId((id) =>
-                            id === trainer.id ? null : trainer.id,
-                          )
+                      <DropdownMenu
+                        open={openActionMenuId === trainer.id}
+                        onOpenChange={(open) =>
+                          setOpenActionMenuId(open ? trainer.id : null)
                         }
-                        className="p-2 hover:bg-muted rounded-lg transition-colors"
                       >
-                        <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-                      </button>
-
-                      {openActionMenuId === trainer.id && (
-                        <div
-                          ref={actionMenuRef}
-                          className="absolute right-6 top-10 w-40 bg-card border border-border rounded-lg shadow-lg z-20 overflow-hidden"
-                        >
-                          <button className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left">
+                        <DropdownMenuTrigger asChild>
+                          <button className="p-2 hover:bg-muted rounded-lg transition-colors">
+                            <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem className="gap-2">
                             <Eye className="w-4 h-4" />
                             View Profile
-                          </button>
-
-                          <button className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left">
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="gap-2">
                             <Pencil className="w-4 h-4" />
                             Edit
-                          </button>
-
-                          <button className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left">
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="gap-2">
                             <Calendar className="w-4 h-4" />
                             Schedule
-                          </button>
-
-                          <button
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
                             onClick={() => handleDeleteTrainer(trainer.id)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left text-red-600"
+                            className="gap-2 text-red-600 focus:text-red-600"
                           >
                             <Trash2 className="w-4 h-4" />
                             Delete
-                          </button>
-                        </div>
-                      )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))

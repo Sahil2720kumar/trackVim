@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
   Search,
   Filter,
   Download,
-  X,
   MoreVertical,
   ChevronLeft,
   ChevronRight,
@@ -14,6 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -80,21 +84,6 @@ export function TrainerAssignedMembersTable({
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [planFilter, setPlanFilter] = useState("All Plans");
   const [progressFilter, setProgressFilter] = useState("All Progress");
-  const filterPanelRef = useRef<HTMLDivElement>(null);
-
-  // Close popover on outside click
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (
-        filterPanelRef.current &&
-        !filterPanelRef.current.contains(e.target as Node)
-      ) {
-        setShowFilterPanel(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   // Filter logic
   const filteredMembers = useMemo(() => {
@@ -103,8 +92,7 @@ export function TrainerAssignedMembersTable({
         member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         member.plan.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesStatus =
-        !selectedStatus || member.status === selectedStatus;
+      const matchesStatus = !selectedStatus || member.status === selectedStatus;
       const matchesPlan =
         planFilter === "All Plans" || member.plan === planFilter;
       const matchesProgress =
@@ -217,85 +205,78 @@ export function TrainerAssignedMembersTable({
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Filter Button + Popover */}
-            <div className="relative" ref={filterPanelRef}>
-              <button
-                onClick={() => setShowFilterPanel((v) => !v)}
-                className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors relative"
-              >
-                <Filter className="w-4 h-4" />
-                <span className="hidden xs:inline">Filters</span>
-                {activeFilterCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-
-              {showFilterPanel && (
-                <div className="absolute right-0 mt-2 w-64 max-w-[85vw] bg-card border border-border rounded-lg shadow-lg p-4 z-20">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold text-foreground">
-                      Advanced filters
-                    </h4>
-                    <button
-                      onClick={() => setShowFilterPanel(false)}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">
-                        Plan
-                      </label>
-                      <select
-                        value={planFilter}
-                        onChange={(e) => {
-                          setPlanFilter(e.target.value);
-                          setCurrentPage(1);
-                        }}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                      >
-                        {assignedMemberPlanOptions.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">
-                        Progress
-                      </label>
-                      <select
-                        value={progressFilter}
-                        onChange={(e) => {
-                          setProgressFilter(e.target.value);
-                          setCurrentPage(1);
-                        }}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                      >
-                        {assignedMemberProgressOptions.map((pr) => (
-                          <option key={pr} value={pr}>
-                            {pr}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <button
-                      onClick={resetAdvancedFilters}
-                      className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-                    >
-                      Reset filters
-                    </button>
-                  </div>
+            <Popover open={showFilterPanel} onOpenChange={setShowFilterPanel}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="relative gap-2 px-3 sm:px-4 py-2 h-auto text-sm font-normal"
+                >
+                  <Filter className="w-4 h-4" />
+                  <span className="hidden xs:inline">Filters</span>
+                  {activeFilterCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64" align="end">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-foreground">
+                    Advanced filters
+                  </h4>
                 </div>
-              )}
-            </div>
+
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Plan
+                    </label>
+                    <select
+                      value={planFilter}
+                      onChange={(e) => {
+                        setPlanFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      {assignedMemberPlanOptions.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Progress
+                    </label>
+                    <select
+                      value={progressFilter}
+                      onChange={(e) => {
+                        setProgressFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      {assignedMemberProgressOptions.map((pr) => (
+                        <option key={pr} value={pr}>
+                          {pr}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={resetAdvancedFilters}
+                    className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
+                  >
+                    Reset filters
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             {/* Export Button */}
             <button
@@ -523,7 +504,8 @@ export function TrainerAssignedMembersTable({
           <p className="text-sm text-muted-foreground">
             Showing{" "}
             <span className="font-medium text-foreground">
-              {startIdx + 1}–{Math.min(startIdx + ITEMS_PER_PAGE, filteredMembers.length)}
+              {startIdx + 1}–
+              {Math.min(startIdx + ITEMS_PER_PAGE, filteredMembers.length)}
             </span>{" "}
             of{" "}
             <span className="font-medium text-foreground">
@@ -587,6 +569,3 @@ export function TrainerAssignedMembersTable({
     </Card>
   );
 }
-
-// Alias export for flexibility
-export const TrainerAssignedMembersTables = TrainerAssignedMembersTable;
