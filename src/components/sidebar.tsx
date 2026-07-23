@@ -17,6 +17,7 @@ import {
   LogOut,
   Menu,
   X,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -117,6 +118,19 @@ const navigationConfig: NavConfig = {
         { icon: <></>, label: "All Sessions", href: "/trainer/sessions" },
         { icon: <></>, label: "New Session", href: "/trainer/sessions/new" },
       ],
+    },
+    {
+      icon: <FileText className="h-5 w-5" />,
+      label: "Templates",
+      children: [
+        { icon: <></>, label: "All Templates", href: "/trainer/templates" },
+        { icon: <></>, label: "New Template", href: "/trainer/templates/new" },
+      ],
+    },
+    {
+      icon: <Settings className="h-5 w-5" />,
+      label: "Settings",
+      children: [{ icon: <></>, label: "Settings", href: "/trainer/settings" }],
     },
   ],
   member: [
