@@ -152,6 +152,90 @@ export const ownerBreadcrumbRoutes: BreadcrumbRoute[] = [
   },
 ];
 
+export const trainerBreadcrumbRoutes: BreadcrumbRoute[] = [
+  {
+    pattern: "/trainer/dashboard",
+    items: [{ label: "Home", href: "/trainer/dashboard" }],
+  },
+  {
+    pattern: "/trainer/members",
+    items: [
+      { label: "Home", href: "/trainer/dashboard" },
+      { label: "Members", href: "/trainer/members" },
+      { label: "All Members", href: "/trainer/members", isActive: true },
+    ],
+  },
+  // {
+  //   pattern: "/trainer/members/new",
+  //   items: [
+  //     { label: "Home", href: "/trainer/dashboard" },
+  //     { label: "Members", href: "/trainer/members" },
+  //     { label: "All Members", href: "/trainer/members" },
+  //     { label: "Add New Member", href: "/trainer/members/new", isActive: true },
+  //   ],
+  // },
+  {
+    pattern: "/trainer/members/:id",
+    items: [
+      { label: "Home", href: "/trainer/dashboard" },
+      { label: "Members", href: "/trainer/members" },
+      { label: "All Members", href: "/trainer/members" },
+      { label: "Member Details", href: "/trainer/members/:id", isActive: true },
+    ],
+  },
+  {
+    pattern: "/trainer/sessions",
+    items: [
+      { label: "Home", href: "/trainer/dashboard" },
+      { label: "Sessions", href: "/trainer/sessions", isActive: true },
+    ],
+  },
+  {
+    pattern: "/trainer/sessions/new",
+    items: [
+      { label: "Home", href: "/trainer/dashboard" },
+      { label: "Sessions", href: "/trainer/sessions" },
+      {
+        label: "Add New Session",
+        href: "/trainer/sessions/new",
+        isActive: true,
+      },
+    ],
+  },
+  {
+    pattern: "/trainer/sessions/:id",
+    items: [
+      { label: "Home", href: "/trainer/dashboard" },
+      { label: "Sessions", href: "/trainer/sessions" },
+      {
+        label: "Session Details",
+        href: "/trainer/sessions/:id",
+        isActive: true,
+      },
+    ],
+  },
+  {
+    pattern: "/trainer/sessions/:id/edit",
+    items: [
+      { label: "Home", href: "/trainer/dashboard" },
+      { label: "Sessions", href: "/trainer/sessions" },
+      { label: "Session Details", href: "/trainer/sessions/:id" },
+      {
+        label: "Edit Session",
+        href: "/trainer/sessions/:id/edit",
+        isActive: true,
+      },
+    ],
+  },
+  {
+    pattern: "/trainer/settings",
+    items: [
+      { label: "Home", href: "/trainer/dashboard" },
+      { label: "Settings", href: "/trainer/settings", isActive: true },
+    ],
+  },
+];
+
 /**
  * Matches a real pathname (e.g. "/owner/members/42/attendance") against
  * the route patterns above (e.g. "/owner/members/:id/attendance") and
