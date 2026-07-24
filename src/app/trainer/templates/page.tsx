@@ -86,6 +86,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { bigSquareButton } from "@/lib/styles";
 
 // ============================================================================
 // Types & Interfaces
@@ -1360,11 +1361,11 @@ export default function TemplatesPage() {
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Button variant="outline">
+          <Button variant="outline" className={bigSquareButton}>
             <Download className="mr-2 size-4" />
             Import Template
           </Button>
-          <Button>
+          <Button className={bigSquareButton}>
             <Plus className="mr-2 size-4" />
             Create Template
           </Button>

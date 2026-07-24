@@ -6,7 +6,9 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
+  ArrowLeft,
   Calendar,
   Clock3,
   Timer,
@@ -17,17 +19,14 @@ import {
   Circle,
   Pencil,
   MoreHorizontal,
-  ChevronRight,
   ClipboardList,
   Tag,
   Layers,
   Gauge,
-  Weight,
   Copy,
   ClipboardPlus,
   Trash2,
   ExternalLink,
-  GripVertical,
   ListChecks,
   BarChart3,
   Info,
@@ -46,14 +45,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { bigSquareButton } from "@/lib/styles";
 
 // ============================================================================
 // Types & Interfaces
@@ -93,8 +88,6 @@ interface Exercise {
   reps: string;
   weight: string;
   restSeconds: number;
-  tempo: string;
-  rpe: number;
   completed: boolean;
 }
 
@@ -215,8 +208,6 @@ const MOCK_SESSION: SessionDetails = {
       reps: "6 - 8",
       weight: "100 kg",
       restSeconds: 120,
-      tempo: "2-0-2",
-      rpe: 8,
       completed: true,
     },
     {
@@ -229,8 +220,6 @@ const MOCK_SESSION: SessionDetails = {
       reps: "8 - 10",
       weight: "Bodyweight",
       restSeconds: 90,
-      tempo: "2-0-2",
-      rpe: 8,
       completed: true,
     },
     {
@@ -243,8 +232,6 @@ const MOCK_SESSION: SessionDetails = {
       reps: "8 - 10",
       weight: "70 kg",
       restSeconds: 90,
-      tempo: "2-0-2",
-      rpe: 8,
       completed: true,
     },
     {
@@ -257,8 +244,6 @@ const MOCK_SESSION: SessionDetails = {
       reps: "10 - 12",
       weight: "60 kg",
       restSeconds: 75,
-      tempo: "2-1-2",
-      rpe: 7,
       completed: true,
     },
     {
@@ -271,8 +256,6 @@ const MOCK_SESSION: SessionDetails = {
       reps: "10 - 12",
       weight: "55 kg",
       restSeconds: 75,
-      tempo: "2-1-2",
-      rpe: 7,
       completed: true,
     },
     {
@@ -285,8 +268,6 @@ const MOCK_SESSION: SessionDetails = {
       reps: "12 - 15",
       weight: "20 kg",
       restSeconds: 60,
-      tempo: "2-1-2",
-      rpe: 7,
       completed: true,
     },
     {
@@ -299,8 +280,6 @@ const MOCK_SESSION: SessionDetails = {
       reps: "8 - 12",
       weight: "30 kg",
       restSeconds: 60,
-      tempo: "2-0-2",
-      rpe: 8,
       completed: true,
     },
     {
@@ -313,8 +292,6 @@ const MOCK_SESSION: SessionDetails = {
       reps: "10 - 12",
       weight: "12.5 kg",
       restSeconds: 60,
-      tempo: "2-0-2",
-      rpe: 7,
       completed: true,
     },
   ],
@@ -336,9 +313,12 @@ function getMuscleGroupStyle(muscleGroup: string): string {
   return MUSCLE_GROUP_STYLES[muscleGroup] ?? DEFAULT_MUSCLE_GROUP_STYLE;
 }
 
-
 function getTotalSets(exercises: Exercise[]): number {
   return exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
+}
+
+function getCompletedCount(exercises: Exercise[]): number {
+  return exercises.filter((exercise) => exercise.completed).length;
 }
 
 // ============================================================================
@@ -374,7 +354,6 @@ function MuscleGroupBadge({ muscleGroup }: { muscleGroup: string }) {
     </Badge>
   );
 }
-
 
 interface MetaItemProps {
   icon: React.ElementType;
@@ -434,40 +413,34 @@ function SummaryRow({ icon: Icon, label, children }: SummaryRowProps) {
   );
 }
 
-interface ActionRowProps {
+interface ActionButtonProps {
   icon: React.ElementType;
   label: string;
   destructive?: boolean;
   onClick?: () => void;
 }
 
-function ActionRow({
+function ActionButton({
   icon: Icon,
   label,
   destructive,
   onClick,
-}: ActionRowProps) {
+}: ActionButtonProps) {
   return (
-    <button
+    <Button
       type="button"
+      variant={destructive ? "ghost" : "outline"}
       onClick={onClick}
       className={cn(
-        "flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2.5 text-left text-sm font-medium transition-colors",
-        "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-        destructive
-          ? "text-destructive hover:bg-destructive/10"
-          : "text-foreground",
+        bigSquareButton,
+        "w-full justify-start gap-2.5",
+        destructive &&
+          "text-destructive hover:bg-destructive/10 hover:text-destructive",
       )}
     >
-      <span className="flex items-center gap-2.5">
-        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-        {label}
-      </span>
-      <ChevronRight
-        className="h-4 w-4 shrink-0 text-muted-foreground"
-        aria-hidden="true"
-      />
-    </button>
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      {label}
+    </Button>
   );
 }
 
@@ -488,7 +461,7 @@ function StatCard({
         </div>
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="truncate text-lg font-semibold text-foreground">
+          <p className="truncate text-lg font-semibold text-foreground tabular-nums">
             {value}
           </p>
         </div>
@@ -505,17 +478,38 @@ function ExerciseThumbnail() {
   );
 }
 
+// Order + completion are merged into one leading indicator so the table
+// reads like a checklist at a glance, instead of splitting that signal
+// across a "#" column and a separate "Completed" column at the far end.
+function ExerciseStatusMarker({ exercise }: { exercise: Exercise }) {
+  return (
+    <div className="flex items-center gap-2">
+      {exercise.completed ? (
+        <CheckCircle2
+          className="h-4 w-4 shrink-0 text-emerald-500"
+          aria-hidden="true"
+        />
+      ) : (
+        <Circle
+          className="h-4 w-4 shrink-0 text-muted-foreground/40"
+          aria-hidden="true"
+        />
+      )}
+      <span className="text-sm text-muted-foreground tabular-nums">
+        {exercise.order}
+      </span>
+      <span className="sr-only">
+        {exercise.completed ? "Completed" : "Not completed"}
+      </span>
+    </div>
+  );
+}
+
 function ExerciseTableRow({ exercise }: { exercise: Exercise }) {
   return (
-    <TableRow>
-      <TableCell className="text-sm text-muted-foreground">
-        <span className="inline-flex items-center gap-2">
-          <GripVertical
-            className="h-3.5 w-3.5 text-muted-foreground/60"
-            aria-hidden="true"
-          />
-          {exercise.order}
-        </span>
+    <TableRow className={cn(!exercise.completed && "bg-muted/30")}>
+      <TableCell>
+        <ExerciseStatusMarker exercise={exercise} />
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-3">
@@ -533,33 +527,17 @@ function ExerciseTableRow({ exercise }: { exercise: Exercise }) {
       <TableCell>
         <MuscleGroupBadge muscleGroup={exercise.muscleGroup} />
       </TableCell>
-      <TableCell className="text-sm font-medium text-foreground">
+      <TableCell className="text-sm font-medium text-foreground tabular-nums">
         {exercise.sets}
       </TableCell>
-      <TableCell className="text-sm font-medium text-foreground">
+      <TableCell className="text-sm font-medium text-foreground tabular-nums">
         {exercise.reps}
       </TableCell>
-      <TableCell className="text-sm font-medium text-foreground">
+      <TableCell className="text-sm font-medium text-foreground tabular-nums">
         {exercise.weight}
       </TableCell>
-      <TableCell className="text-sm text-muted-foreground">
+      <TableCell className="text-sm text-muted-foreground tabular-nums">
         {exercise.restSeconds} sec
-      </TableCell>
-      <TableCell>
-        {exercise.completed ? (
-          <CheckCircle2
-            className="h-5 w-5 text-emerald-500"
-            aria-hidden="true"
-          />
-        ) : (
-          <Circle
-            className="h-5 w-5 text-muted-foreground/40"
-            aria-hidden="true"
-          />
-        )}
-        <span className="sr-only">
-          {exercise.completed ? "Completed" : "Not completed"}
-        </span>
       </TableCell>
     </TableRow>
   );
@@ -567,7 +545,12 @@ function ExerciseTableRow({ exercise }: { exercise: Exercise }) {
 
 function ExerciseMobileCard({ exercise }: { exercise: Exercise }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div
+      className={cn(
+        "rounded-xl border border-border bg-card p-4",
+        !exercise.completed && "bg-muted/30",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <ExerciseThumbnail />
@@ -602,19 +585,25 @@ function ExerciseMobileCard({ exercise }: { exercise: Exercise }) {
       <dl className="grid grid-cols-3 gap-y-3 text-sm">
         <div>
           <dt className="text-xs text-muted-foreground">Sets</dt>
-          <dd className="font-medium text-foreground">{exercise.sets}</dd>
+          <dd className="font-medium text-foreground tabular-nums">
+            {exercise.sets}
+          </dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">Reps</dt>
-          <dd className="font-medium text-foreground">{exercise.reps}</dd>
+          <dd className="font-medium text-foreground tabular-nums">
+            {exercise.reps}
+          </dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">Weight</dt>
-          <dd className="font-medium text-foreground">{exercise.weight}</dd>
+          <dd className="font-medium text-foreground tabular-nums">
+            {exercise.weight}
+          </dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">Rest</dt>
-          <dd className="font-medium text-foreground">
+          <dd className="font-medium text-foreground tabular-nums">
             {exercise.restSeconds} sec
           </dd>
         </div>
@@ -640,7 +629,7 @@ function EmptyExercisesState() {
           This session does not contain any exercises yet.
         </p>
       </div>
-      <Button size="sm" className="mt-1 gap-1.5">
+      <Button className={cn(bigSquareButton, "mt-1 gap-1.5")}>
         <ClipboardPlus className="h-4 w-4" aria-hidden="true" />
         Add Exercise
       </Button>
@@ -648,91 +637,134 @@ function EmptyExercisesState() {
   );
 }
 
+// ============================================================================
+// Page
+// ============================================================================
+
 export default function SessionDetailsPage({ params }: PageProps) {
+  const router = useRouter();
   const session = MOCK_SESSION;
 
   const totalExercises = session.exercises.length;
   const totalSets = getTotalSets(session.exercises);
+  const completedCount = getCompletedCount(session.exercises);
+  const completionPercent =
+    totalExercises > 0
+      ? Math.round((completedCount / totalExercises) * 100)
+      : 0;
 
   return (
     <TooltipProvider delayDuration={200}>
       <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
         <div className="space-y-6">
+          {/* Back navigation */}
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Back to Sessions
+          </button>
+
           {/* Session Header */}
           <Card className="rounded-2xl border-border shadow-sm">
-            <CardContent className="flex flex-col gap-6 p-6 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                  <Calendar
-                    className="h-6 w-6 text-primary"
-                    aria-hidden="true"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                      {session.name}
-                    </h1>
-                    <StatusBadge status={session.status} />
+            <CardContent className="space-y-5 p-6">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex gap-4">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                    <Calendar
+                      className="h-6 w-6 text-primary"
+                      aria-hidden="true"
+                    />
                   </div>
-                  <p className="max-w-xl text-sm text-muted-foreground">
-                    {session.description}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1">
-                    <MetaItem
-                      icon={User}
-                      label={session.member.name}
-                      srLabel="Member"
-                    />
-                    <MetaItem
-                      icon={Calendar}
-                      label={session.date}
-                      srLabel="Date"
-                    />
-                    <MetaItem
-                      icon={Clock3}
-                      label={session.timeRange}
-                      srLabel="Time"
-                    />
-                    <MetaItem
-                      icon={Timer}
-                      label={`${session.durationMinutes} min`}
-                      srLabel="Duration"
-                    />
-                    <MetaItem
-                      icon={Tag}
-                      label={session.sessionType}
-                      srLabel="Session type"
-                    />
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                        {session.name}
+                      </h1>
+                      <StatusBadge status={session.status} />
+                    </div>
+                    <p className="max-w-xl text-sm text-muted-foreground">
+                      {session.description}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1">
+                      <MetaItem
+                        icon={User}
+                        label={session.member.name}
+                        srLabel="Member"
+                      />
+                      <MetaItem
+                        icon={Calendar}
+                        label={session.date}
+                        srLabel="Date"
+                      />
+                      <MetaItem
+                        icon={Clock3}
+                        label={session.timeRange}
+                        srLabel="Time"
+                      />
+                      <MetaItem
+                        icon={Timer}
+                        label={`${session.durationMinutes} min`}
+                        srLabel="Duration"
+                      />
+                      <MetaItem
+                        icon={Tag}
+                        label={session.sessionType}
+                        srLabel="Session type"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="rounded-xl border border-border bg-muted/50 px-4 py-3">
+                    <p className="text-xs text-muted-foreground">Template</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {session.template.name}
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className="mt-1 rounded-full border-border bg-background px-2 py-0 text-[11px] font-medium text-muted-foreground"
+                    >
+                      From Template
+                    </Badge>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Button className={cn(bigSquareButton, "gap-1.5")}>
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                      Edit Session
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className={cn(bigSquareButton, "gap-1.5")}
+                    >
+                      <MoreHorizontal
+                        className="h-3.5 w-3.5"
+                        aria-hidden="true"
+                      />
+                      More Actions
+                    </Button>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-start gap-3">
-                <div className="rounded-xl border border-border bg-muted/50 px-4 py-3">
-                  <p className="text-xs text-muted-foreground">Template</p>
-                  <p className="text-sm font-semibold text-foreground">
-                    {session.template.name}
-                  </p>
-                  <Badge
-                    variant="outline"
-                    className="mt-1 rounded-full border-border bg-background px-2 py-0 text-[11px] font-medium text-muted-foreground"
-                  >
-                    From Template
-                  </Badge>
+              {/* Workout progress */}
+              <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-medium text-foreground">
+                    Workout Progress
+                  </span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {completedCount} of {totalExercises} exercises completed
+                  </span>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Button size="sm" className="gap-1.5">
-                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                    Edit Session
-                  </Button>
-                  <Button size="sm" variant="outline" className="gap-1.5">
-                    <MoreHorizontal
-                      className="h-3.5 w-3.5"
-                      aria-hidden="true"
-                    />
-                    More Actions
-                  </Button>
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{ width: `${completionPercent}%` }}
+                  />
                 </div>
               </div>
             </CardContent>
@@ -745,19 +777,14 @@ export default function SessionDetailsPage({ params }: PageProps) {
               {/* Session Overview */}
               <Card className="rounded-2xl border-border shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-base">
-                    Session Overview
-                  </CardTitle>
+                  <CardTitle className="text-base">Session Overview</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
                     <OverviewItem icon={User} label="Member">
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6">
-                          <AvatarImage
-                            src={session.member.avatarUrl}
-                            alt=""
-                          />
+                          <AvatarImage src={session.member.avatarUrl} alt="" />
                           <AvatarFallback className="text-[10px]">
                             {session.member.initials}
                           </AvatarFallback>
@@ -811,11 +838,24 @@ export default function SessionDetailsPage({ params }: PageProps) {
               {/* Exercises */}
               <Card className="rounded-2xl border-border shadow-sm">
                 <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-                  <CardTitle className="text-base">
-                    Exercises in This Session ({totalExercises})
-                  </CardTitle>
+                  <div className="flex items-center gap-2.5">
+                    <CardTitle className="text-base">
+                      Exercises in This Session
+                    </CardTitle>
+                    {totalExercises > 0 && (
+                      <Badge
+                        variant="outline"
+                        className="rounded-full border-border bg-muted px-2 py-0 text-[11px] font-medium text-muted-foreground"
+                      >
+                        {completedCount}/{totalExercises} completed
+                      </Badge>
+                    )}
+                  </div>
                   {totalExercises > 0 && (
-                    <Button size="sm" variant="outline" className="gap-1.5">
+                    <Button
+                      variant="outline"
+                      className={cn(bigSquareButton, "gap-1.5")}
+                    >
                       <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                       Customize Exercises
                     </Button>
@@ -831,14 +871,13 @@ export default function SessionDetailsPage({ params }: PageProps) {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="w-10">#</TableHead>
+                              <TableHead className="w-16">Status</TableHead>
                               <TableHead>Exercise</TableHead>
                               <TableHead>Muscle Group</TableHead>
                               <TableHead>Sets</TableHead>
                               <TableHead>Reps</TableHead>
                               <TableHead>Weight</TableHead>
                               <TableHead>Rest</TableHead>
-                              <TableHead>Completed</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -868,7 +907,7 @@ export default function SessionDetailsPage({ params }: PageProps) {
               </Card>
 
               {/* Bottom Summary */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <StatCard
                   icon={ListChecks}
                   label="Total Exercises"
@@ -878,6 +917,11 @@ export default function SessionDetailsPage({ params }: PageProps) {
                   icon={Layers}
                   label="Total Sets"
                   value={`${totalSets} sets`}
+                />
+                <StatCard
+                  icon={CheckCircle2}
+                  label="Completed"
+                  value={`${completedCount}/${totalExercises}`}
                 />
                 <StatCard
                   icon={BarChart3}
@@ -974,13 +1018,9 @@ export default function SessionDetailsPage({ params }: PageProps) {
                   </div>
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="w-full gap-1.5"
+                    className={cn(bigSquareButton, "w-full gap-1.5")}
                   >
-                    <ExternalLink
-                      className="h-3.5 w-3.5"
-                      aria-hidden="true"
-                    />
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                     View Template
                   </Button>
                 </CardContent>
@@ -991,12 +1031,12 @@ export default function SessionDetailsPage({ params }: PageProps) {
                 <CardHeader>
                   <CardTitle className="text-base">Actions</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-1">
-                  <ActionRow icon={Pencil} label="Edit Session" />
-                  <ActionRow icon={Copy} label="Duplicate Session" />
-                  <ActionRow icon={ClipboardPlus} label="Assign Homework" />
+                <CardContent className="space-y-2">
+                  <ActionButton icon={Pencil} label="Edit Session" />
+                  <ActionButton icon={Copy} label="Duplicate Session" />
+                  <ActionButton icon={ClipboardPlus} label="Assign Homework" />
                   <Separator className="my-1" />
-                  <ActionRow
+                  <ActionButton
                     icon={Trash2}
                     label="Delete Session"
                     destructive

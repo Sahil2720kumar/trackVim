@@ -1,4 +1,5 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";import { NextResponse } from "next/server";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -8,7 +9,10 @@ const isPublicRoute = createRouteMatcher([
   // "/api/(.*)",
 ]);
 
-const isOnboardingRoute = createRouteMatcher(["/onboarding(.*)","/api/onboarding/(.*)",]);
+const isOnboardingRoute = createRouteMatcher([
+  "/onboarding(.*)",
+  "/api/onboarding/(.*)",
+]);
 
 const isOwnerRoute = createRouteMatcher(["/owner(.*)"]);
 const isTrainerRoute = createRouteMatcher(["/trainer(.*)"]);
@@ -30,7 +34,6 @@ export default clerkMiddleware(async (auth, req) => {
     | undefined;
   const gymId = sessionClaims?.publicMetadata?.gymId as string | undefined;
 
-
   // Signed in but hasn't finished onboarding (no role/gym yet) -> force onboarding
   const onboardingComplete = Boolean(role && gymId);
 
@@ -40,6 +43,9 @@ export default clerkMiddleware(async (auth, req) => {
 
   // Already onboarded -> don't let them revisit onboarding
   if (onboardingComplete && isOnboardingRoute(req)) {
+    if (role === "member") {
+      return NextResponse.redirect(new URL(`/member/home`, req.url));
+    }
     return NextResponse.redirect(new URL(`/${role}/dashboard`, req.url));
   }
 

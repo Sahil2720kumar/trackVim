@@ -39,7 +39,6 @@ import {
   ArrowRight,
   NotebookPen,
   BarChart3,
-  CalendarDays,
   ChevronRight,
   MoreVertical,
 } from "lucide-react";
@@ -57,8 +56,6 @@ interface Exercise {
   reps: string;
   weight: string;
   rest: string;
-  tempo: string;
-  rpe: number;
   icon: string;
 }
 
@@ -145,8 +142,6 @@ const MOCK_TEMPLATE: TemplateData = {
       reps: "6 - 8",
       weight: "100 kg",
       rest: "120 sec",
-      tempo: "2-0-2",
-      rpe: 8,
       icon: "⬆️",
     },
     {
@@ -158,8 +153,6 @@ const MOCK_TEMPLATE: TemplateData = {
       reps: "8 - 10",
       weight: "Bodyweight",
       rest: "90 sec",
-      tempo: "2-0-2",
-      rpe: 8,
       icon: "🤸",
     },
     {
@@ -171,8 +164,6 @@ const MOCK_TEMPLATE: TemplateData = {
       reps: "8 - 10",
       weight: "70 kg",
       rest: "90 sec",
-      tempo: "2-0-2",
-      rpe: 8,
       icon: "📊",
     },
     {
@@ -184,8 +175,6 @@ const MOCK_TEMPLATE: TemplateData = {
       reps: "10 - 12",
       weight: "60 kg",
       rest: "75 sec",
-      tempo: "2-1-2",
-      rpe: 7,
       icon: "⬇️",
     },
     {
@@ -197,8 +186,6 @@ const MOCK_TEMPLATE: TemplateData = {
       reps: "10 - 12",
       weight: "55 kg",
       rest: "75 sec",
-      tempo: "2-1-2",
-      rpe: 7,
       icon: "➡️",
     },
     {
@@ -210,8 +197,6 @@ const MOCK_TEMPLATE: TemplateData = {
       reps: "12 - 15",
       weight: "20 kg",
       rest: "60 sec",
-      tempo: "2-1-2",
-      rpe: 7,
       icon: "👤",
     },
     {
@@ -223,8 +208,6 @@ const MOCK_TEMPLATE: TemplateData = {
       reps: "8 - 12",
       weight: "30 kg",
       rest: "60 sec",
-      tempo: "2-0-2",
-      rpe: 8,
       icon: "💪",
     },
     {
@@ -236,8 +219,6 @@ const MOCK_TEMPLATE: TemplateData = {
       reps: "10 - 12",
       weight: "12.5 kg",
       rest: "60 sec",
-      tempo: "2-0-2",
-      rpe: 7,
       icon: "🔨",
     },
   ],
@@ -270,6 +251,9 @@ const getMuscleGroupColor = (muscle: string): string => {
 const calculateTotalSets = (exercises: Exercise[]): number => {
   return exercises.reduce((total, ex) => total + ex.sets, 0);
 };
+
+const capitalize = (value: string): string =>
+  value.charAt(0).toUpperCase() + value.slice(1);
 
 // ============================================================================
 // Reusable Components
@@ -345,6 +329,30 @@ function OverviewItem({ icon, label, value }: OverviewItemProps) {
   );
 }
 
+// Inline label/value row used in the Template Summary sidebar — label on the
+// left, value on the right, one thin divider between rows instead of a
+// stacked "label above value" layout with a full <Separator /> between each.
+interface SummaryRowProps {
+  label: string;
+  value: React.ReactNode;
+  border?: boolean;
+}
+
+function SummaryRow({ label, value, border = true }: SummaryRowProps) {
+  return (
+    <div
+      className={`flex items-start justify-between gap-4 py-2.5 ${
+        border ? "border-b border-border" : ""
+      }`}
+    >
+      <span className="text-sm text-muted-foreground shrink-0">{label}</span>
+      <span className="text-sm font-semibold text-foreground text-right">
+        {value}
+      </span>
+    </div>
+  );
+}
+
 interface ExerciseCardProps {
   exercise: Exercise;
   index: number;
@@ -406,19 +414,6 @@ function ExerciseCard({
               <p className="text-sm font-semibold text-foreground">
                 {exercise.rest}
               </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Tempo</p>
-              <p className="text-sm font-semibold text-foreground">
-                {exercise.tempo}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">RPE</p>
-              <Badge variant="secondary">{exercise.rpe}</Badge>
             </div>
           </div>
         </div>
@@ -572,8 +567,7 @@ export default function TemplateDetailPage() {
                           {template.name}
                         </h1>
                         <Badge className={STATUS_COLORS[template.status]}>
-                          {template.status.charAt(0).toUpperCase() +
-                            template.status.slice(1)}
+                          {capitalize(template.status)}
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
@@ -598,8 +592,8 @@ export default function TemplateDetailPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <BarChart3 className="size-4 text-muted-foreground" />
-                      <Badge className={difficultyColor}>
-                        {template.difficulty}
+                      <Badge className={difficultyColor.badge}>
+                        {capitalize(template.difficulty)}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2">
@@ -682,10 +676,7 @@ export default function TemplateDetailPage() {
                 <OverviewItem
                   icon={<BarChart3 className="size-5" />}
                   label="Difficulty"
-                  value={
-                    template.difficulty.charAt(0).toUpperCase() +
-                    template.difficulty.slice(1)
-                  }
+                  value={capitalize(template.difficulty)}
                 />
               </div>
               <Separator className="my-6" />
@@ -694,8 +685,7 @@ export default function TemplateDetailPage() {
                   Description
                 </p>
                 <p className="text-sm text-foreground leading-relaxed">
-                  A focused pulling workout designed to build back thickness,
-                  improve posture, and develop stronger biceps.
+                  {template.description}
                 </p>
               </div>
             </CardContent>
@@ -729,8 +719,6 @@ export default function TemplateDetailPage() {
                           <TableHead>Reps</TableHead>
                           <TableHead>Weight</TableHead>
                           <TableHead>Rest</TableHead>
-                          <TableHead>Tempo</TableHead>
-                          <TableHead>RPE</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -779,14 +767,6 @@ export default function TemplateDetailPage() {
                             <TableCell className="text-sm">
                               {exercise.rest}
                             </TableCell>
-                            <TableCell className="text-sm">
-                              {exercise.tempo}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary" className="text-xs">
-                                {exercise.rpe}
-                              </Badge>
-                            </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-2">
                                 <TooltipProvider>
@@ -831,7 +811,7 @@ export default function TemplateDetailPage() {
                         <TableRow className="bg-muted/50 font-semibold hover:bg-muted/50">
                           <TableCell colSpan={3}>Total</TableCell>
                           <TableCell>{totalSets}</TableCell>
-                          <TableCell colSpan={4}></TableCell>
+                          <TableCell colSpan={2}></TableCell>
                           <TableCell className="text-right">
                             Est. Duration: {template.duration} min
                           </TableCell>
@@ -868,115 +848,66 @@ export default function TemplateDetailPage() {
                 Template Summary
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  Template Name
-                </p>
-                <p className="text-sm font-semibold text-foreground">
-                  {template.name}
-                </p>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  Workout Type
-                </p>
-                <p className="text-sm font-semibold text-foreground">
-                  {template.type}
-                </p>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  Primary Goal
-                </p>
-                <p className="text-sm font-semibold text-foreground">
-                  {template.primaryGoal}
-                </p>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Difficulty</p>
-                <Badge className={difficultyColor}>{template.difficulty}</Badge>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  Target Muscles
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {template.targetMuscles.map((muscle) => (
-                    <Badge
-                      key={muscle}
-                      className={getMuscleGroupColor(muscle)}
-                      variant="secondary"
-                    >
-                      {muscle}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Equipment</p>
-                <div className="flex flex-wrap gap-1">
-                  {template.equipment.map((eq) => (
-                    <Badge key={eq} variant="outline" className="text-xs">
-                      {eq}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  Estimated Duration
-                </p>
-                <p className="text-sm font-semibold text-foreground">
-                  {template.duration} min
-                </p>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  Total Exercises
-                </p>
-                <p className="text-sm font-semibold text-foreground">
-                  {template.exercises.length}
-                </p>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Total Sets</p>
-                <p className="text-sm font-semibold text-foreground">
-                  {totalSets}
-                </p>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Created</p>
-                <p className="text-sm font-semibold text-foreground">
-                  {template.createdDate}
-                </p>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  Last Updated
-                </p>
-                <p className="text-sm font-semibold text-foreground">
-                  {template.lastUpdated}
-                </p>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Status</p>
-                <Badge className={STATUS_COLORS[template.status]}>
-                  {template.status.charAt(0).toUpperCase() +
-                    template.status.slice(1)}
-                </Badge>
-              </div>
+            <CardContent className="pt-0">
+              <SummaryRow label="Template Name" value={template.name} />
+              <SummaryRow label="Workout Type" value={template.type} />
+              <SummaryRow label="Primary Goal" value={template.primaryGoal} />
+              <SummaryRow
+                label="Difficulty"
+                value={
+                  <Badge className={difficultyColor.badge}>
+                    {capitalize(template.difficulty)}
+                  </Badge>
+                }
+              />
+              <SummaryRow
+                label="Target Muscles"
+                value={
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {template.targetMuscles.map((muscle) => (
+                      <Badge
+                        key={muscle}
+                        className={getMuscleGroupColor(muscle)}
+                        variant="secondary"
+                      >
+                        {muscle}
+                      </Badge>
+                    ))}
+                  </div>
+                }
+              />
+              <SummaryRow
+                label="Equipment"
+                value={
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {template.equipment.map((eq) => (
+                      <Badge key={eq} variant="outline" className="text-xs">
+                        {eq}
+                      </Badge>
+                    ))}
+                  </div>
+                }
+              />
+              <SummaryRow
+                label="Estimated Duration"
+                value={`${template.duration} min`}
+              />
+              <SummaryRow
+                label="Total Exercises"
+                value={template.exercises.length}
+              />
+              <SummaryRow label="Total Sets" value={totalSets} />
+              <SummaryRow label="Created" value={template.createdDate} />
+              <SummaryRow label="Last Updated" value={template.lastUpdated} />
+              <SummaryRow
+                label="Status"
+                value={
+                  <Badge className={STATUS_COLORS[template.status]}>
+                    {capitalize(template.status)}
+                  </Badge>
+                }
+                border={false}
+              />
             </CardContent>
           </Card>
 

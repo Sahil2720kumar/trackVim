@@ -33,6 +33,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { Member, MemberStatus } from "@/mock/trainer/members";
+import { useRouter } from "next/navigation";
 
 // ============================================================================
 // Constants
@@ -353,9 +354,9 @@ export interface MembersTableProps {
   /** Link shown next to the title — useful for a dashboard widget. */
   viewAllHref?: string;
   onViewAllClick?: () => void;
-  onViewProfile?: (member: Member) => void;
-  onSendMessage?: (member: Member) => void;
-  onRemoveMember?: (member: Member) => void;
+  // onViewProfile?: (member: Member) => void;
+  // onSendMessage?: (member: Member) => void;
+  // onRemoveMember?: (member: Member) => void;
   className?: string;
 }
 
@@ -374,9 +375,9 @@ export const MembersTable: React.FC<MembersTableProps> = ({
   variant = "full",
   viewAllHref,
   onViewAllClick,
-  onViewProfile,
-  onSendMessage,
-  onRemoveMember,
+  // onViewProfile,
+  // onSendMessage,
+  // onRemoveMember,
   className = "",
 }) => {
   const [searchValue, setSearchValue] = useState("");
@@ -389,6 +390,15 @@ export const MembersTable: React.FC<MembersTableProps> = ({
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize });
+
+  const router = useRouter();
+
+  const handleViewProfile = (member: Member) =>
+    router.push(`/trainer/members/${member.id}`);
+  const handleSendMessage = (member: Member) =>
+    console.log("message member", member.id);
+  const handleRemoveMember = (member: Member) =>
+    console.log("remove member", member.id);
 
   const resetFilters = () => {
     setMembershipFilter("all");
@@ -516,9 +526,9 @@ export const MembersTable: React.FC<MembersTableProps> = ({
           <div className="flex justify-end">
             <ActionMenu
               member={row.original}
-              onViewProfile={onViewProfile}
-              onSendMessage={onSendMessage}
-              onRemoveMember={onRemoveMember}
+              onViewProfile={handleViewProfile}
+              onSendMessage={handleSendMessage}
+              onRemoveMember={handleRemoveMember}
             />
           </div>
         ),
@@ -526,7 +536,7 @@ export const MembersTable: React.FC<MembersTableProps> = ({
     );
 
     return base;
-  }, [isCompact, onViewProfile, onSendMessage, onRemoveMember]);
+  }, [isCompact, handleViewProfile, handleSendMessage, handleRemoveMember]);
 
   const table = useReactTable({
     data: filteredMembers,
@@ -792,9 +802,9 @@ export const MembersTable: React.FC<MembersTableProps> = ({
               <MobileCard
                 key={member.id}
                 member={member}
-                onViewProfile={onViewProfile}
-                onSendMessage={onSendMessage}
-                onRemoveMember={onRemoveMember}
+                onViewProfile={handleViewProfile}
+                onSendMessage={handleSendMessage}
+                onRemoveMember={handleRemoveMember}
               />
             ))
         ) : (

@@ -138,11 +138,13 @@ export const FormTextarea = ({ label, placeholder, error, ...props }: any) => (
 
 export const SectionCard = ({
   title,
+  description,
   icon: Icon,
   badge,
   children,
 }: {
   title: string;
+  description?: React.ReactNode;
   icon: LucideIcon;
   badge?: React.ReactNode;
   children: React.ReactNode;
@@ -153,9 +155,16 @@ export const SectionCard = ({
         <div className="p-2 rounded-lg bg-primary/10 shrink-0">
           <Icon className="w-5 h-5 text-primary" />
         </div>
-        <h3 className="text-lg font-semibold text-card-foreground truncate">
-          {title}
-        </h3>
+        <div className="min-w-0">
+          <h3 className="text-lg font-semibold text-card-foreground truncate">
+            {title}
+          </h3>
+          {description ? (
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {description}
+            </p>
+          ) : null}
+        </div>
       </div>
       {badge}
     </div>

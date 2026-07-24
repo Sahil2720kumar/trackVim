@@ -477,10 +477,6 @@ export default function SessionsPage() {
     console.log("Create new session clicked");
   };
 
-  const handleViewDetails = (session: Session) => {
-    console.log("View details for session:", session);
-  };
-
   if (isLoading) {
     return (
       <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
@@ -515,7 +511,7 @@ export default function SessionsPage() {
         subtitle="Manage and track all your training sessions."
         showCreateButton
         onCreateClick={handleCreateSession}
-        onViewDetails={handleViewDetails}
+        // onViewDetails={handleViewDetails}
         pageSize={5}
       />
 

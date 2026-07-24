@@ -5,11 +5,11 @@ import { Header } from "@/components/Header";
 import { ReactNode, useState } from "react";
 import { trainerBreadcrumbRoutes } from "@/lib/breadcrumbs-config";
 
-interface OwnerLayoutProps {
+interface TrainerLayoutProps {
   children: ReactNode;
 }
 
-export default function TrainerLayout({ children }: OwnerLayoutProps) {
+export default function TrainerLayout({ children }: TrainerLayoutProps) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   return (

@@ -1,10 +1,5 @@
 "use client";
 
-// ============================================================================
-// Imports
-// ============================================================================
-
-import React from "react";
 import {
   Calendar,
   Clock,
@@ -18,8 +13,6 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/StatCard";
-import { useRouter } from "next/navigation"; // swap for your router if different
-
 import { SesssionTable } from "@/components/trainer/SesssionTable";
 import { Sesssions, type Session } from "@/mock/trainer/sesssions";
 import { MembersTable } from "@/components/trainer/MembersTable";
@@ -94,22 +87,6 @@ const MOCK_STATS: DashboardStat[] = [
 // ============================================================================
 
 export default function TrainerDashboard() {
-  const router = useRouter();
-
-  const handleViewSession = (session: Session) =>
-    router.push(`/sessions/${session.id}`);
-  const handleEditSession = (session: Session) =>
-    router.push(`/sessions/${session.id}/edit`);
-  const handleCancelSession = (session: Session) =>
-    console.log("cancel session", session.id);
-
-  const handleViewProfile = (member: Member) =>
-    router.push(`/trainer/members/${member.id}`);
-  const handleSendMessage = (member: Member) =>
-    console.log("message member", member.id);
-  const handleRemoveMember = (member: Member) =>
-    console.log("remove member", member.id);
-
   return (
     <div className="min-h-screen bg-background">
       <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
@@ -152,9 +129,6 @@ export default function TrainerDashboard() {
               viewAllHref="/trainer/sessions"
               showPagination={false}
               pageSize={6}
-              onViewDetails={handleViewSession}
-              onEditSession={handleEditSession}
-              onCancelSession={handleCancelSession}
               showToolbar={false}
             />
           </div>
@@ -237,9 +211,6 @@ export default function TrainerDashboard() {
           showToolbar={false}
           showPagination={false}
           viewAllHref="/trainer/members"
-          onViewProfile={handleViewProfile}
-          onSendMessage={handleSendMessage}
-          onRemoveMember={handleRemoveMember}
         />
       </div>
     </div>

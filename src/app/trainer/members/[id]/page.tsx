@@ -39,6 +39,9 @@ import {
   ClipboardEdit,
   Download,
   ListChecks,
+  LogIn,
+  LogOut,
+  UserCog,
 } from "lucide-react";
 
 // ============================================================================
@@ -97,6 +100,16 @@ interface AttendanceRecord {
   status: AttendanceStatus;
   trainer: string;
   notes: string;
+}
+
+type MarkedBy = "Member" | "Trainer";
+
+interface TodayCheckState {
+  date: string; // YYYY-MM-DD — the day this check-in state belongs to
+  checkInTime: string | null;
+  checkOutTime: string | null;
+  checkInBy: MarkedBy | null;
+  checkOutBy: MarkedBy | null;
 }
 
 // ============================================================================
@@ -320,6 +333,203 @@ function ChartRangeSelect() {
         <option key={option}>{option}</option>
       ))}
     </select>
+  );
+}
+
+// ============================================================================
+// Today's Check-in / Check-out Card
+// ============================================================================
+
+/**
+ * Returns YYYY-MM-DD for a given date, used to key today's check-in state so
+ * it naturally resets each day without any extra scheduling logic — a new
+ * calendar day simply produces a new key and the card goes back to "pending".
+ */
+function toDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatTime(date: Date) {
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+interface TodayCheckInCardProps {
+  memberName: string;
+  today?: Date;
+}
+
+function TodayCheckInCard({
+  memberName,
+  today = new Date(),
+}: TodayCheckInCardProps) {
+  const todayKey = toDateKey(today);
+
+  const [checkState, setCheckState] = useState<TodayCheckState>({
+    date: todayKey,
+    checkInTime: null,
+    checkOutTime: null,
+    checkInBy: null,
+    checkOutBy: null,
+  });
+
+  // Day-specific: if the stored state belongs to an earlier day, treat the
+  // card as freshly pending for today instead of showing yesterday's data.
+  const state =
+    checkState.date === todayKey
+      ? checkState
+      : {
+          date: todayKey,
+          checkInTime: null,
+          checkOutTime: null,
+          checkInBy: null,
+          checkOutBy: null,
+        };
+
+  const handleCheckIn = (by: MarkedBy) => {
+    setCheckState({
+      ...state,
+      checkInTime: formatTime(new Date()),
+      checkInBy: by,
+    });
+  };
+
+  const handleCheckOut = (by: MarkedBy) => {
+    setCheckState({
+      ...state,
+      checkOutTime: formatTime(new Date()),
+      checkOutBy: by,
+    });
+  };
+
+  const status: "pending" | "checked-in" | "checked-out" = state.checkOutTime
+    ? "checked-out"
+    : state.checkInTime
+      ? "checked-in"
+      : "pending";
+
+  const statusConfig = {
+    pending: {
+      label: "Not Checked In",
+      cls: "bg-gray-100 text-gray-700 border-gray-200",
+    },
+    "checked-in": {
+      label: "Checked In",
+      cls: "bg-green-50 text-green-700 border-green-200",
+    },
+    "checked-out": {
+      label: "Session Complete",
+      cls: "bg-blue-50 text-blue-700 border-blue-200",
+    },
+  } as const;
+
+  const todayLabel = today.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mt-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2.5 rounded-lg bg-primary/10 shrink-0">
+            <Clock className="w-5 h-5 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-semibold text-foreground">
+                Today&apos;s Session
+              </p>
+              <div
+                className={`px-2 py-0.5 border rounded text-xs font-medium whitespace-nowrap ${statusConfig[status].cls}`}
+              >
+                {statusConfig[status].label}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {todayLabel}
+              {state.checkInTime && (
+                <>
+                  {" • Checked in "}
+                  <span className="font-medium text-foreground">
+                    {state.checkInTime}
+                  </span>
+                  {state.checkInBy && ` (by ${state.checkInBy})`}
+                </>
+              )}
+              {state.checkOutTime && (
+                <>
+                  {" • Checked out "}
+                  <span className="font-medium text-foreground">
+                    {state.checkOutTime}
+                  </span>
+                  {state.checkOutBy && ` (by ${state.checkOutBy})`}
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          {status === "pending" && (
+            <>
+              <Button
+                size="sm"
+                className="gap-1.5"
+                onClick={() => handleCheckIn("Member")}
+              >
+                <LogIn className="w-4 h-4" />
+                {memberName.split(" ")[0]} Check In
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => handleCheckIn("Trainer")}
+              >
+                <UserCog className="w-4 h-4" />
+                Check In (Trainer)
+              </Button>
+            </>
+          )}
+
+          {status === "checked-in" && (
+            <>
+              <Button
+                size="sm"
+                className="gap-1.5"
+                onClick={() => handleCheckOut("Member")}
+              >
+                <LogOut className="w-4 h-4" />
+                {memberName.split(" ")[0]} Check Out
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => handleCheckOut("Trainer")}
+              >
+                <UserCog className="w-4 h-4" />
+                Check Out (Trainer)
+              </Button>
+            </>
+          )}
+
+          {status === "checked-out" && (
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <CheckCircle2 className="w-4 h-4 text-green-600" />
+              Session logged for today
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1165,8 +1375,11 @@ export default function MemberDetailPage() {
           </div>
         </div>
 
+        {/* Today's Check-in / Check-out — day-specific, stays active until acted on */}
+        <TodayCheckInCard memberName={MOCK_MEMBER.name} />
+
         {/* Tabs */}
-        <div className="flex gap-8 border-b border-border">
+        <div className="flex gap-8 border-b border-border mt-6">
           <button
             onClick={() => setActiveTab("overview")}
             className={`py-4 text-sm font-medium border-b-2 -mb-px ${

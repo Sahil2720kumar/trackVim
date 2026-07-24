@@ -55,7 +55,7 @@ import type {
   SessionStatus,
   SessionType,
 } from "@/mock/trainer/sesssions";
-
+import { useRouter } from "next/navigation";
 // ============================================================================
 // Constants
 // ============================================================================
@@ -223,9 +223,9 @@ export interface SesssionTableProps {
   /** Link shown next to the title instead of (or alongside) the create button — useful for a dashboard widget. */
   viewAllHref?: string;
   onViewAllClick?: () => void;
-  onViewDetails?: (session: Session) => void;
-  onEditSession?: (session: Session) => void;
-  onCancelSession?: (session: Session) => void;
+  // onViewDetails?: (session: Session) => void;
+  // onEditSession?: (session: Session) => void;
+  // onCancelSession?: (session: Session) => void;
   className?: string;
 }
 
@@ -242,11 +242,13 @@ export const SesssionTable: React.FC<SesssionTableProps> = ({
   pageSize = 5,
   viewAllHref,
   onViewAllClick,
-  onViewDetails,
-  onEditSession,
-  onCancelSession,
+  // onViewDetails,
+  // onEditSession,
+  // onCancelSession,
   className = "",
 }) => {
+  const router = useRouter();
+
   const [searchValue, setSearchValue] = useState("");
   const [typeFilters, setTypeFilters] = useState<SessionType[]>([]);
   const [statusFilter, setStatusFilter] = useState<
@@ -255,6 +257,13 @@ export const SesssionTable: React.FC<SesssionTableProps> = ({
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize });
+
+  const handleViewSession = (session: Session) =>
+    router.push(`/sessions/${session.id}`);
+  const handleEditSession = (session: Session) =>
+    router.push(`/sessions/${session.id}/edit`);
+  const handleCancelSession = (session: Session) =>
+    console.log("cancel session", session.id);
 
   const toggleTypeFilter = (type: SessionType) => {
     setTypeFilters((prev) =>
@@ -368,15 +377,15 @@ export const SesssionTable: React.FC<SesssionTableProps> = ({
           <div className="flex items-center justify-end">
             <SessionActionsMenu
               session={row.original}
-              onView={onViewDetails}
-              onEdit={onEditSession}
-              onCancel={onCancelSession}
+              onView={handleViewSession}
+              onEdit={handleEditSession}
+              onCancel={handleCancelSession}
             />
           </div>
         ),
       },
     ],
-    [onViewDetails, onEditSession, onCancelSession],
+    [handleViewSession, handleEditSession, handleCancelSession],
   );
 
   const table = useReactTable({
@@ -415,10 +424,13 @@ export const SesssionTable: React.FC<SesssionTableProps> = ({
               </a>
             )}
             {showCreateButton && (
-              <Button onClick={onCreateClick} className="w-full sm:w-auto">
-                <Plus className="w-4 h-4 mr-2" />
-                {createButtonLabel}
-              </Button>
+              <button
+                onClick={onCreateClick}
+                className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">{createButtonLabel}</span>
+              </button>
             )}
           </div>
         </div>
@@ -628,9 +640,9 @@ export const SesssionTable: React.FC<SesssionTableProps> = ({
                         <StatusBadge status={session.status} />
                         <SessionActionsMenu
                           session={session}
-                          onView={onViewDetails}
-                          onEdit={onEditSession}
-                          onCancel={onCancelSession}
+                          onView={handleViewSession}
+                          onEdit={handleEditSession}
+                          onCancel={handleCancelSession}
                         />
                       </div>
                     </div>

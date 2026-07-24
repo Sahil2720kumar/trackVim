@@ -90,18 +90,6 @@ export default function MembersPage() {
     console.log("Record attendance clicked");
   };
 
-  const handleViewProfile = (member: Member) => {
-    console.log("View profile:", member.id);
-  };
-
-  const handleSendMessage = (member: Member) => {
-    console.log("Send message:", member.id);
-  };
-
-  const handleRemoveMember = (member: Member) => {
-    console.log("Remove member:", member.id);
-  };
-
   return (
     <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
       {/* Statistics */}
@@ -130,9 +118,6 @@ export default function MembersPage() {
         showCreateButton
         createButtonLabel="Record Attendance"
         onCreateClick={handleRecordAttendance}
-        onViewProfile={handleViewProfile}
-        onSendMessage={handleSendMessage}
-        onRemoveMember={handleRemoveMember}
         pageSize={10}
       />
     </div>
