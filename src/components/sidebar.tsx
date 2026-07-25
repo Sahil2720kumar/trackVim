@@ -119,6 +119,19 @@ const navigationConfig: NavConfig = {
         { icon: <></>, label: "New Session", href: "/trainer/sessions/new" },
       ],
     },
+    {
+      icon: <FileText className="h-5 w-5" />,
+      label: "Templates",
+      children: [
+        { icon: <></>, label: "All Templates", href: "/trainer/templates" },
+        { icon: <></>, label: "New Template", href: "/trainer/templates/new" },
+      ],
+    },
+    {
+      icon: <Settings className="h-5 w-5" />,
+      label: "Settings",
+      children: [{ icon: <></>, label: "Settings", href: "/trainer/settings" }],
+    },
   ],
   member: [
     { icon: <Home className="h-5 w-5" />, label: "Home", href: "/member/home" },

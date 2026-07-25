@@ -7,6 +7,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { BreadcrumbOverrideProvider } from "@/providers/BreadcrumbProvider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const fontSans = Inter({
   subsets: ["latin"],
@@ -48,7 +49,7 @@ export default function RootLayout({
             <ReactQueryProviders>
               <BreadcrumbOverrideProvider>
                 <Toaster position="top-right" richColors />
-                {children}
+                <TooltipProvider>{children}</TooltipProvider>
               </BreadcrumbOverrideProvider>
             </ReactQueryProviders>
           </ClerkProvider>

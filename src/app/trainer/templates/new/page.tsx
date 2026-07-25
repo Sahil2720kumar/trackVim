@@ -1,37 +1,46 @@
+import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import CreateSessionForm, {
-  SESSION_FORM_ID,
-} from "@/components/trainer/CreateSessionForm";
 import { bigSquareButton } from "@/lib/styles";
+import CreateTemplateForm, {
+  TEMPLATE_FORM_ID,
+} from "@/components/trainer/CreateTemplateForm";
 
-export default function CreateTrainingSessionPage() {
+export default function CreateTemplatePage() {
   return (
     <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
       {/* Page Header */}
       <div className="border-b border-border bg-background/95 backdrop-blur-sm">
-        <div className="py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="py-4 sm:py-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">
-              Create New Session
+              Create Workout Template
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Select a workout template and configure session details. Exercises
-              will be added automatically.
+              Build reusable workout templates that can be assigned to future
+              training sessions.
             </p>
           </div>
           <div className="flex flex-row gap-3">
-            <Button variant="outline" className={bigSquareButton}>
-              Cancel
-            </Button>
+            <Link href="/trainer/templates">
+              <Button
+                type="button"
+                variant="outline"
+                className={bigSquareButton}
+              >
+                <ChevronLeft className="size-4 mr-2" />
+                Back to Templates
+              </Button>
+            </Link>
             {/* type="submit" + form="..." lets this button, which lives
                 outside the <form> element, submit the client-side form
                 without this component needing to be a client component. */}
             <Button
               type="submit"
-              form={SESSION_FORM_ID}
+              form={TEMPLATE_FORM_ID}
               className={bigSquareButton}
             >
-              Create Session
+              Save Template
             </Button>
           </div>
         </div>
@@ -39,7 +48,7 @@ export default function CreateTrainingSessionPage() {
 
       {/* Main Content */}
       <main className="py-4">
-        <CreateSessionForm />
+        <CreateTemplateForm />
       </main>
     </div>
   );

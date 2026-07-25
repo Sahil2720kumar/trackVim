@@ -10,7 +10,7 @@ interface StatCardProps {
   iconBg: string;
   iconColor: string;
   trend?: {
-    value: string;
+    value: string | number;
     positive: boolean;
   };
   badge?: string;
