@@ -152,6 +152,113 @@ export const ownerBreadcrumbRoutes: BreadcrumbRoute[] = [
   },
 ];
 
+export const memberBreadcrumbRoutes: BreadcrumbRoute[] = [
+  {
+    pattern: "/member/home",
+    items: [{ label: "Home", href: "/member/home", isActive: true }],
+  },
+
+  {
+    pattern: "/member/discover",
+    items: [
+      { label: "Home", href: "/member/home" },
+      { label: "Discover", href: "/member/discover" },
+      { label: "Browse Gyms", href: "/member/discover", isActive: true },
+    ],
+  },
+  {
+    pattern: "/member/discover/:id",
+    items: [
+      { label: "Home", href: "/member/home" },
+      { label: "Discover", href: "/member/discover" },
+      { label: "Gym Details", href: "/member/discover/:id", isActive: true },
+    ],
+  },
+  {
+    pattern: "/member/discover/:id/apply",
+    items: [
+      { label: "Home", href: "/member/home" },
+      { label: "Discover", href: "/member/discover" },
+      { label: "Gym Details", href: "/member/discover/:id" },
+      {
+        label: "Apply for Membership",
+        href: "/member/discover/:id/apply",
+        isActive: true,
+      },
+    ],
+  },
+
+  {
+    pattern: "/member/applications",
+    items: [
+      { label: "Home", href: "/member/home" },
+      { label: "Applications", href: "/member/applications" },
+      {
+        label: "My Applications",
+        href: "/member/applications",
+        isActive: true,
+      },
+    ],
+  },
+  {
+    pattern: "/member/applications/:id",
+    items: [
+      { label: "Home", href: "/member/home" },
+      { label: "Applications", href: "/member/applications" },
+      {
+        label: "Application Details",
+        href: "/member/applications/:id",
+        isActive: true,
+      },
+    ],
+  },
+
+  {
+    pattern: "/member/membership",
+    items: [
+      { label: "Home", href: "/member/home" },
+      { label: "Membership", href: "/member/membership", isActive: true },
+    ],
+  },
+
+  {
+    pattern: "/member/attendance",
+    items: [
+      { label: "Home", href: "/member/home" },
+      { label: "Attendance", href: "/member/attendance", isActive: true },
+    ],
+  },
+
+  {
+    pattern: "/member/sessions",
+    items: [
+      { label: "Home", href: "/member/home" },
+      { label: "Sessions", href: "/member/sessions" },
+      { label: "My Sessions", href: "/member/sessions", isActive: true },
+    ],
+  },
+  {
+    pattern: "/member/sessions/:id",
+    items: [
+      { label: "Home", href: "/member/home" },
+      { label: "Sessions", href: "/member/sessions" },
+      {
+        label: "Session Details",
+        href: "/member/sessions/:id",
+        isActive: true,
+      },
+    ],
+  },
+
+  {
+    pattern: "/member/settings",
+    items: [
+      { label: "Home", href: "/member/home" },
+      { label: "Settings", href: "/member/settings", isActive: true },
+    ],
+  },
+];
+
 export const trainerBreadcrumbRoutes: BreadcrumbRoute[] = [
   {
     pattern: "/trainer/dashboard",
