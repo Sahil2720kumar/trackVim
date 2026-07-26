@@ -1,11 +1,11 @@
-import { config } from 'dotenv';
+import { config } from "dotenv";
 import { defineConfig } from "drizzle-kit";
 
-config({ path: '.env.local' });
+config({ path: ".env.local" });
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.DIRECT_URL;
 if (!databaseUrl) {
-  throw new Error('Missing environment variable: DATABASE_URL');
+  throw new Error("Missing environment variable: DIRECT_URL");
 }
 
 export default defineConfig({

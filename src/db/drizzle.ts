@@ -1,13 +1,18 @@
-import { config } from "dotenv";
-import { drizzle } from "drizzle-orm/neon-serverless"; 
-import { Pool } from "@neondatabase/serverless";
+import "dotenv/config";
 
-config({ path: ".env.local" });
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  throw new Error("Missing environment variable: DATABASE_URL");
+if (!databaseUrl) throw new Error("DATABASE_URL is not set");
+
+let connectionString = databaseUrl;
+if (connectionString.includes("postgres:postgres@supabase_db_")) {
+  const url = new URL(connectionString);
+  url.hostname = url.hostname.split("_")[1];
+  connectionString = url.href;
 }
 
-const pool = new Pool({ connectionString: databaseUrl });
-export const db = drizzle(pool);
+// Disable prefetch as it is not supported for "Transaction" pool mode
+export const client = postgres(connectionString, { prepare: false });
+export const db = drizzle(client);
