@@ -29,6 +29,34 @@
       "when": 1784272422318,
       "tag": "0003_giant_donald_blake",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785100085799,
+      "tag": "0004_orange_electro",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785147412008,
+      "tag": "0005_greedy_killer_shrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785147624822,
+      "tag": "0006_typical_infant_terrible",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785172077572,
+      "tag": "0007_huge_fixer",
+      "breakpoints": true
     }
   ]
 }
