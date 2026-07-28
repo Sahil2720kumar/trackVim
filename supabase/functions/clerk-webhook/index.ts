@@ -99,6 +99,12 @@ export default {
           )
           .select()
           .single();
+
+        if (userError || !user) {
+          console.error("Failed to upsert user:", userError);
+          return new Response("Failed to sync user", { status: 500 });
+        }
+
         // --- Trainer invite acceptance -----------------------------------
         if (meta.role === "trainer" && meta.trainerId) {
           const { error } = await ctx.supabaseAdmin
