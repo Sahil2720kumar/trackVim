@@ -156,7 +156,7 @@ export async function updateGym(
     if (val !== undefined) update[col] = val;
   }
 
-  const { error } = await supabase.from("gyms").update(update).eq("id", gymId);
+  const { error } = await supabase.from("gyms").update(update as any).eq("id", gymId);
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/dashboard/settings");
@@ -325,11 +325,11 @@ export async function createMembershipPlan(
       gym_id: gymId,
       plan_name: payload.planName,
       short_description: payload.shortDescription,
-      plan_price: payload.planPrice.toString(),
+      plan_price: payload.planPrice,
       duration_months: payload.durationMonths,
       membership_duration: payload.membershipDuration,
-      joining_fee: (payload.joiningFee ?? 0).toString(),
-      security_deposit: (payload.securityDeposit ?? 0).toString(),
+      joining_fee: payload.joiningFee ?? 0,
+      security_deposit: payload.securityDeposit ?? 0,
       plan_category: payload.planCategory,
       plan_color: payload.planColor,
       plan_icon: payload.planIcon,
@@ -408,7 +408,7 @@ export async function updateMembershipPlan(
 
   const { error } = await supabase
     .from("membership_plans")
-    .update(update)
+    .update(update as any)
     .eq("id", planId);
   if (error) return { success: false, error: error.message };
 

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getTodayDateStr } from "@/lib/utils";
 
 // ============================================================================
 // Read-only data-fetching functions
@@ -27,19 +28,19 @@ export async function getExercises(gymId: string) {
   return { success: true as const, data };
 }
 
-export async function getMyTrainerProfile(gymId: string) {
+export async function getMyTrainerProfile(gymId: string, trainerId: string) {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("trainers")
     .select("*")
     .eq("gym_id", gymId)
+    .eq("id", trainerId)
     .single();
 
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
-
 export async function getMyAssignedMembers(gymId: string, trainerId: string) {
   const supabase = await createClient();
 
@@ -68,7 +69,13 @@ export async function getMyAssignedMembers(gymId: string, trainerId: string) {
 export async function getUpcomingSessions(gymId: string, trainerId: string) {
   const supabase = await createClient();
 
-  const today = new Date().toISOString().split("T")[0];
+  const { data: gym } = await supabase
+    .from("gyms")
+    .select("timezone")
+    .eq("id", gymId)
+    .maybeSingle();
+
+  const today = getTodayDateStr(gym?.timezone ?? "Asia/Kolkata");
 
   const { data, error } = await supabase
     .from("training_sessions")

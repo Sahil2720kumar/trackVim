@@ -277,7 +277,15 @@ export async function applyForMembership(payload: {
     .select("id")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    if (error.code === "23505") {
+      return {
+        success: false,
+        error: "You already have a pending application to this gym.",
+      };
+    }
+    return { success: false, error: error.message };
+  }
 
   revalidatePath("/my/applications");
   return { success: true, data: { id: data.id } };

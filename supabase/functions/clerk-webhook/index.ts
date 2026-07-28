@@ -81,27 +81,24 @@ export default {
 
         const { data: user, error: userError } = await ctx.supabaseAdmin
           .from("users")
-          .insert({
-            clerk_id: clerkUser.id,
-            email,
-            full_name: fullName,
-            phone,
-            avatar_url: clerkUser.image_url ?? null,
-            role:
-              meta.role === "trainer"
-                ? "trainer"
-                : meta.role === "member"
-                  ? "member"
-                  : null,
-          })
+          .upsert(
+            {
+              clerk_id: clerkUser.id,
+              email,
+              full_name: fullName,
+              phone,
+              avatar_url: clerkUser.image_url ?? null,
+              role:
+                meta.role === "trainer"
+                  ? "trainer"
+                  : meta.role === "member"
+                    ? "member"
+                    : null,
+            },
+            { onConflict: "clerk_id" },
+          )
           .select()
           .single();
-
-        if (userError) {
-          console.error("Failed to create users row:", userError);
-          return new Response("Failed to create user", { status: 500 });
-        }
-
         // --- Trainer invite acceptance -----------------------------------
         if (meta.role === "trainer" && meta.trainerId) {
           const { error } = await ctx.supabaseAdmin

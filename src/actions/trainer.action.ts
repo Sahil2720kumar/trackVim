@@ -514,7 +514,10 @@ export async function seedSessionFromTemplate(
     .from("session_exercises")
     .insert(sessionExercises);
 
-  if (insertError) return { success: false, error: insertError.message };
+  if (insertError) {
+    await supabase.from("training_sessions").delete().eq("id", sessionId);
+    return { success: false, error: insertError.message };
+  }
 
   return { success: true, data: { count: sessionExercises.length } };
 }
@@ -563,6 +566,7 @@ export async function updateTrainingSession(
     .from("training_sessions")
     .update(update as any)
     .eq("id", sessionId);
+
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/dashboard/trainer/sessions");

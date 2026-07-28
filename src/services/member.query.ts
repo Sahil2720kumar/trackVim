@@ -1,10 +1,10 @@
 import { ActionResult } from "@/actions/owner.action";
 import { createClient } from "@/lib/supabase/server";
+import { getTodayDateStr } from "@/lib/utils";
+
 
 // ============================================================================
 // Dashboard read-only queries
-// ============================================================================
-
 export async function getMyProfile() {
   const supabase = await createClient();
 
@@ -20,7 +20,7 @@ export async function getMyProfile() {
       )
     `,
     )
-    .single();
+    .maybeSingle();
 
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
@@ -151,7 +151,21 @@ export async function getMyTrainingSessions() {
 
 export async function getMyUpcomingSessions() {
   const supabase = await createClient();
-  const today = new Date().toISOString().split("T")[0];
+
+  const { data: memberProfile } = await supabase
+    .from("members")
+    .select(
+      `
+      gym_memberships:active_gym_membership_id(
+        gyms(timezone)
+      )
+    `,
+    )
+    .maybeSingle();
+
+  const timezone =
+    (memberProfile?.gym_memberships as any)?.gyms?.timezone ?? "Asia/Kolkata";
+  const today = getTodayDateStr(timezone);
 
   const { data, error } = await supabase
     .from("training_sessions")
@@ -249,7 +263,14 @@ export async function getUnreadMessageCount(): Promise<
 
 export async function getTodayAttendanceStatus(gymId: string) {
   const supabase = await createClient();
-  const today = new Date().toISOString().split("T")[0];
+
+  const { data: gym } = await supabase
+    .from("gyms")
+    .select("timezone")
+    .eq("id", gymId)
+    .maybeSingle();
+
+  const today = getTodayDateStr(gym?.timezone ?? "Asia/Kolkata");
 
   const { data, error } = await supabase
     .from("attendance")
