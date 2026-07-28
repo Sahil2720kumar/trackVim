@@ -382,10 +382,15 @@ export type Database = {
           billing_period_end: string
           billing_period_start: string
           created_at: string
+          due_date: string | null
           gym_id: string
           id: string
+          invoice_date: string | null
+          is_prorated: boolean
           plan_id: string
           price_per_member: number | null
+          proration_days: number | null
+          proration_total_days: number | null
           razorpay_subscription_id: string | null
           status: Database["public"]["Enums"]["subscription_billing_status"]
           total_amount: number
@@ -396,10 +401,15 @@ export type Database = {
           billing_period_end: string
           billing_period_start: string
           created_at?: string
+          due_date?: string | null
           gym_id: string
           id?: string
+          invoice_date?: string | null
+          is_prorated?: boolean
           plan_id: string
           price_per_member?: number | null
+          proration_days?: number | null
+          proration_total_days?: number | null
           razorpay_subscription_id?: string | null
           status?: Database["public"]["Enums"]["subscription_billing_status"]
           total_amount: number
@@ -410,10 +420,15 @@ export type Database = {
           billing_period_end?: string
           billing_period_start?: string
           created_at?: string
+          due_date?: string | null
           gym_id?: string
           id?: string
+          invoice_date?: string | null
+          is_prorated?: boolean
           plan_id?: string
           price_per_member?: number | null
+          proration_days?: number | null
+          proration_total_days?: number | null
           razorpay_subscription_id?: string | null
           status?: Database["public"]["Enums"]["subscription_billing_status"]
           total_amount?: number
@@ -442,6 +457,7 @@ export type Database = {
           address_line2: string | null
           amenities: Json | null
           billing_address: string | null
+          billing_start_date: string | null
           business_email: string | null
           business_name: string | null
           business_phone: string | null
@@ -451,6 +467,7 @@ export type Database = {
           contact_phone: string | null
           country: string
           created_at: string
+          current_plan_id: string | null
           deleted_at: string | null
           equipment: Json | null
           facility_notes: string | null
@@ -493,6 +510,7 @@ export type Database = {
           address_line2?: string | null
           amenities?: Json | null
           billing_address?: string | null
+          billing_start_date?: string | null
           business_email?: string | null
           business_name?: string | null
           business_phone?: string | null
@@ -502,6 +520,7 @@ export type Database = {
           contact_phone?: string | null
           country?: string
           created_at?: string
+          current_plan_id?: string | null
           deleted_at?: string | null
           equipment?: Json | null
           facility_notes?: string | null
@@ -544,6 +563,7 @@ export type Database = {
           address_line2?: string | null
           amenities?: Json | null
           billing_address?: string | null
+          billing_start_date?: string | null
           business_email?: string | null
           business_name?: string | null
           business_phone?: string | null
@@ -553,6 +573,7 @@ export type Database = {
           contact_phone?: string | null
           country?: string
           created_at?: string
+          current_plan_id?: string | null
           deleted_at?: string | null
           equipment?: Json | null
           facility_notes?: string | null
@@ -592,6 +613,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "gyms_current_plan_id_subscription_plans_id_fk"
+            columns: ["current_plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "gyms_owner_id_users_id_fk"
             columns: ["owner_id"]
             isOneToOne: false
@@ -609,6 +637,9 @@ export type Database = {
           allergies: string | null
           blood_group: Database["public"]["Enums"]["blood_group"] | null
           city: string | null
+          clerk_invitation_id: string | null
+          contact_email: string | null
+          contact_phone: string | null
           created_at: string
           date_of_birth: string | null
           deleted_at: string | null
@@ -619,16 +650,19 @@ export type Database = {
             | Database["public"]["Enums"]["relationship"]
             | null
           fitness_goal: string | null
+          full_name: string | null
           gender: Database["public"]["Enums"]["gender"] | null
           height_cm: number | null
           id: string
+          invitation_accepted_at: string | null
+          invitation_sent_at: string | null
           medical_conditions: string | null
           member_code: string | null
           occupation: string | null
           photo_url: string | null
           physical_notes: string | null
           pin_code: string | null
-          profile_id: string
+          profile_id: string | null
           state: string | null
           updated_at: string
           weight_kg: number | null
@@ -641,6 +675,9 @@ export type Database = {
           allergies?: string | null
           blood_group?: Database["public"]["Enums"]["blood_group"] | null
           city?: string | null
+          clerk_invitation_id?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
           created_at?: string
           date_of_birth?: string | null
           deleted_at?: string | null
@@ -651,16 +688,19 @@ export type Database = {
             | Database["public"]["Enums"]["relationship"]
             | null
           fitness_goal?: string | null
+          full_name?: string | null
           gender?: Database["public"]["Enums"]["gender"] | null
           height_cm?: number | null
           id?: string
+          invitation_accepted_at?: string | null
+          invitation_sent_at?: string | null
           medical_conditions?: string | null
           member_code?: string | null
           occupation?: string | null
           photo_url?: string | null
           physical_notes?: string | null
           pin_code?: string | null
-          profile_id: string
+          profile_id?: string | null
           state?: string | null
           updated_at?: string
           weight_kg?: number | null
@@ -673,6 +713,9 @@ export type Database = {
           allergies?: string | null
           blood_group?: Database["public"]["Enums"]["blood_group"] | null
           city?: string | null
+          clerk_invitation_id?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
           created_at?: string
           date_of_birth?: string | null
           deleted_at?: string | null
@@ -683,16 +726,19 @@ export type Database = {
             | Database["public"]["Enums"]["relationship"]
             | null
           fitness_goal?: string | null
+          full_name?: string | null
           gender?: Database["public"]["Enums"]["gender"] | null
           height_cm?: number | null
           id?: string
+          invitation_accepted_at?: string | null
+          invitation_sent_at?: string | null
           medical_conditions?: string | null
           member_code?: string | null
           occupation?: string | null
           photo_url?: string | null
           physical_notes?: string | null
           pin_code?: string | null
-          profile_id?: string
+          profile_id?: string | null
           state?: string | null
           updated_at?: string
           weight_kg?: number | null
@@ -1079,9 +1125,9 @@ export type Database = {
           gym_membership_id: string | null
           id: string
           member_id: string
-          method: Database["public"]["Enums"]["payment_method"]
+          method: Database["public"]["Enums"]["payment_method"] | null
           notes: string | null
-          payment_date: string
+          payment_date: string | null
           receipt_id: string | null
           rejection_reason: string | null
           status: Database["public"]["Enums"]["payment_status"]
@@ -1102,9 +1148,9 @@ export type Database = {
           gym_membership_id?: string | null
           id?: string
           member_id: string
-          method: Database["public"]["Enums"]["payment_method"]
+          method?: Database["public"]["Enums"]["payment_method"] | null
           notes?: string | null
-          payment_date: string
+          payment_date?: string | null
           receipt_id?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
@@ -1125,9 +1171,9 @@ export type Database = {
           gym_membership_id?: string | null
           id?: string
           member_id?: string
-          method?: Database["public"]["Enums"]["payment_method"]
+          method?: Database["public"]["Enums"]["payment_method"] | null
           notes?: string | null
-          payment_date?: string
+          payment_date?: string | null
           receipt_id?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
@@ -1874,10 +1920,103 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approve_membership_application: {
+        Args: { p_application_id: string }
+        Returns: string
+      }
+      change_gym_subscription_plan: {
+        Args: { p_gym_id: string; p_new_plan_id: string }
+        Returns: undefined
+      }
+      check_in_or_out: { Args: { qr_identifier: string }; Returns: Json }
+      create_gym_invoice: {
+        Args: {
+          p_gym_id: string
+          p_member_count: number
+          p_period_end: string
+          p_period_start: string
+          p_prorated?: boolean
+          p_proration_days?: number
+          p_proration_total_days?: number
+        }
+        Returns: string
+      }
+      create_subscription_payment_order: {
+        Args: { p_gateway_order_id: string; p_gym_subscription_id: string }
+        Returns: string
+      }
       current_member_id: { Args: never; Returns: string }
       current_user_id: { Args: never; Returns: string }
+      expire_overdue_memberships: { Args: never; Returns: number }
+      extend_gym_trial: {
+        Args: { p_gym_id: string; p_new_billing_start_date: string }
+        Returns: undefined
+      }
+      generate_first_gym_invoices: { Args: never; Returns: number }
+      generate_gym_subscription_invoices: {
+        Args: { p_period_end: string; p_period_start: string }
+        Returns: number
+      }
+      gym_subscription_plan_for: {
+        Args: { p_gym_id: string }
+        Returns: {
+          billing_model: Database["public"]["Enums"]["billing_model"]
+          created_at: string
+          features: Json | null
+          flat_price: number | null
+          id: string
+          is_active: boolean
+          max_members: number | null
+          name: string
+          price_per_member: number | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "subscription_plans"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      is_gym_owner: { Args: { target_gym_id: string }; Returns: boolean }
+      mark_gym_subscription_paid: {
+        Args: { p_gym_subscription_id: string }
+        Returns: undefined
+      }
+      mark_overdue_gym_subscriptions: { Args: never; Returns: number }
       my_gym_ids: { Args: never; Returns: string[] }
+      record_subscription_payment_captured: {
+        Args: {
+          p_amount: number
+          p_gateway_order_id: string
+          p_gateway_payment_id: string
+        }
+        Returns: undefined
+      }
+      reject_membership_application: {
+        Args: { p_application_id: string; p_reason: string }
+        Returns: undefined
+      }
+      reject_payment: {
+        Args: { p_payment_id: string; p_reason: string }
+        Returns: undefined
+      }
+      renew_membership: {
+        Args: { p_gym_membership_id: string; p_plan_id?: string }
+        Returns: string
+      }
       staff_gym_ids: { Args: never; Returns: string[] }
+      submit_payment: {
+        Args: {
+          p_file_type?: string
+          p_method: Database["public"]["Enums"]["payment_method"]
+          p_payment_id: string
+          p_receipt_file_url: string
+          p_transaction_ref?: string
+        }
+        Returns: undefined
+      }
+      verify_payment: { Args: { p_payment_id: string }; Returns: undefined }
     }
     Enums: {
       application_status: "Pending" | "Approved" | "Rejected"
@@ -1925,6 +2064,7 @@ export type Database = {
         | "Net Banking"
         | "Razorpay"
       payment_status:
+        | "Pending"
         | "PendingVerification"
         | "Verified"
         | "Rejected"
@@ -2161,6 +2301,7 @@ export const Constants = {
         "Razorpay",
       ],
       payment_status: [
+        "Pending",
         "PendingVerification",
         "Verified",
         "Rejected",

@@ -57,6 +57,20 @@
       "when": 1785172077572,
       "tag": "0007_huge_fixer",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785172365423,
+      "tag": "0008_plain_agent_brand",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785232132709,
+      "tag": "0009_concerned_swordsman",
+      "breakpoints": true
     }
   ]
 }

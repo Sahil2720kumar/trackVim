@@ -203,4 +203,845 @@ Payment (Verified)
 ▼
 Membership Active
 
+# APP COMPLETE FLOW
+
+Based on the schema you've shared, here's the complete lifecycle of your TrackVim system, including **when each RPC, trigger, and cron job runs**.
+
+---
+
+# 1. Gym Registration
+
+### User Action
+
+Owner signs up and creates a gym.
+
+```
+Owner
+    │
+    ▼
+Insert into gyms
+```
+
+### Trigger
+
+```
+gyms_set_billing_defaults()
+```
+
+Runs **BEFORE INSERT**
+
+It automatically sets:
+
+- `billing_start_date = current_date + 1 month`
+- `current_plan_id = Basic`
+
+Owner cannot choose these.
+
+---
+
+## Example
+
+```
+Signup
+
+July 15
+
+↓
+
+billing_start_date
+
+Aug 15
+
+↓
+
+current_plan
+
+Basic
+```
+
+---
+
+# 2. Owner changes subscription plan
+
+During trial (or later)
+
+Owner clicks
+
+```
+Upgrade to Premium
+```
+
+Client calls
+
+```
+change_gym_subscription_plan()
+```
+
+RPC checks
+
+- Owner owns gym
+- Plan exists
+- Plan is active
+
+Then
+
+```
+gyms.current_plan_id
+
+↓
+
+Premium
+```
+
+No invoices change.
+
+---
+
+# 3. Member applies for membership
+
+Member selects
+
+```
+Gym
+
+↓
+
+Plan
+
+↓
+
+Apply
+```
+
+Client inserts
+
+```
+membership_applications
+```
+
+Status
+
+```
+Pending
+```
+
+No RPC yet.
+
+---
+
+# 4. Owner reviews application
+
+Owner opens
+
+```
+Pending Applications
+```
+
+---
+
+## Approve
+
+Client calls
+
+```
+approve_membership_application(application_id)
+```
+
+This RPC
+
+Updates
+
+```
+membership_application
+
+Pending
+
+↓
+
+Approved
+```
+
+Creates
+
+```
+gym_membership
+
+PaymentPending
+```
+
+Creates
+
+```
+payment
+
+Pending
+```
+
+Creates
+
+```
+notification
+```
+
+Everything happens atomically.
+
+---
+
+## Reject
+
+Owner clicks Reject
+
+Calls
+
+```
+reject_membership_application(
+    application_id,
+    reason
+)
+```
+
+Updates
+
+```
+Application
+
+↓
+
+Rejected
+```
+
+Creates notification.
+
+No membership created.
+
+---
+
+# 5. Member submits payment
+
+Member opens
+
+```
+Pending Payment
+```
+
+Uploads receipt
+
+Calls
+
+```
+submit_payment()
+```
+
+RPC
+
+Updates
+
+```
+Payment
+
+Pending
+
+↓
+
+PendingVerification
+```
+
+Creates
+
+```
+payment_receipts
+```
+
+Cannot fake
+
+```
+Verified
+```
+
+because RPC controls status.
+
+---
+
+# 6. Owner verifies payment
+
+Owner reviews receipt.
+
+---
+
+Approve
+
+Calls
+
+```
+verify_payment()
+```
+
+RPC
+
+Updates
+
+```
+Payment
+
+PendingVerification
+
+↓
+
+Verified
+```
+
+Updates
+
+```
+Membership
+
+PaymentPending
+
+↓
+
+Active
+```
+
+Recalculates
+
+```
+start_date
+
+end_date
+```
+
+Creates notification.
+
+---
+
+Reject
+
+Calls
+
+```
+reject_payment()
+```
+
+Updates
+
+```
+Payment
+
+↓
+
+Rejected
+```
+
+Updates
+
+```
+Membership
+
+↓
+
+PaymentRejected
+```
+
+Creates notification.
+
+---
+
+# 7. Member resubmits payment
+
+Member uploads new receipt.
+
+Calls
+
+```
+submit_payment()
+```
+
+again.
+
+Allowed because status
+
+```
+Rejected
+```
+
+is accepted.
+
+---
+
+# 8. Attendance
+
+Member scans QR.
+
+Calls
+
+```
+check_in_or_out(qr_identifier)
+```
+
+RPC
+
+Finds
+
+- member
+- gym
+- today's attendance
+
+If no attendance
+
+```
+INSERT attendance
+
+Check In
+```
+
+Else
+
+```
+UPDATE attendance
+
+Check Out
+```
+
+Members never directly insert attendance.
+
+Only RPC.
+
+---
+
+# 9. Trainer creates session
+
+Trainer inserts
+
+```
+training_sessions
+```
+
+Trigger runs
+
+```
+notify_session_scheduled()
+```
+
+Creates notification.
+
+---
+
+# 10. Daily Membership Expiration
+
+Cron
+
+```
+2 AM
+```
+
+Runs
+
+```
+expire_overdue_memberships()
+```
+
+Changes
+
+```
+Active
+
+↓
+
+Expired
+```
+
+Creates notifications.
+
+---
+
+# 11. Trial Ends
+
+Example
+
+```
+Signup
+
+July 15
+
+↓
+
+Trial Ends
+
+Aug 15
+```
+
+Daily cron
+
+```
+2:30 AM
+```
+
+Runs
+
+```
+generate_first_gym_invoices()
+```
+
+Checks
+
+```
+billing_start_date <= today
+```
+
+AND
+
+```
+No invoice exists
+```
+
+Creates
+
+```
+First Invoice
+
+Aug15
+
+↓
+
+Aug31
+```
+
+using
+
+```
+create_gym_invoice()
+```
+
+which calls
+
+```
+gym_subscription_plan_for()
+```
+
+to read
+
+```
+gyms.current_plan_id
+```
+
+---
+
+# 12. Owner Pays Platform Subscription
+
+Owner clicks
+
+```
+Pay Now
+```
+
+Backend creates Razorpay Order.
+
+Then calls
+
+```
+create_subscription_payment_order()
+```
+
+Creates
+
+```
+subscription_payments
+
+Created
+```
+
+Stores
+
+```
+gateway_order_id
+```
+
+---
+
+# 13. Razorpay webhook
+
+Payment succeeds.
+
+Webhook receives
+
+```
+payment.captured
+```
+
+Server calls
+
+```
+record_subscription_payment_captured()
+```
+
+Looks up
+
+```
+subscription_payments
+
+↓
+
+gateway_order_id
+```
+
+Updates
+
+```
+Captured
+```
+
+Calls
+
+```
+mark_gym_subscription_paid()
+```
+
+Updates
+
+```
+Invoice
+
+↓
+
+Paid
+```
+
+If no unpaid invoices remain
+
+```
+Gym
+
+Suspended
+
+↓
+
+Active
+```
+
+---
+
+# 14. Monthly Billing
+
+Every
+
+```
+1st
+
+3 AM
+```
+
+Cron
+
+Runs
+
+```
+generate_gym_subscription_invoices()
+```
+
+Loops all gyms
+
+Creates invoice
+
+via
+
+```
+create_gym_invoice()
+```
+
+---
+
+# 15. Daily Overdue Check
+
+Every day
+
+```
+4 AM
+```
+
+Runs
+
+```
+mark_overdue_gym_subscriptions()
+```
+
+Updates
+
+```
+Pending
+
+↓
+
+Overdue
+```
+
+Suspends gym
+
+Creates notification.
+
+---
+
+# 16. Membership Renewal
+
+Owner chooses
+
+```
+Renew
+```
+
+Calls
+
+```
+renew_membership()
+```
+
+Creates
+
+```
+NEW gym_membership
+```
+
+Creates
+
+```
+NEW payment
+```
+
+Old membership remains.
+
+History preserved.
+
+---
+
+# 17. Trial Extension (Admin)
+
+Support decides
+
+```
+Extend Trial
+```
+
+Backend
+
+Calls
+
+```
+extend_gym_trial()
+```
+
+Updates
+
+```
+billing_start_date
+```
+
+Cancels first pending invoice if one exists.
+
+---
+
+# Complete Flow Diagram
+
+```text
+Owner creates Gym
+        │
+        ▼
+gyms_set_billing_defaults() (Trigger)
+        │
+        ▼
+1 Month Trial
+        │
+        ├───────────────► change_gym_subscription_plan()
+        │
+Member Applies
+        │
+        ▼
+membership_applications
+        │
+        ├────────► approve_membership_application()
+        │                 │
+        │                 ├── gym_membership
+        │                 ├── payment
+        │                 └── notification
+        │
+        └────────► reject_membership_application()
+
+Member Pays
+        │
+        ▼
+submit_payment()
+        │
+        ▼
+PendingVerification
+        │
+        ├────────► verify_payment()
+        │                 ├── membership Active
+        │                 └── payment Verified
+        │
+        └────────► reject_payment()
+
+Member Uses Gym
+        │
+        ▼
+check_in_or_out()
+
+Trainer Creates Session
+        │
+        ▼
+notify_session_scheduled() (Trigger)
+
+Daily 2:00 AM
+        │
+        ▼
+expire_overdue_memberships()
+
+Daily 2:30 AM
+        │
+        ▼
+generate_first_gym_invoices()
+        │
+        ▼
+create_gym_invoice()
+
+Owner Pays TrackVim
+        │
+        ▼
+create_subscription_payment_order()
+        │
+        ▼
+Razorpay Checkout
+        │
+        ▼
+Webhook
+        │
+        ▼
+record_subscription_payment_captured()
+        │
+        ▼
+mark_gym_subscription_paid()
+
+Monthly (1st, 3:00 AM)
+        │
+        ▼
+generate_gym_subscription_invoices()
+        │
+        ▼
+create_gym_invoice()
+
+Daily 4:00 AM
+        │
+        ▼
+mark_overdue_gym_subscriptions()
+
+Membership Renewal
+        │
+        ▼
+renew_membership()
+
+Support/Admin
+        │
+        ▼
+extend_gym_trial()
+```
+
+This architecture is well structured: **user-facing actions** (approvals, payments, attendance, renewals) are handled through RPCs, **automatic row-level reactions** (defaults, notifications) are handled by triggers, and **time-based operations** (billing, expiration, overdue checks) are handled by scheduled cron jobs.
+
 <!-- END:nextjs-agent-rules -->
