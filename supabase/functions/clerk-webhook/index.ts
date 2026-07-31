@@ -74,6 +74,7 @@ export default {
           clerkUser.email_addresses?.[0]?.email_address ?? null;
         const phone: string | null =
           clerkUser.phone_numbers?.[0]?.phone_number ?? null;
+        const username: string | null = clerkUser.username ?? null;
         const fullName =
           [clerkUser.first_name, clerkUser.last_name]
             .filter(Boolean)
@@ -81,28 +82,26 @@ export default {
 
         const { data: user, error: userError } = await ctx.supabaseAdmin
           .from("users")
-          .upsert(
-            {
-              clerk_id: clerkUser.id,
-              email,
-              full_name: fullName,
-              phone,
-              avatar_url: clerkUser.image_url ?? null,
-              role:
-                meta.role === "trainer"
-                  ? "trainer"
-                  : meta.role === "member"
-                    ? "member"
-                    : null,
-            },
-            { onConflict: "clerk_id" },
-          )
+          .insert({
+            clerk_id: clerkUser.id,
+            email,
+            username,
+            full_name: fullName,
+            phone,
+            avatar_url: clerkUser.image_url ?? null,
+            role:
+              meta.role === "trainer"
+                ? "trainer"
+                : meta.role === "member"
+                  ? "member"
+                  : null,
+          })
           .select()
           .single();
 
-        if (userError || !user) {
-          console.error("Failed to upsert user:", userError);
-          return new Response("Failed to sync user", { status: 500 });
+        if (userError) {
+          console.error("Failed to create users row:", userError);
+          return new Response("Failed to create user", { status: 500 });
         }
 
         // --- Trainer invite acceptance -----------------------------------

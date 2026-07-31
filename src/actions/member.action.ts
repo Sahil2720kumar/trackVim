@@ -1,6 +1,12 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createMemberSchema } from "@/db/validators";
+import { uploadFile } from "@/lib/cloudinary/upload";
+import { extractMemberFields } from "@/lib/extractFields";
+import { createServerClient } from "@/lib/supabase/server";
+import { generateMemberCode } from "@/lib/utils";
+import { auth, clerkClient } from "@clerk/nextjs/server";
+
 import { revalidatePath } from "next/cache";
 
 // ============================================================================
@@ -19,54 +25,134 @@ export type ActionResult<T = void> =
  * Create the global member profile row (one per user, ever).
  * Called on first login after Clerk sign-up.
  */
-export async function createMemberProfile(payload: {
-  profileId: string;
-  fullName?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  dateOfBirth?: string;
-  gender?: "Male" | "Female" | "Other";
-  occupation?: string;
-  bloodGroup?: "A+" | "A-" | "B+" | "B-" | "O+" | "O-" | "AB+" | "AB-";
-  address?: string;
-  city?: string;
-  state?: string;
-  pinCode?: string;
-  fitnessGoal?: string;
-  medicalConditions?: string;
-  allergies?: string;
-  emergencyContactName?: string;
-  emergencyContactPhone?: string;
-}): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createClient();
+export async function createMemberProfileAction(
+  formData: FormData,
+): Promise<ActionResult<{ id: string }>> {
+  // 1. Auth
+  const { userId } = await auth();
+  if (!userId) {
+    return {
+      success: false,
+      error: "You must be signed in to create a member profile.",
+    };
+  }
 
-  const { data, error } = await supabase
+  // 2. Extract & validate
+  const parsed = createMemberSchema.safeParse(extractMemberFields(formData));
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid member data.",
+    };
+  }
+  const memberData = parsed.data;
+
+  // 3. Photo upload
+  const photoFile = formData.get("photoFile");
+  let photoUrl: string | undefined;
+
+  try {
+    if (photoFile instanceof File && photoFile.size > 0) {
+      photoUrl = await uploadFile(
+        photoFile,
+        `trackVim/members/${userId}/photo`,
+      );
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to upload photo. Please try again.",
+    };
+  }
+
+  const supabase = await createServerClient();
+
+  // 4. Update users row first — need users.id (UUID) for members.profile_id FK
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .update({
+      full_name: memberData.fullName,
+      phone: memberData.contactPhone,
+      role: "member",
+      account_status: "Active",
+    })
+    .eq("clerk_id", userId)
+    .select("id,email")
+    .single();
+
+  if (userError) return { success: false, error: userError.message };
+
+  const internalUserId = userData.id;
+
+  // 5. Insert member row
+  const { data: member, error: memberError } = await supabase
     .from("members")
     .insert({
-      profile_id: payload.profileId,
-      full_name: payload.fullName,
-      contact_email: payload.contactEmail,
-      contact_phone: payload.contactPhone,
-      date_of_birth: payload.dateOfBirth,
-      gender: payload.gender,
-      occupation: payload.occupation,
-      blood_group: payload.bloodGroup,
-      address: payload.address,
-      city: payload.city,
-      state: payload.state,
-      pin_code: payload.pinCode,
-      fitness_goal: payload.fitnessGoal,
-      medical_conditions: payload.medicalConditions,
-      allergies: payload.allergies,
-      emergency_contact_name: payload.emergencyContactName,
-      emergency_contact_phone: payload.emergencyContactPhone,
+      profile_id: internalUserId,
+      member_code: generateMemberCode(),
+      // ── Identity ───────────────────────────────────────────────────
+      full_name: memberData.fullName ?? null,
+      contact_email: userData.email ?? null,
+      contact_phone: memberData.contactPhone ?? null,
+      date_of_birth: memberData.dateOfBirth ?? null,
+      gender: (memberData.gender as "Male" | "Female" | "Other") ?? null,
+      occupation: memberData.occupation ?? null,
+      blood_group:
+        (memberData.bloodGroup as
+          | "A+"
+          | "A-"
+          | "B+"
+          | "B-"
+          | "O+"
+          | "O-"
+          | "AB+"
+          | "AB-") ?? null,
+      photo_url: photoUrl ?? null,
+
+      // ── Address ────────────────────────────────────────────────────
+      address: memberData.address ?? null,
+      city: memberData.city ?? null,
+      state: memberData.state ?? null,
+      pin_code: memberData.pinCode ?? null,
+
+      // ── Health ─────────────────────────────────────────────────────
+      fitness_goal: memberData.fitnessGoal ?? null,
+      medical_conditions: memberData.medicalConditions ?? null,
+      allergies: memberData.allergies ?? null,
+      physical_notes: memberData.physicalNotes ?? null,
+      height_cm: memberData.heightCm ? Number(memberData.heightCm) : null,
+      weight_kg: memberData.weightKg ? Number(memberData.weightKg) : null,
+
+      // ── Emergency contact ──────────────────────────────────────────
+      emergency_contact_name: memberData.emergencyContactName ?? null,
+      emergency_contact_phone: memberData.emergencyContactPhone ?? null,
+      // emergency_contact_relationship:
+      //   memberData.emergencyContactRelationship ?? null,
+      emergency_contact_address: memberData.emergencyContactAddress ?? null,
+
+      // ── Misc ───────────────────────────────────────────────────────
+      additional_notes: memberData.additionalNotes ?? null,
       account_status: "Active",
     })
     .select("id")
     .single();
 
-  if (error) return { success: false, error: error.message };
-  return { success: true, data: { id: data.id } };
+  if (memberError) return { success: false, error: memberError.message };
+
+  // 6. Update Clerk metadata
+  await clerkClient().then((client) =>
+    client.users.updateUserMetadata(userId, {
+      publicMetadata: {
+        role: "member",
+        onboardingComplete: true,
+      },
+    }),
+  );
+
+  return { success: true, data: { id: member.id } };
 }
 
 /**
@@ -74,7 +160,7 @@ export async function createMemberProfile(payload: {
  * The `members_guard_self_update` trigger blocks changing account_status
  * (owner-only) from this path.
  */
-export async function updateMyProfile(
+export async function updateMyProfileAction(
   memberId: string,
   payload: Partial<{
     fullName: string;
@@ -161,7 +247,7 @@ export async function updateMyProfile(
  * The `members_guard_self_update` trigger ensures the membership belongs to
  * this member — owner cannot do this on behalf of the member.
  */
-export async function switchActiveGymMembership(
+export async function switchActiveGymMembershipAction(
   memberId: string,
   gymMembershipId: string | null,
 ): Promise<ActionResult> {
@@ -182,58 +268,6 @@ export async function switchActiveGymMembership(
 }
 
 // ============================================================================
-// Gym Discovery
-// ============================================================================
-
-/**
- * Find a gym by its unique code (e.g. "Q8K7PW").
- */
-export async function findGymByCode(code: string) {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("gyms")
-    .select(
-      `
-      id, name, code, gym_description, logo_url, contact_email, contact_phone,
-      city, state, country, amenities,
-      membership_plans(id, plan_name, short_description, plan_price, duration_months,
-        joining_fee, plan_category, plan_color, selected_features, custom_features,
-        enrollment_mode, status, is_featured)
-    `,
-    )
-    .eq("code", code.toUpperCase())
-    .eq("status", "Active")
-    .single();
-
-  if (error) return { success: false as const, error: error.message };
-  return { success: true as const, data };
-}
-
-/**
- * List active gyms (for discovery / browse screen).
- */
-export async function listActiveGyms(options?: {
-  city?: string;
-  limit?: number;
-}) {
-  const supabase = await createClient();
-
-  let query = supabase
-    .from("gyms")
-    .select("id, name, code, gym_description, logo_url, city, state, amenities")
-    .eq("status", "Active")
-    .order("name", { ascending: true })
-    .limit(options?.limit ?? 20);
-
-  if (options?.city) query = query.ilike("city", `%${options.city}%`);
-
-  const { data, error } = await query;
-  if (error) return { success: false as const, error: error.message };
-  return { success: true as const, data };
-}
-
-// ============================================================================
 // Membership Application
 // ============================================================================
 
@@ -241,7 +275,7 @@ export async function listActiveGyms(options?: {
  * Submit a membership application to a gym.
  * RLS: member_id must equal current_member_id().
  */
-export async function applyForMembership(payload: {
+export async function applyForMembershipAction(payload: {
   gymId: string;
   memberId: string;
   planId: string;
@@ -304,7 +338,7 @@ export async function applyForMembership(payload: {
  *   - status is set server-side to PendingVerification (cannot be faked)
  *   - A payment_receipts row is created (old one's is_current flipped to false)
  */
-export async function submitPayment(
+export async function submitPaymentAction(
   paymentId: string,
   payload: {
     method:
@@ -349,7 +383,7 @@ export async function submitPayment(
  *
  * Returns: { action: 'checked_in' | 'checked_out' | 'already_done', ... }
  */
-export async function checkInOrOut(qrIdentifier: string): Promise<
+export async function checkInOrOutAction(qrIdentifier: string): Promise<
   ActionResult<{
     action: "checked_in" | "checked_out" | "already_done";
     checkIn?: string;
@@ -373,7 +407,7 @@ export async function checkInOrOut(qrIdentifier: string): Promise<
 // Messaging
 // ============================================================================
 
-export async function sendMessage(payload: {
+export async function sendMessageAction(payload: {
   gymId?: string;
   receiverId: string;
   subject?: string;
@@ -405,7 +439,7 @@ export async function sendMessage(payload: {
   return { success: true, data: { id: data.id } };
 }
 
-export async function markMessageRead(
+export async function markMessageReadAction(
   messageId: string,
 ): Promise<ActionResult> {
   const supabase = await createClient();

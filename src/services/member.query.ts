@@ -2,6 +2,57 @@ import { ActionResult } from "@/actions/owner.action";
 import { createClient } from "@/lib/supabase/server";
 import { getTodayDateStr } from "@/lib/utils";
 
+// ============================================================================
+// Gym Discovery
+// ============================================================================
+
+/**
+ * Find a gym by its unique code (e.g. "Q8K7PW").
+ */
+export async function findGymByCode(code: string) {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("gyms")
+    .select(
+      `
+      id, name, code, gym_description, logo_url, contact_email, contact_phone,
+      city, state, country, amenities,
+      membership_plans(id, plan_name, short_description, plan_price, duration_months,
+        joining_fee, plan_category, plan_color, selected_features, custom_features,
+        enrollment_mode, status, is_featured)
+    `,
+    )
+    .eq("code", code.toUpperCase())
+    .eq("status", "Active")
+    .single();
+
+  if (error) return { success: false as const, error: error.message };
+  return { success: true as const, data };
+}
+
+/**
+ * List active gyms (for discovery / browse screen).
+ */
+export async function listActiveGyms(options?: {
+  city?: string;
+  limit?: number;
+}) {
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("gyms")
+    .select("id, name, code, gym_description, logo_url, city, state, amenities")
+    .eq("status", "Active")
+    .order("name", { ascending: true })
+    .limit(options?.limit ?? 20);
+
+  if (options?.city) query = query.ilike("city", `%${options.city}%`);
+
+  const { data, error } = await query;
+  if (error) return { success: false as const, error: error.message };
+  return { success: true as const, data };
+}
 
 // ============================================================================
 // Dashboard read-only queries

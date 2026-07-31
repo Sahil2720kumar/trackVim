@@ -1,6 +1,12 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { ROOM_TYPES } from "@/constants/gym-options";
+import { createGymSchema } from "@/db/validators";
+import { MAX_GALLERY_IMAGES, uploadFile } from "@/lib/cloudinary/upload";
+import { extractGymFields } from "@/lib/extractFields";
+import { createServerClient } from "@/lib/supabase/server";
+import { generateGymCode } from "@/lib/utils";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 
 // ============================================================================
@@ -21,66 +27,223 @@ export type ActionResult<T = void> =
  *   - billing_start_date = today + 1 month
  *   - current_plan_id    = Basic
  */
-export async function createGym(payload: {
-  name: string;
-  code: string;
-  ownerId: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  gymShortName?: string;
-  gymDescription?: string;
-  website?: string;
-  logoUrl?: string;
-  addressLine1?: string;
-  city?: string;
-  state?: string;
-  postalCode?: string;
-  country?: string;
-  amenities?: string[];
-  equipment?: { name: string; quantity: number }[];
-  gstRegistered?: boolean;
-  gstin?: string;
-  legalBusinessName?: string;
-}): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("gyms")
-    .insert({
-      owner_id: payload.ownerId,
-      name: payload.name,
-      code: payload.code,
-      gym_short_name: payload.gymShortName,
-      gym_description: payload.gymDescription,
-      contact_email: payload.contactEmail,
-      contact_phone: payload.contactPhone,
-      website: payload.website,
-      logo_url: payload.logoUrl,
-      address_line1: payload.addressLine1,
-      city: payload.city,
-      state: payload.state,
-      postal_code: payload.postalCode,
-      country: payload.country ?? "India",
-      amenities: payload.amenities ?? [],
-      equipment: payload.equipment ?? [],
-      gst_registered: payload.gstRegistered ?? false,
-      gstin: payload.gstin,
-      legal_business_name: payload.legalBusinessName,
+export async function createGymAction(
+  formData: FormData,
+): Promise<ActionResult<{ id: string; code: string }>> {
+  // 1. Auth
+  const { userId } = await auth();
+  if (!userId) {
+    return {
+      success: false,
+      error: "You must be signed in to register a gym.",
+    };
+  }
+
+  // 2. Validate
+  const parsed = createGymSchema.safeParse(extractGymFields(formData));
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid gym data.",
+    };
+  }
+  const gymData = parsed.data;
+
+  // 3. Files
+  const logo = formData.get("logo");
+  const paymentQr = formData.get("paymentQr");
+  const gallery = formData
+    .getAll("gallery")
+    .filter((v): v is File => v instanceof File);
+
+  if (gallery.length > MAX_GALLERY_IMAGES) {
+    return {
+      success: false,
+      error: `You can upload up to ${MAX_GALLERY_IMAGES} gallery images.`,
+    };
+  }
+
+  // 4. Upload all files in parallel
+  let logoUrl: string | undefined;
+  let paymentQrUrl: string | undefined;
+  let galleryUrls: string[] = [];
+
+  try {
+    const folder = `trackVim/gyms/${userId}`;
+    const [logoResult, qrResult, galleryResult] = await Promise.all([
+      logo instanceof File && logo.size > 0
+        ? uploadFile(logo, `${folder}/logo`)
+        : Promise.resolve(undefined),
+      paymentQr instanceof File && paymentQr.size > 0
+        ? uploadFile(paymentQr, `${folder}/payment-qr`)
+        : Promise.resolve(undefined),
+      gallery.length
+        ? Promise.all(gallery.map((f) => uploadFile(f, `${folder}/gallery`)))
+        : Promise.resolve([]),
+    ]);
+    logoUrl = logoResult;
+    paymentQrUrl = qrResult;
+    galleryUrls = galleryResult;
+  } catch (err) {
+    return {
+      success: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to upload images. Please try again.",
+    };
+  }
+
+  const supabase = await createServerClient();
+  const code = generateGymCode();
+
+  // 5. Update user row first — we need users.id for gyms.owner_id
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .update({
+      full_name: gymData.ownerName,
+      phone: gymData.contactPhone ?? gymData.businessPhone,
+      role: "owner",
+      account_status: "Active",
     })
-    .select("id")
+    .eq("clerk_id", userId)
+    .select("id,email")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (userError) return { success: false, error: userError.message };
 
-  revalidatePath("/dashboard");
-  return { success: true, data: { id: data.id } };
+  const internalUserId = userData.id; // UUID from users table
+
+  // 6. Insert gym — owner_id now correctly references users.id (UUID)
+  const { data: gymData2, error: gymError } = await supabase
+    .from("gyms")
+    .insert({
+      owner_id: internalUserId,
+
+      // ── Core identity ──────────────────────────────────────────────
+      name: gymData.name,
+      code,
+      gym_short_name: gymData.gymShortName ?? null,
+      gym_description: gymData.gymDescription ?? null,
+
+      // ── Contact ────────────────────────────────────────────────────
+      contact_email: userData.email ?? null,
+      contact_phone: gymData.contactPhone ?? null,
+      website: gymData.website ?? null,
+      logo_url: logoUrl ?? null,
+      payment_qr_url: paymentQrUrl ?? null,
+
+      // ── Owner / business ───────────────────────────────────────────
+      owner_name: gymData.ownerName ?? null,
+      business_name: gymData.businessName ?? null,
+      business_email: gymData.businessEmail ?? null,
+      business_phone: gymData.businessPhone ?? null,
+
+      // ── Address ────────────────────────────────────────────────────
+      address_line1: gymData.addressLine1 ?? null,
+      address_line2: gymData.addressLine2 ?? null,
+      city: gymData.city ?? null,
+      state: gymData.state ?? null,
+      state_code: gymData.stateCode ?? null,
+      postal_code: gymData.postalCode ?? null,
+      country: gymData.country ?? "India",
+      timezone: gymData.timezone ?? "Asia/Kolkata",
+
+      // ── Facilities ─────────────────────────────────────────────────
+      number_of_floors: gymData.numberOfFloors ?? null,
+      number_of_rooms: gymData.numberOfRooms ?? null,
+      facility_notes: gymData.facilityNotes ?? null,
+
+      has_washroom: gymData.hasWashroom ?? false,
+      washroom_count: gymData.hasWashroom
+        ? (gymData.washroomCount ?? null)
+        : null,
+
+      has_sauna_room: gymData.hasSaunaRoom ?? false,
+      sauna_room_count: gymData.hasSaunaRoom
+        ? (gymData.saunaRoomCount ?? null)
+        : null,
+
+      has_steam_room: gymData.hasSteamRoom ?? false,
+      steam_room_count: gymData.hasSteamRoom
+        ? (gymData.steamRoomCount ?? null)
+        : null,
+
+      has_shower_room: gymData.hasShowerRoom ?? false,
+      shower_room_count: gymData.hasShowerRoom
+        ? (gymData.showerRoomCount ?? null)
+        : null,
+
+      has_locker_room: gymData.hasLockerRoom ?? false,
+      locker_room_count: gymData.hasLockerRoom
+        ? (gymData.lockerRoomCount ?? null)
+        : null,
+
+      // ── Extras ─────────────────────────────────────────────────────
+      amenities: gymData.amenities ?? [],
+      equipment: gymData.equipment ?? [],
+
+      // ── GST ────────────────────────────────────────────────────────
+      gst_registered: gymData.gstRegistered ?? false,
+      gstin: gymData.gstRegistered ? (gymData.gstin ?? null) : null,
+      legal_business_name: gymData.gstRegistered
+        ? (gymData.legalBusinessName ?? null)
+        : null,
+      billing_address: gymData.gstRegistered
+        ? (gymData.billingAddress ?? null)
+        : null,
+      gst_state: gymData.gstRegistered ? (gymData.gstState ?? null) : null,
+      place_of_supply: gymData.gstRegistered
+        ? (gymData.placeOfSupply ?? null)
+        : null,
+      sac_code: gymData.gstRegistered ? (gymData.sacCode ?? null) : null,
+    })
+    .select("id, code")
+    .single();
+
+  if (gymError) return { success: false, error: gymError.message };
+
+  const gymId = gymData2.id;
+
+  // 7. Gallery photos + Clerk metadata in parallel
+  const sideEffects: PromiseLike<unknown>[] = [
+    clerkClient().then((client) =>
+      client.users.updateUserMetadata(userId, {
+        publicMetadata: { role: "owner", gymId, onboardingComplete: true },
+      }),
+    ),
+  ];
+
+  if (galleryUrls.length) {
+    sideEffects.push(
+      supabase
+        .from("gym_photos")
+        .insert(
+          galleryUrls.map((url, i) => ({
+            gym_id: gymId,
+            uploaded_by: internalUserId, // ← consistent with FK
+            photo_url: url,
+            is_cover: i === 0,
+            sort_order: i,
+          })),
+        )
+        .then(({ error }) => {
+          if (error) console.error("gym_photos insert failed:", error);
+        }),
+    );
+  }
+
+  await Promise.all(sideEffects);
+  // revalidatePath("/owner/dashboard");
+  return { success: true, data: { id: gymId, code: gymData2.code } };
 }
 
 /**
  * Update gym profile. billing_start_date and current_plan_id are protected by
  * the `gyms_protect_billing_fields` trigger and cannot be updated here.
  */
-export async function updateGym(
+export async function updateGymAction(
   gymId: string,
   payload: Partial<{
     name: string;
@@ -156,7 +319,10 @@ export async function updateGym(
     if (val !== undefined) update[col] = val;
   }
 
-  const { error } = await supabase.from("gyms").update(update as any).eq("id", gymId);
+  const { error } = await supabase
+    .from("gyms")
+    .update(update as any)
+    .eq("id", gymId);
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/dashboard/settings");
@@ -168,7 +334,7 @@ export async function updateGym(
  * RPC `change_gym_subscription_plan` internally sets the bypass flag and
  * updates gyms.current_plan_id in one transaction.
  */
-export async function changeGymSubscriptionPlan(
+export async function changeGymSubscriptionPlanAction(
   gymId: string,
   newPlanId: string,
 ): Promise<ActionResult> {
@@ -189,7 +355,7 @@ export async function changeGymSubscriptionPlan(
 // Gym Locations
 // ============================================================================
 
-export async function createGymLocation(payload: {
+export async function createGymLocationAction(payload: {
   gymId: string;
   name?: string;
   address?: string;
@@ -213,7 +379,7 @@ export async function createGymLocation(payload: {
   return { success: true, data: { id: data.id } };
 }
 
-export async function updateGymLocation(
+export async function updateGymLocationAction(
   locationId: string,
   payload: Partial<{ name: string; address: string; isPrimary: boolean }>,
 ): Promise<ActionResult> {
@@ -237,7 +403,7 @@ export async function updateGymLocation(
 // QR Codes
 // ============================================================================
 
-export async function createGymQrCode(payload: {
+export async function createGymQrCodeAction(payload: {
   gymId: string;
   locationId?: string;
   label?: string;
@@ -265,7 +431,7 @@ export async function createGymQrCode(payload: {
   return { success: true, data: { id: data.id } };
 }
 
-export async function toggleQrCodeActive(
+export async function toggleQrCodeActiveAction(
   qrCodeId: string,
   isActive: boolean,
 ): Promise<ActionResult> {
@@ -285,7 +451,7 @@ export async function toggleQrCodeActive(
 // Membership Plans
 // ============================================================================
 
-export async function createMembershipPlan(
+export async function createMembershipPlanAction(
   gymId: string,
   payload: {
     planName: string;
@@ -353,7 +519,7 @@ export async function createMembershipPlan(
   return { success: true, data: { id: data.id } };
 }
 
-export async function updateMembershipPlan(
+export async function updateMembershipPlanAction(
   planId: string,
   payload: Partial<{
     planName: string;
@@ -416,7 +582,7 @@ export async function updateMembershipPlan(
   return { success: true, data: undefined };
 }
 
-export async function deleteMembershipPlan(
+export async function deleteMembershipPlanAction(
   planId: string,
 ): Promise<ActionResult> {
   const supabase = await createClient();
@@ -444,7 +610,7 @@ export async function deleteMembershipPlan(
  * Invite a new trainer. Creates a trainers row with status='Invited'.
  * Trainer fills in their profile (bio, availability, etc.) after accepting.
  */
-export async function inviteTrainer(payload: {
+export async function inviteTrainerAction(payload: {
   gymId: string;
   invitedEmail: string;
   clerkInvitationId?: string;
@@ -485,7 +651,7 @@ export async function inviteTrainer(payload: {
  * The `trainers_guard_self_update` trigger allows these ONLY when is_gym_owner()=true.
  * Fields: gym_id, salary, employee_id, status, profile_id, max_members.
  */
-export async function updateTrainerOwnerFields(
+export async function updateTrainerOwnerFieldsAction(
   trainerId: string,
   payload: Partial<{
     salary: number;
@@ -518,7 +684,7 @@ export async function updateTrainerOwnerFields(
 // Trainer Assignments
 // ============================================================================
 
-export async function assignTrainerToMember(payload: {
+export async function assignTrainerToMemberAction(payload: {
   gymId: string;
   memberId: string;
   trainerId: string;
@@ -543,7 +709,7 @@ export async function assignTrainerToMember(payload: {
   return { success: true, data: { id: data.id } };
 }
 
-export async function unassignTrainer(
+export async function unassignTrainerAction(
   assignmentId: string,
 ): Promise<ActionResult> {
   const supabase = await createClient();
@@ -571,7 +737,7 @@ export async function unassignTrainer(
  *
  * Returns the new gym_memberships.id.
  */
-export async function approveMembershipApplication(
+export async function approveMembershipApplicationAction(
   applicationId: string,
 ): Promise<ActionResult<{ membershipId: string }>> {
   const supabase = await createClient();
@@ -592,7 +758,7 @@ export async function approveMembershipApplication(
  * Application(Pending) → Rejected, notification sent.
  * No membership row is ever created for a rejected application.
  */
-export async function rejectMembershipApplication(
+export async function rejectMembershipApplicationAction(
   applicationId: string,
   reason: string,
 ): Promise<ActionResult> {
@@ -619,7 +785,9 @@ export async function rejectMembershipApplication(
  * Membership → Active (dates computed from today)
  * Notification sent to member.
  */
-export async function verifyPayment(paymentId: string): Promise<ActionResult> {
+export async function verifyPaymentAction(
+  paymentId: string,
+): Promise<ActionResult> {
   const supabase = await createClient();
 
   const { error } = await supabase.rpc("verify_payment", {
@@ -639,7 +807,7 @@ export async function verifyPayment(paymentId: string): Promise<ActionResult> {
  * Membership → PaymentRejected
  * Notification sent to member (member re-uploads via submit_payment RPC).
  */
-export async function rejectPayment(
+export async function rejectPaymentAction(
   paymentId: string,
   reason: string,
 ): Promise<ActionResult> {
@@ -667,7 +835,7 @@ export async function rejectPayment(
  * Optionally switches to a different plan via planId.
  * Returns the new gym_memberships.id.
  */
-export async function renewMembership(
+export async function renewMembershipAction(
   gymMembershipId: string,
   planId?: string,
 ): Promise<ActionResult<{ membershipId: string }>> {
@@ -687,7 +855,7 @@ export async function renewMembership(
 /**
  * Manually cancel a membership.
  */
-export async function cancelMembership(
+export async function cancelMembershipAction(
   membershipId: string,
   reason?: string,
 ): Promise<ActionResult> {
@@ -717,7 +885,7 @@ export async function cancelMembership(
  * Suspend or reinstate a member account.
  * The `members_guard_self_update` trigger enforces owner-only access.
  */
-export async function setMemberAccountStatus(
+export async function setMemberAccountStatusAction(
   memberId: string,
   status: "Active" | "Inactive" | "Suspended",
 ): Promise<ActionResult> {
@@ -746,7 +914,7 @@ export async function setMemberAccountStatus(
  *
  * Returns the subscription_payments.id.
  */
-export async function createSubscriptionPaymentOrder(
+export async function createSubscriptionPaymentOrderAction(
   gymSubscriptionId: string,
   gatewayOrderId: string,
 ): Promise<ActionResult<{ paymentId: string }>> {
@@ -773,7 +941,7 @@ export async function createSubscriptionPaymentOrder(
  * Staff retain direct write access to `attendance`; only members lost it
  * (they must use check_in_or_out RPC).
  */
-export async function correctAttendance(
+export async function correctAttendanceAction(
   attendanceId: string,
   payload: {
     checkOut: string;
@@ -803,7 +971,7 @@ export async function correctAttendance(
 // Notifications (mutation)
 // ============================================================================
 
-export async function markNotificationRead(
+export async function markNotificationReadAction(
   notificationId: string,
 ): Promise<ActionResult> {
   const supabase = await createClient();

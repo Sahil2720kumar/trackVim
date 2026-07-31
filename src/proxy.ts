@@ -6,7 +6,6 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/webhooks/(.*)",
-  // "/api/(.*)",
 ]);
 
 const isOnboardingRoute = createRouteMatcher([
@@ -27,16 +26,18 @@ export default clerkMiddleware(async (auth, req) => {
     return redirectToSignIn({ returnBackUrl: req.url });
   }
 
-  const role = sessionClaims?.publicMetadata?.role as
-    | "owner"
-    | "trainer"
-    | "member"
+  const metadata = sessionClaims?.publicMetadata as
+    | {
+        role?: "owner" | "trainer" | "member";
+        gymId?: string;
+        onboardingComplete?: boolean;
+      }
     | undefined;
-  const gymId = sessionClaims?.publicMetadata?.gymId as string | undefined;
 
-  // Signed in but hasn't finished onboarding (no role/gym yet) -> force onboarding
-  const onboardingComplete = Boolean(role && gymId);
+  const role = metadata?.role;
+  const onboardingComplete = Boolean(metadata?.onboardingComplete);
 
+  // Signed in but hasn't finished onboarding -> force onboarding
   if (!onboardingComplete && !isOnboardingRoute(req)) {
     return NextResponse.redirect(new URL("/onboarding/select-role", req.url));
   }
@@ -44,7 +45,7 @@ export default clerkMiddleware(async (auth, req) => {
   // Already onboarded -> don't let them revisit onboarding
   if (onboardingComplete && isOnboardingRoute(req)) {
     if (role === "member") {
-      return NextResponse.redirect(new URL(`/member/home`, req.url));
+      return NextResponse.redirect(new URL("/member/home", req.url));
     }
     return NextResponse.redirect(new URL(`/${role}/dashboard`, req.url));
   }

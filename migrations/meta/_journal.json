@@ -71,6 +71,20 @@
       "when": 1785232132709,
       "tag": "0009_concerned_swordsman",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785313970238,
+      "tag": "0010_majestic_millenium_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785399138471,
+      "tag": "0011_burly_black_bolt",
+      "breakpoints": true
     }
   ]
 }

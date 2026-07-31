@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Settings as SettingsIcon } from "lucide-react";
-import SettingsForm, { SETTINGS_FORM_ID } from "@/components/owner/SettingsForm";
+import SettingsForm, {
+  SETTINGS_FORM_ID,
+} from "@/components/owner/SettingsForm";
 import { bigSquareButton } from "@/lib/styles";
 
 export default function SettingsPage() {

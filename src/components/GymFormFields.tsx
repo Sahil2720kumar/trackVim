@@ -33,7 +33,7 @@ export const FormInput = ({
         error
           ? "border-destructive bg-destructive/5"
           : "border-border bg-background hover:border-border/80 focus:border-primary"
-      } focus:outline-none focus:ring-2 focus:ring-primary/20`}
+      } focus:outline-none focus:ring-2 focus:ring-primary/20 `}
       {...props}
     />
     {error && (
