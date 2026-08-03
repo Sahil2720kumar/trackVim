@@ -99,7 +99,7 @@ export async function inviteMemberAction(
   // creates the gym_membership (PaymentPending) AND the Pending payment
   // stub together, atomically.
   const { data: membershipId, error: membershipError } = await supabase.rpc(
-    "create_walkin_membership",
+    "create_walkin_membership_v2",
     {
       p_gym_id: gymId,
       p_member_id: member.id,
@@ -211,6 +211,9 @@ export async function inviteMemberAction(
   // create_walkin_membership just inserted and records it as collected.
   // Membership stays PaymentPending either way — see the note at the top.
   if (markPaidNow) {
+    if (!paymentMethod) {
+      return { success: false, error: "Select a payment method." };
+    }
     const { data: payment, error: paymentLookupError } = await supabase
       .from("payments")
       .select("id")

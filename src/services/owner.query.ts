@@ -1,3 +1,4 @@
+import { ActionResult } from "@/actions/member.action";
 import { createServerClient } from "@/lib/supabase/server";
 
 // ============================================================================
@@ -22,9 +23,10 @@ export async function getMembershipPlans(gymId: string) {
     `,
     )
     .eq("gym_id", gymId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: true });
-  if (error) return { success: false, error: error.message };
-  return { success: true, data };
+  if (error) return { success: false as const, error: error.message };
+  return { success: true as const, data };
 }
 
 export async function getTrainersAndPlans(gymId: string) {

@@ -229,7 +229,15 @@ export async function createGymAction(
     );
   }
 
-  await Promise.all(sideEffects);
+  const results = await Promise.allSettled(sideEffects);
+  const failed = results.find((r) => r.status === "rejected");
+  if (failed) {
+    return {
+      success: false,
+      error:
+        "Gym created, but finalizing your account failed. Please retry to finish setup.",
+    };
+  }
   return { success: true, data: { id: gymId, code: gymData2.code } };
 }
 
@@ -449,11 +457,15 @@ export async function createMembershipPlanAction(
   data: CreateMembershipPlanInput,
 ): Promise<ActionResult<{ id: string }>> {
   // 1. Auth
-  const { userId } = await auth();
-  if (!userId) {
+  const { userId, sessionClaims } = await auth();
+  const ownerMeta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (!userId || ownerMeta.role !== "owner" || !ownerMeta.gymId) {
     return {
       success: false,
-      error: "You must be signed in to create a membership plan.",
+      error: "Not authorized to create a membership plan.",
     };
   }
 
@@ -467,18 +479,8 @@ export async function createMembershipPlanAction(
   }
   const plan = parsed.data;
 
-  // 3. Resolve the caller's gym — reads the gymId that was written into
-  // publicMetadata during onboarding (see createGymAction, step 7).
-  const client = await clerkClient();
-  const clerkUser = await client.users.getUser(userId);
-  const gymId = clerkUser.publicMetadata?.gymId as string | undefined;
-
-  if (!gymId) {
-    return {
-      success: false,
-      error: "No gym found for your account. Please register a gym first.",
-    };
-  }
+  // 3. use the caller's gym Id
+  const gymId = ownerMeta.gymId;
 
   // 4. Insert — table-level RLS ("Gym staff can manage plans") is the
   // actual authorization boundary here, keyed off gym_id via STAFF_GYM_IDS.

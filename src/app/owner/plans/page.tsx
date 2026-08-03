@@ -34,7 +34,7 @@ export default async function MembershipPlansPage() {
 
   const totalMembers =
     initialPlans?.reduce(
-      (sum, p) => sum + p.gym_memberships?.[0]?.count || 0,
+      (sum, p) => sum + (p.gym_memberships?.[0]?.count ?? 0),
       0,
     ) || 0;
 
@@ -88,8 +88,8 @@ export default async function MembershipPlansPage() {
         <StatCard
           icon={Star}
           title="Most Popular Plan"
-          value={mostPopularPlan?.plan_name || ""}
-          subtitle={`${mostPopularPlan?.gym_memberships[0].count} Members`}
+          value={mostPopularPlan?.plan_name || "—"}
+          subtitle={`${mostPopularPlan?.gym_memberships?.[0]?.count ?? 0} Members`}
           iconBg="bg-purple-100"
           iconColor="text-purple-600"
         />

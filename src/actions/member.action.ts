@@ -135,11 +135,11 @@ export async function createMemberProfileAction(
     account_status: "Active",
     ...(photoUrl ? { photo_url: photoUrl } : {}),
   };
+
   // Drop undefined keys so a partial submission never nulls stored data.
+  // `null` is kept so a cleared field is actually cleared.
   const definedMemberFields = Object.fromEntries(
-    Object.entries(memberFields).filter(
-      ([, v]) => v !== null && v !== undefined,
-    ),
+    Object.entries(memberFields).filter(([, v]) => v !== undefined),
   );
 
   // 5. Create vs update. Don't trust the memberId param alone — Clerk
@@ -187,15 +187,24 @@ export async function createMemberProfileAction(
   // 6. Update Clerk metadata — now includes memberId, which is the actual
   // fix for the bug: without this, every future page load has no
   // memberId to check against and falls back to "create" mode again.
-  await clerkClient().then((client) =>
-    client.users.updateUserMetadata(userId, {
+  try {
+    const client = await clerkClient();
+    await client.users.updateUserMetadata(userId, {
       publicMetadata: {
         role: "member",
         memberId: member.id,
         onboardingComplete: true,
       },
-    }),
-  );
+    });
+  } catch (err) {
+    return {
+      success: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to finalize onboarding. Please retry.",
+    };
+  }
 
   return { success: true, data: { id: member.id } };
 }

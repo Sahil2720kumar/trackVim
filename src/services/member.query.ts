@@ -25,9 +25,13 @@ export async function findGymByCode(code: string) {
     )
     .eq("code", code.toUpperCase())
     .eq("status", "Active")
-    .single();
+    .eq("membership_plans.status", "Active")
+    .is("membership_plans.deleted_at", null)
+    .maybeSingle();
 
   if (error) return { success: false as const, error: error.message };
+  if (!data)
+    return { success: false as const, error: "No gym found for that code." };
   return { success: true as const, data };
 }
 
