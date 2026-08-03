@@ -88,7 +88,7 @@ const STATE_OPTIONS = [
 const EMPLOYMENT_TYPE_OPTIONS = [
   "Full Time",
   "Part Time",
-  "Freelance",
+  // "Freelance",
   "Contract",
 ].map((v) => ({
   value: v,

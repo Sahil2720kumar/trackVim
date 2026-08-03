@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -34,19 +34,62 @@ import {
   STATE_OPTIONS,
 } from "@/constants/profile-options";
 import { createMemberProfileAction } from "@/actions/member.action";
-import { buildMemberFormData } from "@/lib/extractFields";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
 
+// Row shape from Supabase is snake_case; the form/schema is camelCase.
+// Same merge boundary as TrainerProfileForm: this only maps fields the
+// member themself can edit — gym-side fields (membership, plan, etc.)
+// stay untouched.
+function toDefaultValues(
+  member: Record<string, unknown> | undefined,
+): Partial<CreateMemberInput> {
+  if (!member) return {};
+  return {
+    fullName: member.full_name as string,
+    contactPhone: member.contact_phone as string,
+    dateOfBirth: member.date_of_birth as string,
+    gender: member.gender as CreateMemberInput["gender"],
+    occupation: member.occupation as string,
+    bloodGroup: member.blood_group as CreateMemberInput["bloodGroup"],
+    address: member.address as string,
+    city: member.city as string,
+    state: member.state as string,
+    pinCode: member.pin_code as string,
+    heightCm: String(member.height_cm),
+    weightKg: String(member.weight_kg),
+    fitnessGoal: member.fitness_goal as CreateMemberInput["fitnessGoal"],
+    medicalConditions: member.medical_conditions as string,
+    allergies: member.allergies as string,
+    physicalNotes: member.physical_notes as string,
+    emergencyContactName: member.emergency_contact_name as string,
+    emergencyContactRelationship:
+      member.emergency_contact_relationship as CreateMemberInput["emergencyContactRelationship"],
+    emergencyContactPhone: member.emergency_contact_phone as string,
+    emergencyContactAddress: member.emergency_contact_address as string,
+    additionalNotes: member.additional_notes as string,
+  };
+}
+
 // ---------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------
-export default function MemberProfileForm() {
+export default function MemberProfileForm({
+  memberId,
+  initialData,
+}: {
+  memberId?: string;
+  initialData?: Record<string, unknown>;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const photo = useSingleUpload(undefined, 2 * 1024 * 1024);
-  const { session } = useClerk(); // add this
+  const { session } = useClerk();
+
+  const [existingPhotoUrl] = useState<string | null>(
+    (initialData?.photo_url as string) || null,
+  );
 
   const {
     register,
@@ -55,20 +98,24 @@ export default function MemberProfileForm() {
     formState: { errors },
   } = useForm<CreateMemberInput>({
     resolver: zodResolver(createMemberSchema),
+    defaultValues: toDefaultValues(initialData),
   });
 
   const watchedNotes = watch("additionalNotes");
 
-  const isSubmitting = useRef(false);
-
   const onSubmit = (data: CreateMemberInput) => {
-    if (isSubmitting.current) return; // block concurrent calls
-    isSubmitting.current = true;
-
+    if (isPending) return;
     startTransition(async () => {
       try {
+        // NOTE: createMemberProfileAction currently takes (data, photoFile)
+        // for the create-your-own-profile flow. Passing memberId here so
+        // it can also handle the edit-existing-member case (mirroring
+        // completeTrainerProfileAction(trainerId, data, photoFile)) —
+        // the action needs updating to accept and use it.
         const result = await createMemberProfileAction(
-          buildMemberFormData(data, photo.file),
+          memberId ?? null,
+          data,
+          photo.file ?? null,
         );
         if (!result.success) {
           toast.error(result.error);
@@ -80,8 +127,6 @@ export default function MemberProfileForm() {
       } catch (error) {
         console.error("Error saving profile:", error);
         toast.error("Error saving profile. Please try again.");
-      } finally {
-        isSubmitting.current = false;
       }
     });
   };
@@ -112,7 +157,7 @@ export default function MemberProfileForm() {
       <SectionCard title="Personal Information" icon={User}>
         <ProfileImageUpload
           maxSize={2}
-          image={photo.preview}
+          image={photo.preview ?? existingPhotoUrl}
           onChange={photo.selectFile}
         />
         {photo.error && (
@@ -169,26 +214,27 @@ export default function MemberProfileForm() {
       <SectionCard title="Address" icon={MapPin}>
         <FormInput
           label="Address"
-          placeholder="123, Green Park Avenue, Near City Center"
+          placeholder="Enter address"
           {...register("address")}
           error={errors.address}
         />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <FormInput
             label="City"
-            placeholder="Bangalore"
+            placeholder="Enter city name"
             {...register("city")}
             error={errors.city}
           />
           <FormSelect
             label="State"
+            placeholder="Enter state name"
             options={STATE_OPTIONS}
             {...register("state")}
             error={errors.state}
           />
           <FormInput
             label="PIN Code"
-            placeholder="560034"
+            placeholder="Enter pin code"
             {...register("pinCode")}
             error={errors.pinCode}
           />
@@ -318,7 +364,7 @@ export default function MemberProfileForm() {
             type="button"
             variant="outline"
             onClick={handleSkip}
-            disabled={isPending} // add this
+            disabled={isPending}
             className={`${bigSquareButton} flex-1`}
           >
             Skip

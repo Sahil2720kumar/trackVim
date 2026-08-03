@@ -705,6 +705,8 @@ export const trainers = pgTable(
     fullName: text("full_name"),
     contactEmail: varchar("contact_email", { length: 320 }),
     contactPhone: varchar("contact_phone", { length: 20 }),
+    photoUrl: text("photo_url"),
+    trainerCode: varchar("trainer_code", { length: 20 }).unique(),
     profileId: uuid("profile_id").references(() => profiles.id, {
       onDelete: "cascade",
     }),
@@ -829,6 +831,8 @@ export const members = pgTable(
     fullName: text("full_name"),
     contactEmail: varchar("contact_email", { length: 320 }),
     contactPhone: varchar("contact_phone", { length: 20 }),
+
+    invitedEmail: varchar("invited_email", { length: 320 }),
     clerkInvitationId: varchar("clerk_invitation_id", { length: 255 }),
     invitationSentAt: timestamp("invitation_sent_at", { withTimezone: true }),
     invitationAcceptedAt: timestamp("invitation_accepted_at", {
@@ -1153,7 +1157,7 @@ export const payments = pgTable(
       { onDelete: "set null" },
     ),
 
-    receiptId: varchar("receipt_id", { length: 20 }),
+    receiptId: varchar("receipt_id", { length: 20 }), //this is temporarily unnecessary
 
     amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
     paymentDate: date("payment_date"),

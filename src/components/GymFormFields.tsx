@@ -77,12 +77,22 @@ export const FormInputWithUnit = ({
   </div>
 );
 
-export const FormSelect = ({ label, options, error, ...props }: any) => (
+export const FormSelect = ({
+  label,
+  options,
+  error,
+  ...props
+}: {
+  label: string;
+  options: any[];
+  error?: any;
+} & React.SelectHTMLAttributes<HTMLSelectElement>) => (
   <div className="flex flex-col gap-1.5 min-w-0">
     <label className="text-sm font-medium text-foreground">
       {label}
       {props.required && <span className="text-destructive ml-1">*</span>}
     </label>
+
     <select
       className={`w-full px-3 py-2 rounded-lg border transition-colors ${
         error
@@ -92,16 +102,24 @@ export const FormSelect = ({ label, options, error, ...props }: any) => (
       {...props}
     >
       <option value="">Select...</option>
-      {options.map((opt: any) => (
-        <option
-          className="px-3.5"
-          key={opt.value || opt.id}
-          value={opt.value || opt.id}
-        >
-          {opt.label || opt.name}
-        </option>
-      ))}
+
+      {options.map((opt) => {
+        if (typeof opt === "string") {
+          return (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          );
+        }
+
+        return (
+          <option key={opt.value ?? opt.id} value={opt.value ?? opt.id}>
+            {opt.label ?? opt.name ?? opt.full_name ?? opt.plan_name}
+          </option>
+        );
+      })}
     </select>
+
     {error && (
       <span className="text-xs text-destructive flex items-center gap-1">
         <AlertCircle className="w-3 h-3" />

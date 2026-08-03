@@ -141,6 +141,7 @@ import {
   gymSubscriptions,
   subscriptionPayments,
   systemSettings,
+  genderEnum,
 } from "./schema";
 
 // ============================================================================
@@ -172,6 +173,7 @@ const optionalCoerceInt = (min?: number, max?: number) =>
 
 // Zod v4: email is a top-level format function, not a ZodString method, so
 // trim/lowercase happen in a preprocess step instead of chaining.
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const email = z.preprocess(trimLower, z.email().max(320));
 const optionalEmail = z.preprocess(
   (v) => (v === "" || v === null || v === undefined ? undefined : trimLower(v)),
@@ -181,10 +183,10 @@ const optionalEmail = z.preprocess(
 // Loose E.164-ish phone check — international, 7-15 digits, optional leading +.
 // Not a Zod "format" type, so the plain ZodString chain is unaffected by v4.
 const phoneRegex = /^\+?[0-9]{7,15}$/;
-const phone = z.string().trim().regex(phoneRegex, "Invalid phone number");
+const phone = z.string().trim();
 const optionalPhone = z.preprocess(
   (v) => (v === "" ? undefined : v),
-  phone.optional().nullable(),
+  phone.regex(phoneRegex, "Invalid phone number").optional().nullable(),
 );
 
 const url = z.preprocess(trim, z.url().max(2048));
@@ -248,6 +250,11 @@ const optionalBool = z.preprocess(
 const optionalDate = z.preprocess(
   (v) => (v === "" ? undefined : v),
   z.iso.date().optional().nullable(),
+);
+
+const optionalTime = z.preprocess(
+  (v) => (v === "" ? undefined : v),
+  z.iso.time().optional().nullable(),
 );
 
 // Shared equipment shape — was duplicated verbatim across the gym
@@ -561,6 +568,7 @@ function withMembershipPlanChecks<T extends z.ZodTypeAny>(schema: T) {
 export const createMembershipPlanSchema = withMembershipPlanChecks(
   createInsertSchema(membershipPlans, membershipPlanRefinements).omit({
     id: true,
+    gymId: true,
     createdAt: true,
     updatedAt: true,
     deletedAt: true,
@@ -596,9 +604,23 @@ export type UpdateMembershipPlanInput = z.infer<
 // NOT in this refinement map and are omitted from both schemas; recompute
 // them server-side instead of trusting client input.
 const trainerRefinements = {
-  invitedEmail: optionalEmail,
-  professionalTitle: z.string().trim().max(200).optional().nullable(),
-  bio: z.string().trim().max(2000).optional().nullable(),
+  invitedEmail: z
+    .email()
+    .max(320)
+    .regex(emailRegex, "Invalid email address")
+    .optional()
+    .nullable(),
+  fullName: z.string().trim().min(1).max(200).optional().nullable(),
+
+  contactPhone: optionalPhone,
+  contactEmail: z
+    .email()
+    .max(320)
+    .regex(emailRegex, "Invalid email address")
+    .optional()
+    .nullable(),
+  professionalTitle: z.string().trim().min(5).max(200).optional().nullable(),
+  bio: z.string().trim().min(10).max(2000).optional().nullable(),
   experienceYears: optionalCoerceInt(0, 70),
   salary: optionalMoney,
   specializations: z.array(z.string()).optional(),
@@ -608,6 +630,8 @@ const trainerRefinements = {
   sessionTypes: z.array(z.string()).optional(),
   languages: z.array(z.string()).optional(),
   instagram: optionalUrl,
+  startTime: optionalTime,
+  endTime: optionalTime,
   linkedin: optionalUrl,
   youtube: optionalUrl,
   websiteUrl: optionalUrl,
@@ -639,6 +663,7 @@ const trainerSystemManagedOmit = {
   clerkInvitationId: true,
   invitationSentAt: true,
   invitationAcceptedAt: true,
+  gymId: true,
 } as const;
 
 export const createTrainerSchema = createInsertSchema(
@@ -659,7 +684,6 @@ export const updateTrainerSchema = createUpdateSchema(
 ).omit({
   id: true,
   profileId: true,
-  gymId: true,
   contactEmail: true,
   ...trainerSystemManagedOmit,
   createdAt: true,
@@ -678,10 +702,16 @@ export type UpdateTrainerInput = z.infer<typeof updateTrainerSchema>;
 
 const memberRefinements = {
   fullName: z.string().trim().min(1).max(200).optional().nullable(),
-  contactEmail: optionalEmail,
   contactPhone: optionalPhone,
   dateOfBirth: optionalDate,
+  gender: z.enum(genderEnum.enumValues).optional().nullable(),
   photoUrl: optionalUrl,
+  invitedEmail: z
+    .email()
+    .max(320)
+    .regex(emailRegex, "Invalid email address")
+    .optional()
+    .nullable(),
   address: z.string().trim().max(500).optional().nullable(),
   pinCode: optionalPostalCode,
   heightCm: z.preprocess(
@@ -756,6 +786,27 @@ export const memberIdSchema = z.object({ id: uuid });
 
 export type CreateMemberInput = z.infer<typeof createMemberSchema>;
 export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
+
+//invite Member Form
+const membershipFields = z.object({
+  planId: uuid,
+  startDate: z.iso.date(),
+  joiningFee: optionalMoney,
+  discount: optionalMoney,
+  notes: z.string().trim().max(1000).optional().nullable(),
+});
+
+// trainer_assignments has no insert schema of its own yet — trainerId is
+// optional here since assigning a trainer at signup is optional.
+const trainerAssignmentField = z.object({
+  trainerId: uuid.optional().nullable(),
+});
+
+export const inviteMemberFormSchema = createMemberSchema
+  .merge(membershipFields)
+  .merge(trainerAssignmentField);
+
+export type InviteMemberFormInput = z.infer<typeof inviteMemberFormSchema>;
 
 // ============================================================================
 // Membership Applications

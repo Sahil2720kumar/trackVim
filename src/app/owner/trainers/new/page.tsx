@@ -1,6 +1,4 @@
-import { Button } from "@/components/ui/button";
-import { bigSquareButton } from "@/lib/styles";
-import TrainerForm, { TRAINER_FORM_ID } from "@/components/owner/TrainerForm";
+import TrainerInviteForm from "@/components/owner/TrainerInviteForm";
 
 export default function AddNewTrainerPage() {
   return (
@@ -16,30 +14,11 @@ export default function AddNewTrainerPage() {
               Register a trainer and send an invitation to join your gym.
             </p>
           </div>
-          <div className="flex w-full gap-3 sm:w-auto sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              className={`${bigSquareButton} flex-1 sm:flex-none`}
-            >
-              Cancel
-            </Button>
-            {/* type="submit" + form="..." lets this button, which lives
-                outside the <form> element, submit the client-side form
-                without this component needing to be a client component. */}
-            <Button
-              type="submit"
-              form={TRAINER_FORM_ID}
-              className={`${bigSquareButton} flex-1 sm:flex-none`}
-            >
-              Create Trainer
-            </Button>
-          </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <TrainerForm />
+      <TrainerInviteForm />
     </div>
   );
 }

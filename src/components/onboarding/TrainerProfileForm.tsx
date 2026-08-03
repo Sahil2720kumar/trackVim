@@ -1,8 +1,8 @@
 "use client";
-
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
 import {
   User,
   Briefcase,
@@ -20,7 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
 import {
   FormInput,
   FormSelect,
@@ -38,15 +37,83 @@ import {
   STATE_OPTIONS,
 } from "@/constants/profile-options";
 import { CreateTrainerInput, createTrainerSchema } from "@/db/validators";
-import { useSingleUpload } from "@/components/ImageUpload"; // adjust path as needed
+import { useSingleUpload } from "@/components/ImageUpload";
 import LanguagePicker from "../LanguagePicker";
 import SpecializationPicker from "../SpecializationPicker";
+import { completeTrainerProfileAction } from "@/actions/trainer.action";
+import { toast } from "sonner";
+import { useClerk } from "@clerk/nextjs";
 
-// ---------------------------------------------------------------------
-// Main Component
-// ---------------------------------------------------------------------
-export default function TrainerProfileForm() {
+// Row shape from Supabase is snake_case; the form/schema is camelCase.
+// Mapping only the fields this form actually edits — full_name,
+// invited_email, employment fields set by the owner stay untouched
+// (same merge boundary as the member-profile flow: this UPDATE only
+// touches what the trainer themself can provide).
+function toDefaultValues(
+  trainer: Record<string, unknown> | undefined,
+): Partial<CreateTrainerInput> {
+  if (!trainer) {
+    return {
+      country: "India",
+      joiningDate: new Date().toISOString().split("T")[0],
+    };
+  }
+  return {
+    fullName: trainer.full_name as string,
+    contactPhone: trainer.contact_phone as string,
+    gender: trainer.gender as CreateTrainerInput["gender"],
+    dateOfBirth: trainer.date_of_birth as string,
+    professionalTitle: trainer.professional_title as string,
+    bio: trainer.bio as string,
+    experienceYears: trainer.experience_years as number,
+    qualification: trainer.qualification as string,
+    certification: trainer.certification as string,
+    employmentType:
+      trainer.employment_type as CreateTrainerInput["employmentType"],
+    specializations: (trainer.specializations as string[]) ?? [],
+    workingDays: (trainer.working_days as string[]) ?? [],
+    startTime: trainer.start_time as string,
+    endTime: trainer.end_time as string,
+    maxMembers: trainer.max_members as number,
+    maxSessionsPerDay: trainer.max_sessions_per_day as number,
+    acceptingNewMembers: (trainer.accepting_new_members as boolean) ?? false,
+    sessionTypes: (trainer.session_types as string[]) ?? [],
+    languages: (trainer.languages as string[]) ?? [],
+    websiteUrl: trainer.website_url as string,
+    instagram: trainer.instagram as string,
+    linkedin: trainer.linkedin as string,
+    youtube: trainer.youtube as string,
+    trainingPhilosophy: trainer.training_philosophy as string,
+    coachingExperience: trainer.coaching_experience as string,
+    emergencyContactName: trainer.emergency_contact_name as string,
+    emergencyRelationship:
+      trainer.emergency_relationship as CreateTrainerInput["emergencyRelationship"],
+    emergencyPhone: trainer.emergency_phone as string,
+    emergencyAlternatePhone: trainer.emergency_alternate_phone as string,
+    addressLine: trainer.address_line as string,
+    city: trainer.city as string,
+    state: trainer.state as string,
+    postalCode: trainer.postal_code as string,
+    country: (trainer.country as string) ?? "India",
+    additionalNotes: trainer.additional_notes as string,
+  };
+}
+
+export default function TrainerProfileForm({
+  trainerId,
+  initialData,
+}: {
+  trainerId: string;
+  initialData?: Record<string, unknown>;
+}) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const { session } = useClerk();
+
+  const [existingPhotoUrl] = useState<string | null>(
+    (initialData?.photo_url as string) || null,
+  );
+
   const photo = useSingleUpload(undefined, 2 * 1024 * 1024);
 
   const {
@@ -57,10 +124,7 @@ export default function TrainerProfileForm() {
     formState: { errors },
   } = useForm<CreateTrainerInput>({
     resolver: zodResolver(createTrainerSchema),
-    defaultValues: {
-      country: "India",
-      joiningDate: new Date().toISOString().split("T")[0],
-    },
+    defaultValues: toDefaultValues(initialData),
     mode: "onBlur",
   });
 
@@ -78,44 +142,49 @@ export default function TrainerProfileForm() {
     value: string,
   ) => {
     const current = watch(field) || [];
-    if (current.includes(value)) {
-      setValue(
-        field,
-        current.filter((v) => v !== value),
-        { shouldDirty: true },
-      );
-    } else {
-      setValue(field, [...current, value], { shouldDirty: true });
-    }
+    setValue(
+      field,
+      current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value],
+      {
+        shouldDirty: true,
+      },
+    );
   };
 
   const addCustomLanguage = (value: string) => {
     const current = watch("languages") || [];
-    const alreadyAdded = current.some(
-      (v) => v.toLowerCase() === value.toLowerCase(),
-    );
-    if (alreadyAdded) return;
+    if (current.some((v) => v.toLowerCase() === value.toLowerCase())) return;
     setValue("languages", [...current, value], { shouldDirty: true });
   };
 
   const onSubmit = (data: CreateTrainerInput) => {
+    if (isPending) return;
     startTransition(async () => {
       try {
-        console.log("Trainer profile submitted:", {
-          ...data,
-          photoFile: photo.file,
-        });
-        // await saveTrainerProfileAction(...)
-        // window.location.href = "/trainer/home";
-      } catch (error) {
-        console.error("Error saving profile:", error);
-        alert("Error saving profile. Please try again.");
+        const result = await completeTrainerProfileAction(
+          trainerId,
+          data,
+          photo.file,
+        );
+        if (!result.success) {
+          toast.error(result.error ?? "Failed to save profile.");
+          return;
+        }
+
+        await session?.reload();
+        toast.success("Profile saved successfully");
+        router.push("/trainer/dashboard");
+      } catch (err) {
+        console.error(err);
+        toast.error("Something went wrong. Please try again.");
       }
     });
   };
 
   const handleSkip = () => {
-    window.location.href = "/trainer/home";
+    router.push("/trainer/home");
   };
 
   return (
@@ -142,10 +211,11 @@ export default function TrainerProfileForm() {
         {/* Personal Information */}
         <SectionCard title="Personal Information" icon={User}>
           <ProfileImageUpload
-            image={photo.preview}
+            image={photo.preview ?? existingPhotoUrl}
             maxSize={2}
             onChange={photo.selectFile}
           />
+
           {photo.error && (
             <p className="text-xs text-destructive" role="alert">
               {photo.error}
@@ -160,14 +230,7 @@ export default function TrainerProfileForm() {
               {...register("fullName")}
               error={errors.fullName}
             />
-            <FormInput
-              label="Email"
-              type="email"
-              placeholder="email@example.com"
-              required
-              {...register("contactEmail")}
-              error={errors.contactEmail}
-            />
+
             <FormInput
               label="Phone"
               placeholder="+91 98765 43210"
@@ -247,7 +310,7 @@ export default function TrainerProfileForm() {
         <SectionCard
           title="Specializations"
           icon={Dumbbell}
-          className="lg:col-span-2"
+          // className="lg:col-span-2"
         >
           <p className="text-xs text-muted-foreground -mt-2">
             Select the areas you train clients in. Grouped by discipline to make
@@ -474,31 +537,38 @@ export default function TrainerProfileForm() {
         <SectionCard title="Address" icon={MapPin}>
           <FormInput
             label="Address Line"
-            placeholder="123, Street name"
+            placeholder="Enter address"
             {...register("addressLine")}
             error={errors.addressLine}
           />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <FormInput
               label="City"
-              placeholder="Bangalore"
+              placeholder="Enter city name"
               {...register("city")}
               error={errors.city}
             />
             <FormSelect
               label="State"
+              placeholder="Enter state name"
               options={STATE_OPTIONS}
               {...register("state")}
               error={errors.state}
             />
             <FormInput
               label="Postal Code"
-              placeholder="560034"
+              placeholder="Enter pin code"
               {...register("postalCode")}
               error={errors.postalCode}
             />
           </div>
-          <FormInput label="Country" disabled {...register("country")} />
+          <FormInput
+            placeholder="Enter country name"
+            label="Country"
+            disabled
+            defaultValue="India"
+            {...register("country")}
+          />
         </SectionCard>
 
         {/* Additional Notes */}

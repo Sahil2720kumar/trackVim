@@ -719,6 +719,7 @@ export type Database = {
           id: string
           invitation_accepted_at: string | null
           invitation_sent_at: string | null
+          invited_email: string | null
           medical_conditions: string | null
           member_code: string | null
           occupation: string | null
@@ -757,6 +758,7 @@ export type Database = {
           id?: string
           invitation_accepted_at?: string | null
           invitation_sent_at?: string | null
+          invited_email?: string | null
           medical_conditions?: string | null
           member_code?: string | null
           occupation?: string | null
@@ -795,6 +797,7 @@ export type Database = {
           id?: string
           invitation_accepted_at?: string | null
           invitation_sent_at?: string | null
+          invited_email?: string | null
           medical_conditions?: string | null
           member_code?: string | null
           occupation?: string | null
@@ -1595,6 +1598,7 @@ export type Database = {
           max_members: number | null
           max_sessions_per_day: number | null
           members_trained: number | null
+          photo_url: string | null
           postal_code: string | null
           professional_title: string | null
           profile_id: string | null
@@ -1609,6 +1613,7 @@ export type Database = {
           state: string | null
           status: Database["public"]["Enums"]["trainer_status"]
           total_reviews: number | null
+          trainer_code: string | null
           training_philosophy: string | null
           two_factor_enabled: boolean | null
           updated_at: string
@@ -1660,6 +1665,7 @@ export type Database = {
           max_members?: number | null
           max_sessions_per_day?: number | null
           members_trained?: number | null
+          photo_url?: string | null
           postal_code?: string | null
           professional_title?: string | null
           profile_id?: string | null
@@ -1674,6 +1680,7 @@ export type Database = {
           state?: string | null
           status?: Database["public"]["Enums"]["trainer_status"]
           total_reviews?: number | null
+          trainer_code?: string | null
           training_philosophy?: string | null
           two_factor_enabled?: boolean | null
           updated_at?: string
@@ -1725,6 +1732,7 @@ export type Database = {
           max_members?: number | null
           max_sessions_per_day?: number | null
           members_trained?: number | null
+          photo_url?: string | null
           postal_code?: string | null
           professional_title?: string | null
           profile_id?: string | null
@@ -1739,6 +1747,7 @@ export type Database = {
           state?: string | null
           status?: Database["public"]["Enums"]["trainer_status"]
           total_reviews?: number | null
+          trainer_code?: string | null
           training_philosophy?: string | null
           two_factor_enabled?: boolean | null
           updated_at?: string
@@ -2022,6 +2031,7 @@ export type Database = {
           p_email?: string
           p_full_name: string
           p_gym_id: string
+          p_member_code: string
           p_phone?: string
         }
         Returns: {
@@ -2051,6 +2061,7 @@ export type Database = {
           id: string
           invitation_accepted_at: string | null
           invitation_sent_at: string | null
+          invited_email: string | null
           medical_conditions: string | null
           member_code: string | null
           occupation: string | null
@@ -2073,8 +2084,13 @@ export type Database = {
         Args: { p_gym_id: string; p_member_id: string; p_plan_id: string }
         Returns: string
       }
+      create_walkin_membership_v2: {
+        Args: { p_gym_id: string; p_member_id: string; p_plan_id: string }
+        Returns: string
+      }
       current_member_id: { Args: never; Returns: string }
       current_user_id: { Args: never; Returns: string }
+      debug_jwt: { Args: never; Returns: Json }
       expire_overdue_memberships: { Args: never; Returns: number }
       extend_gym_trial: {
         Args: { p_gym_id: string; p_new_billing_start_date: string }

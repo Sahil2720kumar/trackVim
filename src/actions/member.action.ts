@@ -1,6 +1,6 @@
 "use server";
 
-import { createMemberSchema } from "@/db/validators";
+import { CreateMemberInput, createMemberSchema } from "@/db/validators";
 import { uploadFile } from "@/lib/cloudinary/upload";
 import { extractMemberFields } from "@/lib/extractFields";
 import { createServerClient } from "@/lib/supabase/server";
@@ -25,8 +25,11 @@ export type ActionResult<T = void> =
  * Create the global member profile row (one per user, ever).
  * Called on first login after Clerk sign-up.
  */
+
 export async function createMemberProfileAction(
-  formData: FormData,
+  memberId: string | undefined,
+  data: CreateMemberInput,
+  photoFile?: File | null,
 ): Promise<ActionResult<{ id: string }>> {
   // 1. Auth
   const { userId } = await auth();
@@ -37,8 +40,8 @@ export async function createMemberProfileAction(
     };
   }
 
-  // 2. Extract & validate
-  const parsed = createMemberSchema.safeParse(extractMemberFields(formData));
+  // 2. Validate
+  const parsed = createMemberSchema.safeParse(data);
   if (!parsed.success) {
     return {
       success: false,
@@ -47,12 +50,12 @@ export async function createMemberProfileAction(
   }
   const memberData = parsed.data;
 
-  // 3. Photo upload
-  const photoFile = formData.get("photoFile");
+  // 3. Photo upload — keyed on memberId when we have it (update case) so
+  // repeated saves overwrite the same path instead of accumulating, else
+  // falls back to userId for the very first save.
   let photoUrl: string | undefined;
-
   try {
-    if (photoFile instanceof File && photoFile.size > 0) {
+    if (photoFile && photoFile.size > 0) {
       photoUrl = await uploadFile(
         photoFile,
         `trackVim/members/${userId}/photo`,
@@ -78,75 +81,112 @@ export async function createMemberProfileAction(
       phone: memberData.contactPhone,
       role: "member",
       account_status: "Active",
+      // Only touch avatar_url if a new photo actually came in this
+      // submission — omitting the key leaves the existing one alone
+      // instead of nulling it out on every plain profile edit.
+      ...(photoUrl ? { avatar_url: photoUrl } : {}),
     })
     .eq("clerk_id", userId)
     .select("id,email")
-    .single();
+    .maybeSingle();
 
   if (userError) return { success: false, error: userError.message };
+  if (!userData) {
+    return {
+      success: false,
+      error: "Your account is still being set up. Please retry in a moment.",
+    };
+  }
 
   const internalUserId = userData.id;
 
-  // 5. Insert member row
-  const { data: member, error: memberError } = await supabase
+  // Shared field set for both insert and update — everything except the
+  // create-only columns (profile_id, member_code), which only apply once.
+  const memberFields = {
+    full_name: memberData.fullName ?? null,
+    contact_email: userData.email ?? null,
+    contact_phone: memberData.contactPhone ?? null,
+    date_of_birth: memberData.dateOfBirth ?? null,
+    gender: (memberData.gender as "Male" | "Female" | "Other") ?? null,
+    occupation: memberData.occupation ?? null,
+    blood_group:
+      (memberData.bloodGroup as
+        | "A+"
+        | "A-"
+        | "B+"
+        | "B-"
+        | "O+"
+        | "O-"
+        | "AB+"
+        | "AB-") ?? null,
+    address: memberData.address ?? null,
+    city: memberData.city ?? null,
+    state: memberData.state ?? null,
+    pin_code: memberData.pinCode ?? null,
+    fitness_goal: memberData.fitnessGoal ?? null,
+    medical_conditions: memberData.medicalConditions ?? null,
+    allergies: memberData.allergies ?? null,
+    physical_notes: memberData.physicalNotes ?? null,
+    height_cm: memberData.heightCm ? Number(memberData.heightCm) : null,
+    weight_kg: memberData.weightKg ? Number(memberData.weightKg) : null,
+    emergency_contact_name: memberData.emergencyContactName ?? null,
+    emergency_contact_phone: memberData.emergencyContactPhone ?? null,
+    emergency_contact_address: memberData.emergencyContactAddress ?? null,
+    additional_notes: memberData.additionalNotes ?? null,
+    account_status: "Active",
+    ...(photoUrl ? { photo_url: photoUrl } : {}),
+  };
+
+  // 5. Create vs update. Don't trust the memberId param alone — Clerk
+  // metadata can be stale (which is exactly how the duplicate-key error
+  // happened: metadata never had memberId written into it, so the page
+  // always thought this was a fresh signup and this action always tried
+  // to INSERT, even though the Clerk webhook had already created a
+  // members row for this profile_id). profile_id is the actual source of
+  // truth for "does this row already exist".
+  const { data: existing, error: existingError } = await supabase
     .from("members")
-    .insert({
-      profile_id: internalUserId,
-      member_code: generateMemberCode(),
-      // ── Identity ───────────────────────────────────────────────────
-      full_name: memberData.fullName ?? null,
-      contact_email: userData.email ?? null,
-      contact_phone: memberData.contactPhone ?? null,
-      date_of_birth: memberData.dateOfBirth ?? null,
-      gender: (memberData.gender as "Male" | "Female" | "Other") ?? null,
-      occupation: memberData.occupation ?? null,
-      blood_group:
-        (memberData.bloodGroup as
-          | "A+"
-          | "A-"
-          | "B+"
-          | "B-"
-          | "O+"
-          | "O-"
-          | "AB+"
-          | "AB-") ?? null,
-      photo_url: photoUrl ?? null,
-
-      // ── Address ────────────────────────────────────────────────────
-      address: memberData.address ?? null,
-      city: memberData.city ?? null,
-      state: memberData.state ?? null,
-      pin_code: memberData.pinCode ?? null,
-
-      // ── Health ─────────────────────────────────────────────────────
-      fitness_goal: memberData.fitnessGoal ?? null,
-      medical_conditions: memberData.medicalConditions ?? null,
-      allergies: memberData.allergies ?? null,
-      physical_notes: memberData.physicalNotes ?? null,
-      height_cm: memberData.heightCm ? Number(memberData.heightCm) : null,
-      weight_kg: memberData.weightKg ? Number(memberData.weightKg) : null,
-
-      // ── Emergency contact ──────────────────────────────────────────
-      emergency_contact_name: memberData.emergencyContactName ?? null,
-      emergency_contact_phone: memberData.emergencyContactPhone ?? null,
-      // emergency_contact_relationship:
-      //   memberData.emergencyContactRelationship ?? null,
-      emergency_contact_address: memberData.emergencyContactAddress ?? null,
-
-      // ── Misc ───────────────────────────────────────────────────────
-      additional_notes: memberData.additionalNotes ?? null,
-      account_status: "Active",
-    })
     .select("id")
-    .single();
+    .eq("profile_id", internalUserId)
+    .maybeSingle();
 
-  if (memberError) return { success: false, error: memberError.message };
+  if (existingError) return { success: false, error: existingError.message };
 
-  // 6. Update Clerk metadata
+  let member: { id: string };
+
+  if (existing) {
+    const { data: updated, error: updateError } = await supabase
+      .from("members")
+      .update(memberFields)
+      .eq("id", existing.id)
+      .select("id")
+      .single();
+
+    if (updateError) return { success: false, error: updateError.message };
+    member = updated;
+  } else {
+    const { data: inserted, error: insertError } = await supabase
+      .from("members")
+      .insert({
+        profile_id: internalUserId,
+        member_code: generateMemberCode(),
+        ...memberFields,
+      })
+      .select("id")
+      .single();
+
+    if (insertError) return { success: false, error: insertError.message };
+    member = inserted;
+  }
+
+  // 6. Update Clerk metadata — now includes memberId, which is the actual
+  // fix for the bug: without this, every future page load has no
+  // memberId to check against and falls back to "create" mode again.
   await clerkClient().then((client) =>
     client.users.updateUserMetadata(userId, {
       publicMetadata: {
         role: "member",
+        memberId: member.id,
         onboardingComplete: true,
       },
     }),
@@ -196,7 +236,7 @@ export async function updateMyProfileAction(
     additionalNotes: string;
   }>,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const fieldMap: Record<string, string> = {
     fullName: "full_name",
@@ -251,7 +291,7 @@ export async function switchActiveGymMembershipAction(
   memberId: string,
   gymMembershipId: string | null,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { error } = await supabase
     .from("members")
@@ -281,7 +321,7 @@ export async function applyForMembershipAction(payload: {
   planId: string;
   message?: string;
 }): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   // Prevent duplicate pending applications
   const { data: existing } = await supabase
@@ -353,7 +393,7 @@ export async function submitPaymentAction(
     transactionRef?: string;
   },
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { error } = await (supabase.rpc as any)("submit_payment", {
     p_payment_id: paymentId,
@@ -391,7 +431,7 @@ export async function checkInOrOutAction(qrIdentifier: string): Promise<
     durationMinutes?: number;
   }>
 > {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await (supabase.rpc as any)("check_in_or_out", {
     qr_identifier: qrIdentifier,
@@ -413,7 +453,7 @@ export async function sendMessageAction(payload: {
   subject?: string;
   body: string;
 }): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data: currentUser, error: userError } = await supabase
     .from("users")
@@ -442,7 +482,7 @@ export async function sendMessageAction(payload: {
 export async function markMessageReadAction(
   messageId: string,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { error } = await supabase
     .from("messages")

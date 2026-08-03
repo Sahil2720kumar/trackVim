@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   reactStrictMode: false,
   experimental: {
+    turbopackFileSystemCacheForDev: true,
     serverActions: {
       bodySizeLimit: "10mb",
     },

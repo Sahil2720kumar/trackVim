@@ -17,6 +17,15 @@ const isOwnerRoute = createRouteMatcher(["/owner(.*)"]);
 const isTrainerRoute = createRouteMatcher(["/trainer(.*)"]);
 const isMemberRoute = createRouteMatcher(["/member(.*)"]);
 
+// Where an already-role-assigned user should land to finish onboarding.
+// Invited trainers/members arrive with `role` pre-set in publicMetadata —
+// they should never see the generic role picker.
+const ONBOARDING_PATH_BY_ROLE: Record<"owner" | "trainer" | "member", string> = {
+  owner: "/onboarding/register-gym",
+  trainer: "/onboarding/trainer-profile",
+  member: "/onboarding/member-profile",
+};
+
 export default clerkMiddleware(async (auth, req) => {
   if (isPublicRoute(req)) return NextResponse.next();
 
@@ -36,10 +45,44 @@ export default clerkMiddleware(async (auth, req) => {
 
   const role = metadata?.role;
   const onboardingComplete = Boolean(metadata?.onboardingComplete);
+  const pathname = req.nextUrl.pathname;
 
   // Signed in but hasn't finished onboarding -> force onboarding
   if (!onboardingComplete && !isOnboardingRoute(req)) {
-    return NextResponse.redirect(new URL("/onboarding/select-role", req.url));
+    const destination = role
+      ? ONBOARDING_PATH_BY_ROLE[role]
+      : "/onboarding/select-role";
+    return NextResponse.redirect(new URL(destination, req.url));
+  }
+
+  // Lock each role to its own onboarding route. Without this, a trainer
+  // could just type /onboarding/register-gym in the URL bar and land on
+  // the owner's onboarding screen. API routes are excluded since they may
+  // be shared across roles internally.
+  if (
+    !onboardingComplete &&
+    isOnboardingRoute(req) &&
+    !pathname.startsWith("/api/")
+  ) {
+    const isIndexRoute = pathname === "/onboarding";
+
+    if (role) {
+      const ownRoute = ONBOARDING_PATH_BY_ROLE[role];
+      const isOwnRoute =
+        pathname === ownRoute || pathname.startsWith(`${ownRoute}/`);
+
+      if (!isOwnRoute && !isIndexRoute) {
+        return NextResponse.redirect(new URL(ownRoute, req.url));
+      }
+    } else {
+      // No role yet — only select-role (and the index redirector) is allowed.
+      const isSelectRole = pathname.startsWith("/onboarding/select-role");
+      if (!isSelectRole && !isIndexRoute) {
+        return NextResponse.redirect(
+          new URL("/onboarding/select-role", req.url),
+        );
+      }
+    }
   }
 
   // Already onboarded -> don't let them revisit onboarding

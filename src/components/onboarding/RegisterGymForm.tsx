@@ -97,17 +97,16 @@ export default function RegisterGymForm() {
     if (isPending) return;
     startTransition(async () => {
       try {
-        const result = await createGymAction(
-          buildGymFormData(data, logo.file, paymentQr.file, gallery.files),
-        );
+        const result = await createGymAction(data, {
+          logo: logo.file,
+          paymentQr: paymentQr.file,
+          gallery: gallery.files ?? [],
+        });
         if (!result.success) {
           toast.error(result.error);
           return;
         }
-        // Force Clerk to reload the session so middleware sees
-        // the new publicMetadata (onboardingComplete: true, role: "member")
         await session?.reload();
-
         toast.success("Gym registered successfully");
         router.push("/owner/dashboard");
       } catch (error) {

@@ -58,6 +58,9 @@ export default {
       return new Response("Invalid signature", { status: 400 });
     }
 
+    // TEMP DIAGNOSTIC — remove once confirmed working.
+    console.log("Received webhook event:", evt.type);
+
     // Public endpoint verified above via svix, so we use supabaseAdmin
     // (bypasses RLS) for all writes below — there is no end-user JWT here.
     switch (evt.type) {
@@ -69,6 +72,12 @@ export default {
           trainerId?: string;
           memberId?: string;
         };
+
+        // TEMP DIAGNOSTIC — remove once this is confirmed working.
+        console.log(
+          "user.created public_metadata:",
+          JSON.stringify(clerkUser.public_metadata),
+        );
 
         const email: string | null =
           clerkUser.email_addresses?.[0]?.email_address ?? null;
@@ -106,7 +115,7 @@ export default {
 
         // --- Trainer invite acceptance -----------------------------------
         if (meta.role === "trainer" && meta.trainerId) {
-          const { error } = await ctx.supabaseAdmin
+          const { data: linkedTrainer, error } = await ctx.supabaseAdmin
             .from("trainers")
             .update({
               profile_id: user.id,
@@ -114,9 +123,24 @@ export default {
               invitation_accepted_at: new Date().toISOString(),
             })
             .eq("id", meta.trainerId)
-            .is("profile_id", null); // never overwrite an already-linked row
+            .is("profile_id", null) // never overwrite an already-linked row
+            .select("id"); // lets us see how many rows actually matched
 
-          if (error) console.error("Failed to link trainer invitation:", error);
+          if (error) {
+            console.error("Failed to link trainer invitation:", error);
+          } else if (!linkedTrainer || linkedTrainer.length === 0) {
+            // Update ran fine but matched nothing — either trainerId is
+            // wrong, or profile_id was already set (row already linked).
+            console.warn(
+              `Trainer link no-op: no row matched id=${meta.trainerId} with profile_id IS NULL`,
+            );
+          } else {
+            console.log("Trainer linked:", linkedTrainer[0].id);
+          }
+        } else if (meta.role === "trainer") {
+          console.warn(
+            `Trainer role set but trainerId missing on metadata — cannot link`,
+          );
         }
 
         // --- Member invite acceptance (walk-in member registering later) --
