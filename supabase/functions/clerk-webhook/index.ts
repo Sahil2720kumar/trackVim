@@ -73,12 +73,11 @@ export default {
           memberId?: string;
         };
 
-        // TEMP DIAGNOSTIC — remove once this is confirmed working.
-        console.log(
-          "user.created public_metadata:",
-          JSON.stringify(clerkUser.public_metadata),
-        );
-
+        console.log("user.created metadata:", {
+          role: clerkUser.public_metadata?.role,
+          hasGymId: Boolean(clerkUser.public_metadata?.gymId),
+          hasTrainerId: Boolean(clerkUser.public_metadata?.trainerId),
+        });
         const email: string | null =
           clerkUser.email_addresses?.[0]?.email_address ?? null;
         const phone: string | null =
@@ -128,12 +127,6 @@ export default {
 
           if (error) {
             console.error("Failed to link trainer invitation:", error);
-          } else if (!linkedTrainer || linkedTrainer.length === 0) {
-            // Update ran fine but matched nothing — either trainerId is
-            // wrong, or profile_id was already set (row already linked).
-            console.warn(
-              `Trainer link no-op: no row matched id=${meta.trainerId} with profile_id IS NULL`,
-            );
           } else {
             console.log("Trainer linked:", linkedTrainer[0].id);
           }

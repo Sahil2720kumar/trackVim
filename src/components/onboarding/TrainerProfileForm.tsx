@@ -184,7 +184,7 @@ export default function TrainerProfileForm({
   };
 
   const handleSkip = () => {
-    router.push("/trainer/home");
+    router.push("/trainer/dashboard");
   };
 
   return (

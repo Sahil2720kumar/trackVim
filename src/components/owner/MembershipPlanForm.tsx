@@ -397,7 +397,6 @@ export default function MembershipPlanForm() {
               {...register("validityStarts")}
             />
           </div>
-
           {/* Only relevant when the preset options above don't cover the
               plan's length — otherwise durationMonths is set automatically. */}
           {membershipDuration === "Custom" && (
@@ -410,7 +409,6 @@ export default function MembershipPlanForm() {
               error={errors.durationMonths}
             />
           )}
-
           <FormInput
             label="Grace Period (Days)"
             type="number"
@@ -418,11 +416,12 @@ export default function MembershipPlanForm() {
             {...register("gracePeriodDays")}
             error={errors.gracePeriodDays}
           />
-
           <div className="flex items-center justify-between pt-2 border-t border-border">
-           
             <div className="pl-4 text-left">
-              <label className="text-sm font-medium text-foreground">
+              <label
+                htmlFor="allow-freeze"
+                className="text-sm font-medium text-foreground"
+              >
                 Allow Membership Freeze
               </label>
               <p className="text-xs text-muted-foreground mt-1">
@@ -431,12 +430,13 @@ export default function MembershipPlanForm() {
               </p>
             </div>
             <Switch
+              id="allow-freeze"
               checked={allowFreeze ?? false}
               onCheckedChange={(checked) =>
                 setValue("allowFreeze", checked, { shouldDirty: true })
               }
             />
-          </div>
+          </div>{" "}
           {allowFreeze && (
             <FormInput
               label="Maximum Freeze Days"
@@ -547,7 +547,6 @@ export default function MembershipPlanForm() {
             {...register("enrollmentMode")}
           />
           <div className="flex items-center justify-between pt-2 border-t border-border">
-            
             <div className="pl-4 text-left">
               <label className="text-sm font-medium text-foreground">
                 Allow Cancellation
@@ -586,7 +585,6 @@ export default function MembershipPlanForm() {
             />
           </div>
           <div className="flex items-center justify-between pt-2 border-t border-border">
-            
             <div className="pl-4 text-left">
               <label className="text-sm font-medium text-foreground">
                 Mark as Featured
@@ -660,9 +658,7 @@ export default function MembershipPlanForm() {
                 <SelectedIcon className="w-6 h-6" />
               </div>
               <div className="min-w-0">
-                {isFeatured && (
-                  <Badge className="text-xs mb-1">Featured</Badge>
-                )}
+                {isFeatured && <Badge className="text-xs mb-1">Featured</Badge>}
                 <h4 className="font-semibold text-card-foreground truncate">
                   {planName || "Plan Name"}
                 </h4>

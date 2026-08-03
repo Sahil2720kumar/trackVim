@@ -88,9 +88,6 @@ export async function inviteMemberAction(
     })
     .select("id");
 
-  console.log("member", member);
-  console.log("memberError", memberError);
-
   if (memberError || !member) {
     return {
       success: false,
@@ -98,6 +95,26 @@ export async function inviteMemberAction(
     };
   }
 
+  // 4. Step 2 — "Membership", Option A (no application). This one RPC
+  // creates the gym_membership (PaymentPending) AND the Pending payment
+  // stub together, atomically.
+  const { data: membershipId, error: membershipError } = await supabase.rpc(
+    "create_walkin_membership",
+    {
+      p_gym_id: gymId,
+      p_member_id: member.id,
+      p_plan_id: memberData.planId,
+    },
+  );
+
+  if (membershipError || !membershipId) {
+    return {
+      success: false,
+      error: membershipError?.message ?? "Failed to create membership.",
+    };
+  }
+
+  //5. Fill in the rest of the profile (+ photo, if provided).
   let photoUrl: string | null = null;
   if (photoFile && photoFile.size > 0) {
     try {
@@ -171,25 +188,6 @@ export async function inviteMemberAction(
 
   if (profileError) {
     return { success: false, error: profileError.message };
-  }
-
-  // 5. Step 3 — "Membership", Option A (no application). This one RPC
-  // creates the gym_membership (PaymentPending) AND the Pending payment
-  // stub together, atomically.
-  const { data: membershipId, error: membershipError } = await supabase.rpc(
-    "create_walkin_membership",
-    {
-      p_gym_id: gymId,
-      p_member_id: member.id,
-      p_plan_id: memberData.planId,
-    },
-  );
-
-  if (membershipError || !membershipId) {
-    return {
-      success: false,
-      error: membershipError?.message ?? "Failed to create membership.",
-    };
   }
 
   // 6. Optional trainer assignment — not part of this flow's RPCs, plain

@@ -10,6 +10,8 @@ export default async function AddNewMemberPage() {
 
   const gymId = sessionClaims?.publicMetadata?.gymId as string;
 
+  if (!gymId) throw new Error("Gym ID not found");
+
   const { data: trainersAndPlans, error } = await getTrainersAndPlans(gymId);
   const trainers = trainersAndPlans?.trainers || [];
   const plans = trainersAndPlans?.plans || [];

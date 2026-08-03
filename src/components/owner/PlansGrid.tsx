@@ -132,8 +132,14 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
       p.gym_memberships?.[0]?.count ?? 0,
       p.status,
     ]);
+    const escapeCsv = (value: unknown) => {
+      const str = String(value ?? "");
+      const guarded = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+      return `"${guarded.replace(/"/g, '""')}"`;
+    };
+
     const csvContent = [headers, ...rows]
-      .map((row) => row.map((val) => `"${val}"`).join(","))
+      .map((row) => row.map(escapeCsv).join(","))
       .join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -146,7 +152,6 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
-
   // const handleDuplicatePlan = (id: string) => {
   //   setOpenActionMenuId(null);
   //   startTransition(async () => {
@@ -270,7 +275,9 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
                     >
                       <option>All Durations</option>
                       {DURATION_OPTIONS.map((d) => (
-                        <option key={d.value}>{d.label}</option>
+                        <option key={d.value} value={d.value}>
+                          {d.label}
+                        </option>
                       ))}
                     </select>
                   </div>

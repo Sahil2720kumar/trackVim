@@ -133,12 +133,20 @@ export async function completeTrainerProfileAction(
     return { success: false, error: userError.message };
   }
 
-  const client = await clerkClient();
-  await client.users.updateUserMetadata(userId, {
-    publicMetadata: { onboardingComplete: true },
-  });
+  try {
+    const client = await clerkClient();
+    await client.users.updateUserMetadata(userId, {
+      publicMetadata: { ...meta, role: "trainer", onboardingComplete: true },
+    });
+  } catch (err) {
+    return {
+      success: false,
+      error:
+        err instanceof Error ? err.message : "Failed to finalize onboarding.",
+    };
+  }
 
-  revalidatePath("/trainer/home");
+  revalidatePath("/trainer/dashboard");
   return { success: true, data: undefined };
 }
 

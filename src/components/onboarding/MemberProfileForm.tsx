@@ -46,32 +46,32 @@ function toDefaultValues(
   member: Record<string, unknown> | undefined,
 ): Partial<CreateMemberInput> {
   if (!member) return {};
+  const str = (v: unknown) => (v == null ? "" : String(v));
   return {
-    fullName: member.full_name as string,
-    contactPhone: member.contact_phone as string,
-    dateOfBirth: member.date_of_birth as string,
+    fullName: str(member.full_name),
+    contactPhone: str(member.contact_phone),
+    dateOfBirth: str(member.date_of_birth),
     gender: member.gender as CreateMemberInput["gender"],
-    occupation: member.occupation as string,
+    occupation: str(member.occupation),
     bloodGroup: member.blood_group as CreateMemberInput["bloodGroup"],
-    address: member.address as string,
-    city: member.city as string,
-    state: member.state as string,
-    pinCode: member.pin_code as string,
-    heightCm: String(member.height_cm),
-    weightKg: String(member.weight_kg),
+    address: str(member.address),
+    city: str(member.city),
+    state: str(member.state),
+    pinCode: str(member.pin_code),
+    heightCm: str(member.height_cm),
+    weightKg: str(member.weight_kg),
     fitnessGoal: member.fitness_goal as CreateMemberInput["fitnessGoal"],
-    medicalConditions: member.medical_conditions as string,
-    allergies: member.allergies as string,
-    physicalNotes: member.physical_notes as string,
-    emergencyContactName: member.emergency_contact_name as string,
+    medicalConditions: str(member.medical_conditions),
+    allergies: str(member.allergies),
+    physicalNotes: str(member.physical_notes),
+    emergencyContactName: str(member.emergency_contact_name),
     emergencyContactRelationship:
       member.emergency_contact_relationship as CreateMemberInput["emergencyContactRelationship"],
-    emergencyContactPhone: member.emergency_contact_phone as string,
-    emergencyContactAddress: member.emergency_contact_address as string,
-    additionalNotes: member.additional_notes as string,
+    emergencyContactPhone: str(member.emergency_contact_phone),
+    emergencyContactAddress: str(member.emergency_contact_address),
+    additionalNotes: str(member.additional_notes),
   };
 }
-
 // ---------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------
@@ -107,13 +107,7 @@ export default function MemberProfileForm({
     if (isPending) return;
     startTransition(async () => {
       try {
-        // NOTE: createMemberProfileAction currently takes (data, photoFile)
-        // for the create-your-own-profile flow. Passing memberId here so
-        // it can also handle the edit-existing-member case (mirroring
-        // completeTrainerProfileAction(trainerId, data, photoFile)) —
-        // the action needs updating to accept and use it.
         const result = await createMemberProfileAction(
-          memberId ?? null,
           data,
           photo.file ?? null,
         );

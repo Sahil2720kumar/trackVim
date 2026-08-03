@@ -309,19 +309,18 @@ export default function InviteMemberForm({
             <FormSelect
               label="Trainer"
               options={[
-                "No Trainer Assigned",
-                ...trainers.map((t) => t.full_name),
+                { value: "", label: "No Trainer Assigned" },
+                ...trainers.map((t) => ({
+                  value: t.id,
+                  label: t.full_name ?? t.id,
+                })),
               ]}
-              value={
-                trainers.find((t) => t.id === trainerId)?.full_name ??
-                "No Trainer Assigned"
+              value={trainerId ?? ""}
+              onChange={(e) =>
+                setValue("trainerId", e.target.value || undefined, {
+                  shouldDirty: true,
+                })
               }
-              onChange={(e) => {
-                const trainer = trainers.find(
-                  (t) => t.full_name === e.target.value,
-                );
-                setValue("trainerId", trainer?.id, { shouldDirty: true });
-              }}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -387,7 +386,7 @@ export default function InviteMemberForm({
             </div>
             <div className="flex flex-col gap-1.5 min-w-0">
               <label className="text-sm font-medium text-foreground">
-                Amount Paybale by Member
+                Amount Payable by Member
               </label>
               <div className="px-3 py-2 rounded-lg border border-border bg-muted">
                 <span className="text-sm font-semibold text-foreground">

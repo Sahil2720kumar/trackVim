@@ -17,26 +17,36 @@ import { auth } from "@clerk/nextjs/server";
 export default async function MembershipPlansPage() {
   const { sessionClaims } = await auth();
 
-  const gymId = sessionClaims?.publicMetadata?.gymId as string;
+  const gymId = sessionClaims?.publicMetadata?.gymId as unknown as string;
+
+  if (!gymId) {
+    throw new Error(
+      "Owner session missing gymId — expected onboarding to set this.",
+    );
+  }
 
   const { data: initialPlans, success } = await getMembershipPlans(gymId);
 
   const totalPlans = initialPlans?.length || 0;
+
   const activePlans =
     initialPlans?.filter((p) => p.status === "Active").length || 0;
+
   const totalMembers =
     initialPlans?.reduce(
       (sum, p) => sum + p.gym_memberships?.[0]?.count || 0,
       0,
     ) || 0;
+
   const monthlyRevenue = revenueData[revenueData.length - 1]?.revenue || 0;
+
   const mostPopularPlan =
-    initialPlans?.reduce((max, plan) => {
-      const maxCount = max.gym_memberships?.[0]?.count ?? 0;
+    initialPlans?.reduce<(typeof initialPlans)[number] | null>((max, plan) => {
+      const maxCount = max?.gym_memberships?.[0]?.count ?? 0;
       const planCount = plan.gym_memberships?.[0]?.count ?? 0;
 
       return planCount > maxCount ? plan : max;
-    }) ?? null;
+    }, null) ?? null;
 
   return (
     <div className="flex flex-col px-4 py-5 gap-4 sm:gap-6 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">

@@ -27,7 +27,6 @@ export type ActionResult<T = void> =
  */
 
 export async function createMemberProfileAction(
-  memberId: string | undefined,
   data: CreateMemberInput,
   photoFile?: File | null,
 ): Promise<ActionResult<{ id: string }>> {
@@ -136,6 +135,12 @@ export async function createMemberProfileAction(
     account_status: "Active",
     ...(photoUrl ? { photo_url: photoUrl } : {}),
   };
+  // Drop undefined keys so a partial submission never nulls stored data.
+  const definedMemberFields = Object.fromEntries(
+    Object.entries(memberFields).filter(
+      ([, v]) => v !== null && v !== undefined,
+    ),
+  );
 
   // 5. Create vs update. Don't trust the memberId param alone — Clerk
   // metadata can be stale (which is exactly how the duplicate-key error
@@ -157,7 +162,7 @@ export async function createMemberProfileAction(
   if (existing) {
     const { data: updated, error: updateError } = await supabase
       .from("members")
-      .update(memberFields)
+      .update(definedMemberFields)
       .eq("id", existing.id)
       .select("id")
       .single();

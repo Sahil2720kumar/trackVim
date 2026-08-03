@@ -11,9 +11,6 @@ export default async function TrainerProfilePage() {
     trainerId?: string;
   };
 
-  console.log("meta", meta);
-  console.log(meta.role !== "trainer" || !meta.trainerId);
-
   // Trainer accounts only ever exist via invite (no organic signup path),
   // so trainerId should always be present here — same assumption noted
   // earlier in this thread. If it's missing, something upstream broke.
@@ -28,9 +25,9 @@ export default async function TrainerProfilePage() {
     .eq("id", meta.trainerId)
     .single();
 
-  console.log("trainer", trainer);
-
-  console.log("error", error);
+  if (error || !trainer) {
+    throw new Error("Trainer not found");
+  }
 
   return (
     <div className="min-h-screen bg-background">

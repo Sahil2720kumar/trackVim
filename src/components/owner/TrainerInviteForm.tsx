@@ -58,7 +58,6 @@ export default function TrainerInviteForm() {
       fullName: "",
       joiningDate: new Date().toISOString().split("T")[0],
       acceptingNewMembers: true,
-      
     },
     mode: "onBlur",
   });
@@ -95,7 +94,7 @@ export default function TrainerInviteForm() {
           toast.error(result.error ?? "Failed to invite trainer.");
           return;
         }
-  
+
         toast.success("Trainer invited successfully.");
         router.push("/owner/trainers");
       } catch (err) {
@@ -105,7 +104,6 @@ export default function TrainerInviteForm() {
     });
   };
 
-   
   return (
     <form
       onSubmit={handleSubmit(onSubmit, (e) =>
@@ -177,7 +175,7 @@ export default function TrainerInviteForm() {
               label="Years of Experience"
               type="number"
               placeholder="5"
-              {...register("experienceYears")}
+              {...register("experienceYears", { valueAsNumber: true })}
               error={errors.experienceYears}
             />
           </div>
@@ -203,7 +201,7 @@ export default function TrainerInviteForm() {
               type="number"
               placeholder="35000"
               required
-              {...register("salary")}
+              {...register("salary", { valueAsNumber: true })}
               error={errors.salary}
             />
             <FormSelect
@@ -315,14 +313,14 @@ export default function TrainerInviteForm() {
               label="Max Members"
               type="number"
               placeholder="40"
-              {...register("maxMembers")}
+              {...register("maxMembers", { valueAsNumber: true })}
               error={errors.maxMembers}
             />
             <FormInput
               label="Max Sessions / Day"
               type="number"
               placeholder="8"
-              {...register("maxSessionsPerDay")}
+              {...register("maxSessionsPerDay", { valueAsNumber: true })}
               error={errors.maxSessionsPerDay}
             />
           </div>
@@ -336,18 +334,24 @@ export default function TrainerInviteForm() {
                 return (
                   <Badge
                     key={type}
+                    asChild
                     variant="outline"
-                    onClick={() => toggleListValue("sessionTypes", type)}
                     className={`h-8 rounded-full px-3 flex items-center gap-1.5 cursor-pointer select-none text-sm font-medium transition-all hover:scale-[1.02] active:scale-95 ${
                       isSelected
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-border bg-background hover:border-primary/40 hover:bg-accent"
                     }`}
                   >
-                    {isSelected && (
-                      <Check className="h-3 w-3" strokeWidth={3} />
-                    )}
-                    {type}
+                    <button
+                      type="button"
+                      onClick={() => toggleListValue("sessionTypes", type)}
+                      aria-pressed={isSelected}
+                    >
+                      {isSelected && (
+                        <Check className="h-3 w-3" strokeWidth={3} />
+                      )}
+                      {type}
+                    </button>
                   </Badge>
                 );
               })}
