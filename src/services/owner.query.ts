@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { ActionResult } from "@/actions/member.action";
+import { createServerClient } from "@/lib/supabase/server";
 
 // ============================================================================
 // Read-only data-fetching functions
@@ -11,8 +12,62 @@ import { createClient } from "@/lib/supabase/server";
 // overhead for data that never mutates anything.
 // ============================================================================
 
+export async function getMembershipPlans(gymId: string) {
+  const supabase = await createServerClient();
+  const { data, error } = await supabase
+    .from("membership_plans")
+    .select(
+      `
+      *,
+      gym_memberships(count)
+    `,
+    )
+    .eq("gym_id", gymId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+  if (error) return { success: false as const, error: error.message };
+  return { success: true as const, data };
+}
+
+export async function getTrainersAndPlans(gymId: string) {
+  const supabase = await createServerClient();
+
+  const [trainersResult, plansResult] = await Promise.all([
+    supabase
+      .from("trainers")
+      .select("id, full_name, professional_title")
+      .eq("gym_id", gymId)
+      .eq("status", "Active")
+      .order("full_name", { ascending: true }),
+    supabase
+      .from("membership_plans")
+      .select(
+        "id, plan_name, plan_price,joining_fee,discount_type,discount_value, membership_duration, duration_months",
+      )
+      .eq("gym_id", gymId)
+      .eq("status", "Active")
+      .is("deleted_at", null)
+      .order("plan_price", { ascending: true }),
+  ]);
+
+  if (trainersResult.error) {
+    return { success: false as const, error: trainersResult.error.message };
+  }
+  if (plansResult.error) {
+    return { success: false as const, error: plansResult.error.message };
+  }
+
+  return {
+    success: true as const,
+    data: {
+      trainers: trainersResult.data,
+      plans: plansResult.data,
+    },
+  };
+}
+
 export async function getOwnerNotifications() {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("notifications")
@@ -25,7 +80,7 @@ export async function getOwnerNotifications() {
 }
 
 export async function getGymWithDetails(gymId: string) {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("gyms")
@@ -47,7 +102,7 @@ export async function getGymWithDetails(gymId: string) {
 }
 
 export async function getPendingApplications(gymId: string) {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("membership_applications")
@@ -67,7 +122,7 @@ export async function getPendingApplications(gymId: string) {
 }
 
 export async function getPendingPayments(gymId: string) {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("payments")
@@ -88,7 +143,7 @@ export async function getPendingPayments(gymId: string) {
 }
 
 export async function getGymMembers(gymId: string) {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("gym_memberships")
@@ -107,7 +162,7 @@ export async function getGymMembers(gymId: string) {
 }
 
 export async function getGymActiveMembers(gymId: string) {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("gym_memberships")
@@ -126,7 +181,7 @@ export async function getGymActiveMembers(gymId: string) {
 }
 
 export async function getGymSubscriptions(gymId: string) {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("gym_subscriptions")
@@ -139,7 +194,7 @@ export async function getGymSubscriptions(gymId: string) {
 }
 
 export async function getGymAttendance(gymId: string, date?: string) {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   let query = supabase
     .from("attendance")

@@ -1,105 +1,37 @@
-"use client";
+import RegisterGymForm from "@/components/onboarding/RegisterGymForm";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
-import { useAuth } from "@clerk/nextjs";
-
-export default function RegisterGymPage() {
-  const router = useRouter();
-  const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { getToken } = useAuth();
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-
-    if (!name.trim()) {
-      setError("Gym name is required.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch("/api/onboarding/register-gym", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, address }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error ?? "Something went wrong. Please try again.");
-        return;
-      }
-
-      // Force Clerk to fetch a fresh session token with updated publicMetadata
-      await getToken({ skipCache: true });
-
-      router.push("/owner/dashboard");
-      router.refresh();
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
+export default async function RegisterGymPage() {
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <div>
-        <h1
-          className="text-xl text-foreground"
-          style={{ fontFamily: "Archivo-Bold" }}
-        >
-          Set up your gym
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          We&apos;ll generate an invite code your trainers and members can use
-          to join.
-        </p>
-      </div>
+    <div className="min-h-screen bg-background">
+      {/* ── Main Content ── */}
+      <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
+        {/* Background decoration */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
+        </div>
 
-      <div className="rounded-3xl border border-border bg-card p-5">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="name">Gym name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Iron Peak Fitness"
-              className="rounded-xl"
-              required
-            />
+        {/* Content */}
+        <div className="">
+          {/* Header */}
+          <div className="mb-12 text-center">
+            <div className="mb-4 flex justify-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <div className="text-lg font-bold">V</div>
+              </div>
+            </div>
+            <h1 className="text-3xl font-bold text-foreground sm:text-4xl">
+              Register Your Gym
+            </h1>
+            <p className="mt-2 text-base text-muted-foreground">
+              Tell us about your gym. This information helps you manage your
+              members, trainers, billing, and facilities.
+            </p>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="address">Address (optional)</Label>
-            <Input
-              id="address"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="e.g. GS Road, Guwahati"
-              className="rounded-xl"
-            />
-          </div>
+          {/* Registration Form */}
+          <RegisterGymForm />
         </div>
       </div>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
-      <Button type="submit" size="lg" className="rounded-xl" disabled={loading}>
-        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Create gym
-      </Button>
-    </form>
+    </div>
   );
 }

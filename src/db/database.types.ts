@@ -316,6 +316,66 @@ export type Database = {
           },
         ]
       }
+      gym_photos: {
+        Row: {
+          caption: string | null
+          created_at: string
+          deleted_at: string | null
+          gym_id: string
+          id: string
+          is_cover: boolean
+          photo_url: string
+          sort_order: number
+          status: Database["public"]["Enums"]["general_status"]
+          storage_path: string | null
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          gym_id: string
+          id?: string
+          is_cover?: boolean
+          photo_url: string
+          sort_order?: number
+          status?: Database["public"]["Enums"]["general_status"]
+          storage_path?: string | null
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          gym_id?: string
+          id?: string
+          is_cover?: boolean
+          photo_url?: string
+          sort_order?: number
+          status?: Database["public"]["Enums"]["general_status"]
+          storage_path?: string | null
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_photos_gym_id_gyms_id_fk"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_photos_uploaded_by_users_id_fk"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gym_qr_codes: {
         Row: {
           created_at: string
@@ -491,6 +551,7 @@ export type Database = {
           number_of_rooms: number | null
           owner_id: string
           owner_name: string | null
+          payment_qr_url: string | null
           place_of_supply: string | null
           postal_code: string | null
           sac_code: string | null
@@ -544,6 +605,7 @@ export type Database = {
           number_of_rooms?: number | null
           owner_id: string
           owner_name?: string | null
+          payment_qr_url?: string | null
           place_of_supply?: string | null
           postal_code?: string | null
           sac_code?: string | null
@@ -597,6 +659,7 @@ export type Database = {
           number_of_rooms?: number | null
           owner_id?: string
           owner_name?: string | null
+          payment_qr_url?: string | null
           place_of_supply?: string | null
           postal_code?: string | null
           sac_code?: string | null
@@ -656,6 +719,7 @@ export type Database = {
           id: string
           invitation_accepted_at: string | null
           invitation_sent_at: string | null
+          invited_email: string | null
           medical_conditions: string | null
           member_code: string | null
           occupation: string | null
@@ -694,6 +758,7 @@ export type Database = {
           id?: string
           invitation_accepted_at?: string | null
           invitation_sent_at?: string | null
+          invited_email?: string | null
           medical_conditions?: string | null
           member_code?: string | null
           occupation?: string | null
@@ -732,6 +797,7 @@ export type Database = {
           id?: string
           invitation_accepted_at?: string | null
           invitation_sent_at?: string | null
+          invited_email?: string | null
           medical_conditions?: string | null
           member_code?: string | null
           occupation?: string | null
@@ -1501,6 +1567,8 @@ export type Database = {
           clerk_invitation_id: string | null
           coaching_experience: string | null
           completed_sessions: number | null
+          contact_email: string | null
+          contact_phone: string | null
           country: string | null
           created_at: string
           date_of_birth: string | null
@@ -1516,6 +1584,7 @@ export type Database = {
           employment_type: Database["public"]["Enums"]["employment_type"] | null
           end_time: string | null
           experience_years: number | null
+          full_name: string | null
           gender: Database["public"]["Enums"]["gender"] | null
           gym_id: string
           id: string
@@ -1529,6 +1598,7 @@ export type Database = {
           max_members: number | null
           max_sessions_per_day: number | null
           members_trained: number | null
+          photo_url: string | null
           postal_code: string | null
           professional_title: string | null
           profile_id: string | null
@@ -1543,6 +1613,7 @@ export type Database = {
           state: string | null
           status: Database["public"]["Enums"]["trainer_status"]
           total_reviews: number | null
+          trainer_code: string | null
           training_philosophy: string | null
           two_factor_enabled: boolean | null
           updated_at: string
@@ -1561,6 +1632,8 @@ export type Database = {
           clerk_invitation_id?: string | null
           coaching_experience?: string | null
           completed_sessions?: number | null
+          contact_email?: string | null
+          contact_phone?: string | null
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
@@ -1578,6 +1651,7 @@ export type Database = {
             | null
           end_time?: string | null
           experience_years?: number | null
+          full_name?: string | null
           gender?: Database["public"]["Enums"]["gender"] | null
           gym_id: string
           id?: string
@@ -1591,6 +1665,7 @@ export type Database = {
           max_members?: number | null
           max_sessions_per_day?: number | null
           members_trained?: number | null
+          photo_url?: string | null
           postal_code?: string | null
           professional_title?: string | null
           profile_id?: string | null
@@ -1605,6 +1680,7 @@ export type Database = {
           state?: string | null
           status?: Database["public"]["Enums"]["trainer_status"]
           total_reviews?: number | null
+          trainer_code?: string | null
           training_philosophy?: string | null
           two_factor_enabled?: boolean | null
           updated_at?: string
@@ -1623,6 +1699,8 @@ export type Database = {
           clerk_invitation_id?: string | null
           coaching_experience?: string | null
           completed_sessions?: number | null
+          contact_email?: string | null
+          contact_phone?: string | null
           country?: string | null
           created_at?: string
           date_of_birth?: string | null
@@ -1640,6 +1718,7 @@ export type Database = {
             | null
           end_time?: string | null
           experience_years?: number | null
+          full_name?: string | null
           gender?: Database["public"]["Enums"]["gender"] | null
           gym_id?: string
           id?: string
@@ -1653,6 +1732,7 @@ export type Database = {
           max_members?: number | null
           max_sessions_per_day?: number | null
           members_trained?: number | null
+          photo_url?: string | null
           postal_code?: string | null
           professional_title?: string | null
           profile_id?: string | null
@@ -1667,6 +1747,7 @@ export type Database = {
           state?: string | null
           status?: Database["public"]["Enums"]["trainer_status"]
           total_reviews?: number | null
+          trainer_code?: string | null
           training_philosophy?: string | null
           two_factor_enabled?: boolean | null
           updated_at?: string
@@ -1799,7 +1880,7 @@ export type Database = {
           clerk_id: string | null
           created_at: string
           deleted_at: string | null
-          email: string
+          email: string | null
           full_name: string | null
           id: string
           last_login_at: string | null
@@ -1814,7 +1895,7 @@ export type Database = {
           clerk_id?: string | null
           created_at?: string
           deleted_at?: string | null
-          email: string
+          email?: string | null
           full_name?: string | null
           id?: string
           last_login_at?: string | null
@@ -1829,7 +1910,7 @@ export type Database = {
           clerk_id?: string | null
           created_at?: string
           deleted_at?: string | null
-          email?: string
+          email?: string | null
           full_name?: string | null
           id?: string
           last_login_at?: string | null
@@ -1945,8 +2026,71 @@ export type Database = {
         Args: { p_gateway_order_id: string; p_gym_subscription_id: string }
         Returns: string
       }
+      create_walkin_member: {
+        Args: {
+          p_email?: string
+          p_full_name: string
+          p_gym_id: string
+          p_member_code: string
+          p_phone?: string
+        }
+        Returns: {
+          account_status: Database["public"]["Enums"]["general_status"]
+          active_gym_membership_id: string | null
+          additional_notes: string | null
+          address: string | null
+          allergies: string | null
+          blood_group: Database["public"]["Enums"]["blood_group"] | null
+          city: string | null
+          clerk_invitation_id: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          date_of_birth: string | null
+          deleted_at: string | null
+          emergency_contact_address: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          emergency_contact_relationship:
+            | Database["public"]["Enums"]["relationship"]
+            | null
+          fitness_goal: string | null
+          full_name: string | null
+          gender: Database["public"]["Enums"]["gender"] | null
+          height_cm: number | null
+          id: string
+          invitation_accepted_at: string | null
+          invitation_sent_at: string | null
+          invited_email: string | null
+          medical_conditions: string | null
+          member_code: string | null
+          occupation: string | null
+          photo_url: string | null
+          physical_notes: string | null
+          pin_code: string | null
+          profile_id: string | null
+          state: string | null
+          updated_at: string
+          weight_kg: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_walkin_membership: {
+        Args: { p_gym_id: string; p_member_id: string; p_plan_id: string }
+        Returns: string
+      }
+      create_walkin_membership_v2: {
+        Args: { p_gym_id: string; p_member_id: string; p_plan_id: string }
+        Returns: string
+      }
       current_member_id: { Args: never; Returns: string }
       current_user_id: { Args: never; Returns: string }
+      debug_jwt: { Args: never; Returns: Json }
       expire_overdue_memberships: { Args: never; Returns: number }
       extend_gym_trial: {
         Args: { p_gym_id: string; p_new_billing_start_date: string }
@@ -1979,6 +2123,10 @@ export type Database = {
         }
       }
       is_gym_owner: { Args: { target_gym_id: string }; Returns: boolean }
+      manual_check_in_out: {
+        Args: { p_gym_id: string; p_member_id: string }
+        Returns: Json
+      }
       mark_gym_subscription_paid: {
         Args: { p_gym_subscription_id: string }
         Returns: undefined
@@ -1990,6 +2138,14 @@ export type Database = {
           p_amount: number
           p_gateway_order_id: string
           p_gateway_payment_id: string
+        }
+        Returns: undefined
+      }
+      record_walkin_payment: {
+        Args: {
+          p_method: Database["public"]["Enums"]["payment_method"]
+          p_payment_id: string
+          p_transaction_ref?: string
         }
         Returns: undefined
       }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Package,
   Search,
@@ -13,7 +14,7 @@ import {
   CheckCircle2,
   Trash2,
 } from "lucide-react";
-import { type Plan } from "@/mock/plans";
+import { toast } from "sonner";
 import { bigSquareButton } from "@/lib/styles";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,13 +22,37 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
+import { DURATION_OPTIONS } from "@/constants/plan-options";
+import {
+  // toggleMembershipPlanStatusAction,
+  deleteMembershipPlanAction,
+  // duplicateMembershipPlanAction,
+} from "@/actions/owner.action";
+import { Database } from "@/db/database.types";
+
+// Row type from generated Supabase types, plus the count-aggregate embed
+// getMembershipPlans adds via `gym_memberships(count)`.
+type MembershipPlan =
+  Database["public"]["Tables"]["membership_plans"]["Row"] & {
+    gym_memberships: { count: number }[];
+  };
 
 type PlansGridProps = {
-  initialPlans: Plan[];
+  initialPlans: MembershipPlan[];
 };
 
+const PRICE_FILTERS = [
+  "All Prices",
+  "Under ₹1000",
+  "₹1000 - ₹3000",
+  "Above ₹3000",
+];
+
 export function PlansGrid({ initialPlans }: PlansGridProps) {
-  const [plans, setPlans] = useState<Plan[]>(initialPlans);
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const [plans, setPlans] = useState<MembershipPlan[]>(initialPlans);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
 
@@ -37,12 +62,14 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
   const [priceFilter, setPriceFilter] = useState("All Prices");
 
   // Card action menu state (which card's menu is open)
-  const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
 
-  // Add plan modal state
-
-  const [newPlan, setNewPlan] = useState({ name: "", price: "" });
+  // Keep local list in sync if the server re-renders this with fresh data
+  // (e.g. after revalidatePath from one of the card actions).
+  useEffect(() => {
+    setPlans(initialPlans);
+  }, [initialPlans]);
 
   // Close action menu on outside click (Popover handles its own outside-click)
   useEffect(() => {
@@ -58,27 +85,22 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const matchesDuration = (plan: Plan) => {
-    if (durationFilter === "All Durations") return true;
-    if (durationFilter === "Monthly")
-      return plan.duration.toLowerCase() === "month";
-    if (durationFilter === "Quarterly")
-      return plan.duration.toLowerCase().includes("3");
-    return true;
-  };
+  const matchesDuration = (plan: MembershipPlan) =>
+    durationFilter === "All Durations" ||
+    plan.membership_duration === durationFilter;
 
-  const matchesPrice = (plan: Plan) => {
+  const matchesPrice = (plan: MembershipPlan) => {
+    const price = Number(plan.plan_price);
     if (priceFilter === "All Prices") return true;
-    if (priceFilter === "Under ₹1000") return plan.price < 1000;
-    if (priceFilter === "₹1000 - ₹3000")
-      return plan.price >= 1000 && plan.price <= 3000;
-    if (priceFilter === "Above ₹3000") return plan.price > 3000;
+    if (priceFilter === "Under ₹1000") return price < 1000;
+    if (priceFilter === "₹1000 - ₹3000") return price >= 1000 && price <= 3000;
+    if (priceFilter === "Above ₹3000") return price > 3000;
     return true;
   };
 
   const filteredPlans = useMemo(() => {
     return plans.filter((plan) => {
-      const matchesSearch = plan.name
+      const matchesSearch = plan.plan_name
         .toLowerCase()
         .includes(searchQuery.toLowerCase());
       const matchesStatus = !selectedStatus || plan.status === selectedStatus;
@@ -102,16 +124,22 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
   };
 
   const handleExport = () => {
-    const headers = ["Name", "Price", "Duration", "Members", "Status"];
+    const headers = ["Name", "Price", "Duration", "Active Members", "Status"];
     const rows = filteredPlans.map((p) => [
-      p.name,
-      p.price,
-      p.duration,
-      p.planDetails.members,
+      p.plan_name,
+      p.plan_price,
+      p.membership_duration,
+      p.gym_memberships?.[0]?.count ?? 0,
       p.status,
     ]);
+    const escapeCsv = (value: unknown) => {
+      const str = String(value ?? "");
+      const guarded = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+      return `"${guarded.replace(/"/g, '""')}"`;
+    };
+
     const csvContent = [headers, ...rows]
-      .map((row) => row.map((val) => `"${val}"`).join(","))
+      .map((row) => row.map(escapeCsv).join(","))
       .join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -124,42 +152,64 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
+  // const handleDuplicatePlan = (id: string) => {
+  //   setOpenActionMenuId(null);
+  //   startTransition(async () => {
+  //     const result = await duplicateMembershipPlanAction(id);
+  //     if (!result.success) {
+  //       toast.error(result.error ?? "Failed to duplicate plan.");
+  //       return;
+  //     }
+  //     toast.success("Plan duplicated as a draft.");
+  //     router.refresh();
+  //   });
+  // };
 
-  const handleDuplicatePlan = (id: number) => {
-    const source = plans.find((p) => p.id === id);
-    if (!source) return;
-    const duplicate: Plan = {
-      ...source,
-      id: Math.max(0, ...plans.map((p) => p.id)) + 1,
-      name: `${source.name} (Copy)`,
-      badge: null,
-      stats: { revenue: 0, renewals: 0, newMembers: 0 },
-      planDetails: { ...source.planDetails, members: 0 },
-    };
-    setPlans((prev) => [duplicate, ...prev]);
-    setOpenActionMenuId(null);
-  };
+  // const handleToggleStatus = (plan: MembershipPlan) => {
+  //   setOpenActionMenuId(null);
+  //   const nextStatus = plan.status === "Active" ? "Hidden" : "Active";
+  //   // Optimistic update so the badge flips immediately.
+  //   setPlans((prev) =>
+  //     prev.map((p) => (p.id === plan.id ? { ...p, status: nextStatus } : p)),
+  //   );
+  //   startTransition(async () => {
+  //     const result = await toggleMembershipPlanStatusAction(
+  //       plan.id,
+  //       nextStatus,
+  //     );
+  //     if (!result.success) {
+  //       toast.error(result.error ?? "Failed to update plan status.");
+  //       setPlans((prev) =>
+  //         prev.map((p) => (p.id === plan.id ? { ...p, status: plan.status } : p)),
+  //       );
+  //       return;
+  //     }
+  //     router.refresh();
+  //   });
+  // };
 
-  const handleToggleStatus = (id: number) => {
-    setPlans((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? { ...p, status: p.status === "Active" ? "Inactive" : "Active" }
-          : p,
-      ),
-    );
-    setOpenActionMenuId(null);
-  };
-
-  const handleDeletePlan = (id: number) => {
-    setPlans((prev) => prev.filter((p) => p.id !== id));
-    setOpenActionMenuId(null);
-  };
+  // const handleDeletePlan = (id: string) => {
+  //   setOpenActionMenuId(null);
+  //   const previous = plans;
+  //   setPlans((prev) => prev.filter((p) => p.id !== id));
+  //   startTransition(async () => {
+  //     const result = await deleteMembershipPlanAction(id);
+  //     if (!result.success) {
+  //       toast.error(result.error ?? "Failed to delete plan.");
+  //       setPlans(previous);
+  //       return;
+  //     }
+  //     toast.success("Plan deleted.");
+  //     router.refresh();
+  //   });
+  // };
 
   const getStatusColor = (status: string) =>
     status === "Active"
       ? "bg-green-100 text-green-700"
-      : "bg-gray-100 text-gray-700";
+      : status === "Hidden"
+        ? "bg-gray-100 text-gray-700"
+        : "bg-amber-100 text-amber-700"; // Draft
 
   return (
     <>
@@ -224,8 +274,11 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
                       className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
                     >
                       <option>All Durations</option>
-                      <option>Monthly</option>
-                      <option>Quarterly</option>
+                      {DURATION_OPTIONS.map((d) => (
+                        <option key={d.value} value={d.value}>
+                          {d.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
@@ -238,10 +291,9 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
                       onChange={(e) => setPriceFilter(e.target.value)}
                       className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
                     >
-                      <option>All Prices</option>
-                      <option>Under ₹1000</option>
-                      <option>₹1000 - ₹3000</option>
-                      <option>Above ₹3000</option>
+                      {PRICE_FILTERS.map((p) => (
+                        <option key={p}>{p}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -265,7 +317,10 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
             </button>
 
             {/* Add Plan Button */}
-            <button className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium">
+            <button
+              onClick={() => router.push("/owner/plans/new")}
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium"
+            >
               <Plus className="w-4 h-4" />
               <span className="sm:hidden">Add</span>
               <span className="hidden sm:inline">New Plan</span>
@@ -275,7 +330,7 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
 
         {/* Quick Filter Tabs (Status) */}
         <div className="flex gap-2 overflow-x-auto pb-2 -mx-3 px-3 sm:mx-0 sm:px-0">
-          {["All", "Active", "Inactive"].map((status) => (
+          {["All", "Active", "Draft", "Hidden"].map((status) => (
             <button
               key={status}
               onClick={() =>
@@ -311,165 +366,159 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {filteredPlans.map((plan) => (
-              <div
-                key={plan.id}
-                className="flex flex-col bg-card border border-border rounded-lg p-5"
-              >
-                <div className="mb-2 flex items-start justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground">
-                      {plan.name}
-                    </h3>
-                    <p className="mt-1 text-2xl font-bold text-foreground">
-                      ₹{plan.price.toLocaleString()}
-                      <span className="text-sm font-normal text-muted-foreground">
-                        {" "}
-                        / {plan.duration}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 relative">
-                    {plan.badge && (
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">
-                        {plan.badge}
-                      </span>
-                    )}
-                    <button
-                      onClick={() =>
-                        setOpenActionMenuId((id) =>
-                          id === plan.id ? null : plan.id,
-                        )
-                      }
-                      className="p-2 hover:bg-muted rounded-lg transition-colors"
-                    >
-                      <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-                    </button>
+            {filteredPlans.map((plan) => {
+              const allFeatures = [
+                ...(plan.selected_features ?? []),
+                ...(plan.custom_features ?? []),
+              ];
 
-                    {openActionMenuId === plan.id && (
-                      <div
-                        ref={actionMenuRef}
-                        className="absolute right-0 top-10 w-44 bg-card border border-border rounded-lg shadow-lg z-20 overflow-hidden"
-                      >
-                        <button
-                          onClick={() => handleDuplicatePlan(plan.id)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
-                        >
-                          <Copy className="w-4 h-4" />
-                          Duplicate Plan
-                        </button>
-                        <button
-                          onClick={() => handleToggleStatus(plan.id)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          {plan.status === "Active" ? "Deactivate" : "Activate"}
-                        </button>
-                        <button
-                          onClick={() => handleDeletePlan(plan.id)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left text-red-600"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <span
-                  className={`w-fit px-3 py-1 rounded-full text-xs font-medium mb-3 ${getStatusColor(
-                    plan.status,
-                  )}`}
+              return (
+                <div
+                  key={plan.id}
+                  className="flex flex-col bg-card border border-border rounded-lg p-5"
                 >
-                  {plan.status}
-                </span>
-
-                <p className="text-sm text-muted-foreground">
-                  {plan.description}
-                </p>
-
-                <div className="mt-3 space-y-2">
-                  <p className="text-xs font-semibold text-foreground">
-                    Features
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {plan.features.map((feature) => (
-                      <span
-                        key={feature}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border border-border text-foreground"
+                  <div className="mb-2 flex items-start justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">
+                        {plan.plan_name}
+                      </h3>
+                      <p className="mt-1 text-2xl font-bold text-foreground">
+                        ₹{Number(plan.plan_price).toLocaleString()}
+                        <span className="text-sm font-normal text-muted-foreground">
+                          {" "}
+                          / {plan.membership_duration}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 relative">
+                      {plan.is_featured && (
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">
+                          Featured
+                        </span>
+                      )}
+                      <button
+                        onClick={() =>
+                          setOpenActionMenuId((id) =>
+                            id === plan.id ? null : plan.id,
+                          )
+                        }
+                        className="p-2 hover:bg-muted rounded-lg transition-colors"
                       >
-                        <CheckCircle2 className="w-3 h-3" />
-                        {feature}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+                        <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                      </button>
 
-                <div className="my-4 border-t border-border" />
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <p className="text-muted-foreground">Duration</p>
-                    <p className="font-medium text-foreground">
-                      {plan.planDetails.duration}
-                    </p>
+                      {openActionMenuId === plan.id && (
+                        <div
+                          ref={actionMenuRef}
+                          className="absolute right-0 top-10 w-44 bg-card border border-border rounded-lg shadow-lg z-20 overflow-hidden"
+                        >
+                          <button
+                            disabled={isPending}
+                            // onClick={() => handleDuplicatePlan(plan.id)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left disabled:opacity-50"
+                          >
+                            <Copy className="w-4 h-4" />
+                            Duplicate Plan
+                          </button>
+                          <button
+                            disabled={isPending}
+                            // onClick={() => handleToggleStatus(plan)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            {plan.status === "Active" ? "Hide" : "Activate"}
+                          </button>
+                          <button
+                            disabled={isPending}
+                            // onClick={() => handleDeletePlan(plan.id)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left text-red-600 disabled:opacity-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground">Members</p>
-                    <p className="font-medium text-foreground">
-                      {plan.planDetails.members}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Joining Fee</p>
-                    <p className="font-medium text-foreground">
-                      ₹{plan.planDetails.joiningFee}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Renewal</p>
-                    <p className="font-medium text-foreground">
-                      {plan.planDetails.renewalPeriod}
-                    </p>
-                  </div>
-                </div>
 
-                <div className="my-4 border-t border-border" />
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div>
-                    <p className="text-muted-foreground">Revenue</p>
-                    <p className="font-semibold text-foreground">
-                      ₹{(plan.stats.revenue / 100000).toFixed(1)}L
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Renewals</p>
-                    <p className="font-semibold text-foreground">
-                      {plan.stats.renewals}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">New Members</p>
-                    <p className="font-semibold text-foreground">
-                      {plan.stats.newMembers}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex gap-2">
-                  <button
-                    className={`${bigSquareButton} flex-1 border border-border hover:bg-muted transition-colors`}
+                  <span
+                    className={`w-fit px-3 py-1 rounded-full text-xs font-medium mb-3 ${getStatusColor(
+                      plan.status,
+                    )}`}
                   >
-                    View Details
-                  </button>
-                  <button
-                    className={`${bigSquareButton} flex-1 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium`}
-                  >
-                    Edit Plan
-                  </button>
+                    {plan.status}
+                  </span>
+
+                  <p className="text-sm text-muted-foreground">
+                    {plan.short_description}
+                  </p>
+
+                  {allFeatures.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-xs font-semibold text-foreground">
+                        Features
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {allFeatures.map((feature) => (
+                          <span
+                            key={feature}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border border-border text-foreground"
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                            {feature}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="my-4 border-t border-border" />
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Duration</p>
+                      <p className="font-medium text-foreground">
+                        {plan.duration_months} mo
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Members</p>
+                      <p className="font-medium text-foreground">
+                        {plan.gym_memberships?.[0]?.count ?? 0}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Joining Fee</p>
+                      <p className="font-medium text-foreground">
+                        ₹{Number(plan.joining_fee ?? 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Enrollment</p>
+                      <p className="font-medium text-foreground">
+                        {plan.enrollment_mode ?? "Open"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 flex gap-2 mt-auto">
+                    <Button
+                      onClick={() => router.push(`/owner/plans/${plan.id}`)}
+                      className={` flex-1 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors`}
+                    >
+                      View Details
+                    </Button>
+                    <Button
+                      onClick={() =>
+                        router.push(`/owner/plans/${plan.id}/edit`)
+                      }
+                      className={` flex-1 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium`}
+                    >
+                      Edit Plan
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -1,9 +1,21 @@
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import MemberForm, { MEMBER_FORM_ID } from "@/components/owner/MemberForm";
 import { bigSquareButton } from "@/lib/styles";
+import { getTrainersAndPlans } from "@/services/owner.query";
+import { auth } from "@clerk/nextjs/server";
+import InviteMemberForm from "@/components/owner/InviteMemberForm";
 
-export default function AddNewMemberPage() {
+export default async function AddNewMemberPage() {
+  const { sessionClaims } = await auth();
+
+  const gymId = sessionClaims?.publicMetadata?.gymId as string;
+
+  if (!gymId) throw new Error("Gym ID not found");
+
+  const { data: trainersAndPlans, error } = await getTrainersAndPlans(gymId);
+  const trainers = trainersAndPlans?.trainers || [];
+  const plans = trainersAndPlans?.plans || [];
+
   return (
     <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
       {/* Page Header */}
@@ -26,27 +38,12 @@ export default function AddNewMemberPage() {
               </p>
             </div>
           </div>
-          <div className="flex flex-row gap-3">
-            <Button variant="outline" className={bigSquareButton}>
-              Cancel
-            </Button>
-            {/* type="submit" + form="..." lets this button, which lives
-                outside the <form> element, submit the client-side form
-                without this component needing to be a client component. */}
-            <Button
-              type="submit"
-              form={MEMBER_FORM_ID}
-              className={bigSquareButton}
-            >
-              Save Member
-            </Button>
-          </div>
         </div>
       </div>
 
       {/* Main Content */}
       <main className="py-4">
-        <MemberForm />
+        <InviteMemberForm trainers={trainers} plans={plans} />
       </main>
     </div>
   );

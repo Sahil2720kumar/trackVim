@@ -1,0 +1,1 @@
+ALTER TABLE "members" ADD COLUMN "invited_email" varchar(320);

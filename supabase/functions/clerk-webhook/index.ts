@@ -58,6 +58,9 @@ export default {
       return new Response("Invalid signature", { status: 400 });
     }
 
+    // TEMP DIAGNOSTIC — remove once confirmed working.
+    console.log("Received webhook event:", evt.type);
+
     // Public endpoint verified above via svix, so we use supabaseAdmin
     // (bypasses RLS) for all writes below — there is no end-user JWT here.
     switch (evt.type) {
@@ -70,10 +73,16 @@ export default {
           memberId?: string;
         };
 
+        console.log("user.created metadata:", {
+          role: clerkUser.public_metadata?.role,
+          hasGymId: Boolean(clerkUser.public_metadata?.gymId),
+          hasTrainerId: Boolean(clerkUser.public_metadata?.trainerId),
+        });
         const email: string | null =
           clerkUser.email_addresses?.[0]?.email_address ?? null;
         const phone: string | null =
           clerkUser.phone_numbers?.[0]?.phone_number ?? null;
+        const username: string | null = clerkUser.username ?? null;
         const fullName =
           [clerkUser.first_name, clerkUser.last_name]
             .filter(Boolean)
@@ -81,33 +90,31 @@ export default {
 
         const { data: user, error: userError } = await ctx.supabaseAdmin
           .from("users")
-          .upsert(
-            {
-              clerk_id: clerkUser.id,
-              email,
-              full_name: fullName,
-              phone,
-              avatar_url: clerkUser.image_url ?? null,
-              role:
-                meta.role === "trainer"
-                  ? "trainer"
-                  : meta.role === "member"
-                    ? "member"
-                    : null,
-            },
-            { onConflict: "clerk_id" },
-          )
+          .insert({
+            clerk_id: clerkUser.id,
+            email,
+            username,
+            full_name: fullName,
+            phone,
+            avatar_url: clerkUser.image_url ?? null,
+            role:
+              meta.role === "trainer"
+                ? "trainer"
+                : meta.role === "member"
+                  ? "member"
+                  : null,
+          })
           .select()
           .single();
 
-        if (userError || !user) {
-          console.error("Failed to upsert user:", userError);
-          return new Response("Failed to sync user", { status: 500 });
+        if (userError) {
+          console.error("Failed to create users row:", userError);
+          return new Response("Failed to create user", { status: 500 });
         }
 
         // --- Trainer invite acceptance -----------------------------------
         if (meta.role === "trainer" && meta.trainerId) {
-          const { error } = await ctx.supabaseAdmin
+          const { data: linkedTrainer, error } = await ctx.supabaseAdmin
             .from("trainers")
             .update({
               profile_id: user.id,
@@ -115,9 +122,18 @@ export default {
               invitation_accepted_at: new Date().toISOString(),
             })
             .eq("id", meta.trainerId)
-            .is("profile_id", null); // never overwrite an already-linked row
+            .is("profile_id", null) // never overwrite an already-linked row
+            .select("id"); // lets us see how many rows actually matched
 
-          if (error) console.error("Failed to link trainer invitation:", error);
+          if (error) {
+            console.error("Failed to link trainer invitation:", error);
+          } else {
+            console.log("Trainer linked:", linkedTrainer[0].id);
+          }
+        } else if (meta.role === "trainer") {
+          console.warn(
+            `Trainer role set but trainerId missing on metadata — cannot link`,
+          );
         }
 
         // --- Member invite acceptance (walk-in member registering later) --

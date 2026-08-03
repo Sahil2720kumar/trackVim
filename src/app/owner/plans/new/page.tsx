@@ -28,21 +28,6 @@ export default function CreateMembershipPlanPage() {
               </p>
             </div>
           </div>
-          <div className="flex flex-row gap-3">
-            <Button variant="outline" className={bigSquareButton}>
-              Cancel
-            </Button>
-            {/* type="submit" + form="..." lets this button, which lives
-                outside the <form> element, submit the client-side form
-                without this component needing to be a client component. */}
-            <Button
-              type="submit"
-              form={MEMBERSHIP_PLAN_FORM_ID}
-              className={bigSquareButton}
-            >
-              Save Plan
-            </Button>
-          </div>
         </div>
       </div>
 

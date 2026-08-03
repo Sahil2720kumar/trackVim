@@ -1,11 +1,12 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-// ============================================================================
-// Types
-// ============================================================================
+import { auth, clerkClient } from "@clerk/nextjs/server";
+
+import { createTrainerSchema, type CreateTrainerInput } from "@/db/validators";
+import { uploadFile } from "@/lib/cloudinary/upload";
 
 export type ActionResult<T = void> =
   | { success: true; data: T }
@@ -14,6 +15,140 @@ export type ActionResult<T = void> =
 // ============================================================================
 // Trainer Profile (self-editable fields only)
 // ============================================================================
+
+export async function completeTrainerProfileAction(
+  trainerId: string,
+  data: CreateTrainerInput,
+  photoFile?: File | null,
+): Promise<ActionResult> {
+  const { userId, sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as { trainerId?: string };
+
+  if (!userId || meta.trainerId !== trainerId) {
+    return { success: false, error: "Not authorized to update this profile." };
+  }
+
+  const parsed = createTrainerSchema.safeParse(data);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid form data.",
+    };
+  }
+  const v = parsed.data;
+
+  let photoUrl: string | undefined;
+  if (photoFile instanceof File && photoFile.size > 0) {
+    try {
+      photoUrl = await uploadFile(
+        photoFile,
+        `trackVim/trainers/${userId}/photo`,
+      );
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Failed to upload photo.",
+      };
+    }
+  }
+
+  const supabase = await createServerClient();
+
+  // if (photoUrl) {
+  //   const { error: userError } = await supabase
+  //     .from("users")
+  //     .update({
+  //       avatar_url: photoUrl ?? null,
+  //     })
+  //     .eq("clerk_id", userId);
+  //   if (userError) return { success: false, error: userError.message };
+  // }
+
+  const { data: trainerData, error } = await supabase
+    .from("trainers")
+    .update({
+      full_name: v.fullName,
+      contact_phone: v.contactPhone,
+      bio: v.bio,
+      professional_title: v.professionalTitle,
+      gender: v.gender as "Male" | "Female" | "Other",
+      date_of_birth: v.dateOfBirth,
+      qualification: v.qualification,
+      certification: v.certification,
+      experience_years: v.experienceYears,
+      specializations: v.specializations,
+      languages: v.languages,
+      working_days: v.workingDays,
+      start_time: v.startTime,
+      end_time: v.endTime,
+      max_sessions_per_day: v.maxSessionsPerDay,
+      accepting_new_members: v.acceptingNewMembers,
+      session_types: v.sessionTypes,
+      coaching_experience: v.coachingExperience,
+      training_philosophy: v.trainingPhilosophy,
+      instagram: v.instagram,
+      linkedin: v.linkedin,
+      youtube: v.youtube,
+      website_url: v.websiteUrl,
+      emergency_contact_name: v.emergencyContactName,
+      emergency_relationship: v.emergencyRelationship as
+        | "Mother"
+        | "Father"
+        | "Sister"
+        | "Brother"
+        | "Spouse"
+        | "Sibling"
+        | "Friend"
+        | "Other",
+      emergency_phone: v.emergencyPhone,
+      emergency_alternate_phone: v.emergencyAlternatePhone,
+      address_line: v.addressLine,
+      city: v.city,
+      state: v.state,
+      country: v.country,
+      postal_code: v.postalCode,
+      additional_notes: v.additionalNotes,
+      ...(photoUrl ? { photo_url: photoUrl } : {}),
+      status: "Active",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", trainerId)
+    .select("id,photo_url,full_name,contact_phone")
+    .single();
+
+  if (error) return { success: false, error: error.message };
+
+  const { error: userError } = await supabase
+    .from("users")
+    .update({
+      full_name: trainerData.full_name,
+      phone: trainerData.contact_phone,
+      ...(trainerData.photo_url && {
+        avatar_url: trainerData.photo_url,
+      }),
+    })
+    .eq("clerk_id", userId);
+
+  if (userError) {
+    return { success: false, error: userError.message };
+  }
+
+  try {
+    const client = await clerkClient();
+    await client.users.updateUserMetadata(userId, {
+      publicMetadata: { ...meta, role: "trainer", onboardingComplete: true },
+    });
+  } catch (err) {
+    return {
+      success: false,
+      error:
+        err instanceof Error ? err.message : "Failed to finalize onboarding.",
+    };
+  }
+
+  revalidatePath("/trainer/dashboard");
+  return { success: true, data: undefined };
+}
 
 /**
  * Update self-editable trainer profile fields.
@@ -68,7 +203,7 @@ export async function updateMyTrainerProfile(
     additionalNotes: string;
   }>,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const update: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -126,30 +261,6 @@ export async function updateMyTrainerProfile(
   return { success: true, data: undefined };
 }
 
-/**
- * Mark invitation as accepted and link the trainer row to this user's profile.
- */
-export async function acceptTrainerInvitation(
-  trainerId: string,
-  profileId: string,
-): Promise<ActionResult> {
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("trainers")
-    .update({
-      profile_id: profileId,
-      invitation_accepted_at: new Date().toISOString(),
-      status: "Active",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", trainerId);
-
-  if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/trainer");
-  return { success: true, data: undefined };
-}
-
 // ============================================================================
 // Exercise Library
 // ============================================================================
@@ -177,7 +288,7 @@ export async function createExercise(payload: {
     | "Traps";
   description?: string;
 }): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("exercises")
@@ -205,7 +316,7 @@ export async function updateExercise(
     description: string;
   }>,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const update: Record<string, unknown> = {};
   if (payload.name !== undefined) update.name = payload.name;
@@ -255,7 +366,7 @@ export async function createWorkoutTemplate(payload: {
   status?: "Active" | "Draft" | "Archived";
   additionalNotes?: string;
 }): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("workout_templates")
@@ -296,7 +407,7 @@ export async function updateWorkoutTemplate(
     additionalNotes: string;
   }>,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const update: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -342,7 +453,7 @@ export async function addExerciseToTemplate(payload: {
   weight?: string;
   restSeconds?: number;
 }): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("template_exercises")
@@ -373,7 +484,7 @@ export async function updateTemplateExercise(
     restSeconds: number;
   }>,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const update: Record<string, unknown> = {};
   if (payload.position !== undefined) update.position = payload.position;
@@ -396,7 +507,7 @@ export async function updateTemplateExercise(
 export async function removeExerciseFromTemplate(
   templateExerciseId: string,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { error } = await supabase
     .from("template_exercises")
@@ -447,7 +558,7 @@ export async function createTrainingSession(payload: {
   defaultRestSeconds?: number;
   reminderMinutes?: number;
 }): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("training_sessions")
@@ -486,7 +597,7 @@ export async function seedSessionFromTemplate(
   sessionId: string,
   templateId: string,
 ): Promise<ActionResult<{ count: number }>> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   // Fetch template exercises
   const { data: templateExercises, error: fetchError } = await supabase
@@ -537,7 +648,7 @@ export async function updateTrainingSession(
     notes: string;
   }>,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const update: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -579,7 +690,7 @@ export async function updateTrainingSession(
 export async function completeTrainingSession(
   sessionId: string,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { error } = await supabase
     .from("training_sessions")
@@ -608,7 +719,7 @@ export async function addExerciseToSession(payload: {
   weight?: string;
   restSeconds?: number;
 }): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("session_exercises")
@@ -638,7 +749,7 @@ export async function updateSessionExercise(
     restSeconds: number;
   }>,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const update: Record<string, unknown> = {};
   if (payload.position !== undefined) update.position = payload.position;
@@ -660,7 +771,7 @@ export async function updateSessionExercise(
 export async function removeSessionExercise(
   sessionExerciseId: string,
 ): Promise<ActionResult> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { error } = await supabase
     .from("session_exercises")
@@ -681,7 +792,7 @@ export async function sendMessage(payload: {
   subject?: string;
   body: string;
 }): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data: currentUser, error: userError } = await supabase
     .from("users")

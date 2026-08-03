@@ -10,19 +10,43 @@ import { PlansGrid } from "@/components/owner/PlansGrid";
 import { RevenueOverviewChart } from "@/components/owner/RevenueOverviewChart";
 import { QuickActionsGrid } from "@/components/QuickActionsGrid";
 import { plansQuickActions } from "@/components/owner/quick-actions-data";
-import { initialPlans, revenueData, topPlans } from "@/mock/plans";
+import { revenueData, topPlans } from "@/mock/plans";
+import { getMembershipPlans } from "@/services/owner.query";
+import { auth } from "@clerk/nextjs/server";
 
-export default function MembershipPlansPage() {
-  const totalPlans = initialPlans.length;
-  const activePlans = initialPlans.filter((p) => p.status === "Active").length;
-  const totalMembers = initialPlans.reduce(
-    (sum, p) => sum + p.planDetails.members,
-    0,
-  );
+export default async function MembershipPlansPage() {
+  const { sessionClaims } = await auth();
+
+  const gymId = sessionClaims?.publicMetadata?.gymId as unknown as string;
+
+  if (!gymId) {
+    throw new Error(
+      "Owner session missing gymId — expected onboarding to set this.",
+    );
+  }
+
+  const { data: initialPlans, success } = await getMembershipPlans(gymId);
+
+  const totalPlans = initialPlans?.length || 0;
+
+  const activePlans =
+    initialPlans?.filter((p) => p.status === "Active").length || 0;
+
+  const totalMembers =
+    initialPlans?.reduce(
+      (sum, p) => sum + (p.gym_memberships?.[0]?.count ?? 0),
+      0,
+    ) || 0;
+
   const monthlyRevenue = revenueData[revenueData.length - 1]?.revenue || 0;
-  const mostPopularPlan = initialPlans.reduce((max, p) =>
-    p.planDetails.members > max.planDetails.members ? p : max,
-  );
+
+  const mostPopularPlan =
+    initialPlans?.reduce<(typeof initialPlans)[number] | null>((max, plan) => {
+      const maxCount = max?.gym_memberships?.[0]?.count ?? 0;
+      const planCount = plan.gym_memberships?.[0]?.count ?? 0;
+
+      return planCount > maxCount ? plan : max;
+    }, null) ?? null;
 
   return (
     <div className="flex flex-col px-4 py-5 gap-4 sm:gap-6 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
@@ -64,15 +88,15 @@ export default function MembershipPlansPage() {
         <StatCard
           icon={Star}
           title="Most Popular Plan"
-          value={mostPopularPlan.name}
-          subtitle={`${mostPopularPlan.planDetails.members} Members`}
+          value={mostPopularPlan?.plan_name || "—"}
+          subtitle={`${mostPopularPlan?.gym_memberships?.[0]?.count ?? 0} Members`}
           iconBg="bg-purple-100"
           iconColor="text-purple-600"
         />
       </div>
 
       {/* Interactive search/filter/grid/add-modal all live in the client component */}
-      <PlansGrid initialPlans={initialPlans} />
+      <PlansGrid initialPlans={initialPlans || []} />
 
       {/* Revenue Analytics */}
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">

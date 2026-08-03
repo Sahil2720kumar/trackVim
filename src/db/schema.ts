@@ -302,8 +302,8 @@ export const users = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     clerkId: varchar("clerk_id", { length: 255 }).unique(),
     fullName: text("full_name"),
+    email: varchar("email", { length: 320 }),
     username: varchar("username", { length: 100 }),
-    email: varchar("email", { length: 320 }).notNull(),
     phone: varchar("phone", { length: 20 }),
     avatarUrl: text("avatar_url"),
     role: userRoleEnum("role"),
@@ -324,6 +324,7 @@ export const users = pgTable(
     // ever needs a second plain index; Postgres backs UNIQUE with a btree
     // automatically.
     uniqueIndex("users_email_idx").on(t.email),
+    uniqueIndex("users_username_idx").on(t.username), // add this
     uniqueIndex("users_clerk_id_idx").on(t.clerkId),
     pgPolicy("Users can view their own row", {
       for: "select",
@@ -374,7 +375,7 @@ export const gyms = pgTable(
     logoUrl: text("logo_url"),
 
     code: varchar("code", { length: 10 }).notNull().unique(),
-
+    paymentQrUrl: text("payment_qr_url"), // owner-uploaded QR image, shown to members at payment time
     ownerName: text("owner_name"),
     businessName: text("business_name"),
     businessEmail: varchar("business_email", { length: 320 }),
@@ -462,6 +463,68 @@ export const gyms = pgTable(
       to: authenticatedRole,
       using: sql`owner_id = ${CURRENT_USER_ID}`,
       withCheck: sql`owner_id = ${CURRENT_USER_ID}`,
+    }),
+  ],
+).enableRLS();
+
+export const gymPhotos = pgTable(
+  "gym_photos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gymId: uuid("gym_id")
+      .notNull()
+      .references(() => gyms.id, { onDelete: "cascade" }),
+    uploadedBy: uuid("uploaded_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+
+    photoUrl: text("photo_url").notNull(),
+    storagePath: text("storage_path"),
+    caption: text("caption"),
+
+    isCover: boolean("is_cover").notNull().default(false),
+    sortOrder: smallint("sort_order").notNull().default(0),
+
+    status: generalStatusEnum("status").notNull().default("Active"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    // Every list/gallery query and the RLS policies below filter by gym_id first.
+    index("gym_photos_gym_idx").on(t.gymId),
+
+    // Supports "who uploaded what" lookups and owner_id-style audit queries.
+    index("gym_photos_uploaded_by_idx").on(t.uploadedBy),
+
+    // Gallery screens sort by gym, then cover-first, then explicit order —
+    // covers the common "cover photo + ordered rest" fetch in one index.
+    index("gym_photos_gym_sort_idx").on(t.gymId, t.isCover, t.sortOrder),
+
+    pgPolicy("Anyone connected to a gym can view its photos", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`gym_id in ${MY_GYM_IDS} or gym_id in (select id from gyms where owner_id = ${CURRENT_USER_ID})`,
+    }),
+    pgPolicy("Owners can upload photos to their own gym", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: sql`gym_id in (select id from gyms where owner_id = ${CURRENT_USER_ID})`,
+    }),
+    pgPolicy("Owners can update their own gym's photos", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`gym_id in (select id from gyms where owner_id = ${CURRENT_USER_ID})`,
+      withCheck: sql`gym_id in (select id from gyms where owner_id = ${CURRENT_USER_ID})`,
+    }),
+    pgPolicy("Owners can delete their own gym's photos", {
+      for: "delete",
+      to: authenticatedRole,
+      using: sql`gym_id in (select id from gyms where owner_id = ${CURRENT_USER_ID})`,
     }),
   ],
 ).enableRLS();
@@ -639,6 +702,11 @@ export const trainers = pgTable(
   "trainers",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    fullName: text("full_name"),
+    contactEmail: varchar("contact_email", { length: 320 }),
+    contactPhone: varchar("contact_phone", { length: 20 }),
+    photoUrl: text("photo_url"),
+    trainerCode: varchar("trainer_code", { length: 20 }).unique(),
     profileId: uuid("profile_id").references(() => profiles.id, {
       onDelete: "cascade",
     }),
@@ -763,6 +831,8 @@ export const members = pgTable(
     fullName: text("full_name"),
     contactEmail: varchar("contact_email", { length: 320 }),
     contactPhone: varchar("contact_phone", { length: 20 }),
+
+    invitedEmail: varchar("invited_email", { length: 320 }),
     clerkInvitationId: varchar("clerk_invitation_id", { length: 255 }),
     invitationSentAt: timestamp("invitation_sent_at", { withTimezone: true }),
     invitationAcceptedAt: timestamp("invitation_accepted_at", {
@@ -1087,7 +1157,7 @@ export const payments = pgTable(
       { onDelete: "set null" },
     ),
 
-    receiptId: varchar("receipt_id", { length: 20 }),
+    receiptId: varchar("receipt_id", { length: 20 }), //this is temporarily unnecessary
 
     amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
     paymentDate: date("payment_date"),
