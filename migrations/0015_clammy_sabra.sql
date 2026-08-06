@@ -1,0 +1,1 @@
+CREATE POLICY "Anyone can discover active gyms" ON "gyms" AS PERMISSIVE FOR SELECT TO "authenticated" USING (status = 'Active');

@@ -56,6 +56,13 @@ const navigationConfig: NavConfig = {
       href: "/owner/dashboard",
     },
     {
+      icon: <FileText className="h-5 w-5" />,
+      label: "Applications",
+      children: [
+        { icon: <></>, label: "Applications", href: "/owner/applications" },
+      ],
+    },
+    {
       icon: <Users className="h-5 w-5" />,
       label: "Members",
       children: [

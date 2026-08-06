@@ -866,7 +866,7 @@ export async function addMemberAction(
   // 4. Step 2 — "Membership", Option A (no application). Creates the
   // gym_membership (PaymentPending) AND the Pending payment stub together.
   const { data: membershipId, error: membershipError } = await supabase.rpc(
-    "create_walkin_membership_v2",
+    "create_walkin_membership",
     {
       p_gym_id: gymId,
       p_member_id: member.id,
@@ -1150,8 +1150,7 @@ export async function approveMembershipApplicationAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/applications");
-  revalidatePath("/dashboard/members");
+  revalidatePath(`/owner/applications/[applicationId]`);
   return { success: true, data: { membershipId: data as string } };
 }
 
@@ -1173,7 +1172,7 @@ export async function rejectMembershipApplicationAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/applications");
+  revalidatePath(`/owner/applications/[applicationId]`);
   return { success: true, data: undefined };
 }
 
@@ -1198,8 +1197,7 @@ export async function verifyPaymentAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/payments");
-  revalidatePath("/dashboard/members");
+  revalidatePath(`/owner/applications/[applicationId]`);
   return { success: true, data: undefined };
 }
 
@@ -1222,7 +1220,7 @@ export async function rejectPaymentAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/payments");
+  revalidatePath(`/owner/applications/[applicationId]`);
   return { success: true, data: undefined };
 }
 
@@ -1250,7 +1248,7 @@ export async function renewMembershipAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/members");
+  revalidatePath("/owner/members");
   return { success: true, data: { membershipId: data as string } };
 }
 

@@ -1,5 +1,6 @@
 import { ActionResult } from "@/actions/member.action";
 import { createServerClient } from "@/lib/supabase/server";
+import { MembershipApplication } from "@/types";
 
 // ============================================================================
 // Read-only data-fetching functions
@@ -101,7 +102,8 @@ export async function getGymWithDetails(gymId: string) {
   return { success: true as const, data };
 }
 
-export async function getPendingApplications(gymId: string) {
+//Application Quries
+export async function getApplications(gymId: string) {
   const supabase = await createServerClient();
 
   const { data, error } = await supabase
@@ -110,15 +112,55 @@ export async function getPendingApplications(gymId: string) {
       `
       *,
       members(id, full_name, contact_email, contact_phone, photo_url, gender, date_of_birth, member_code),
-      membership_plans(id, plan_name, plan_price, duration_months, joining_fee, plan_color)
+      membership_plans(id, plan_name, plan_price, duration_months, joining_fee, plan_color),
+      gym_memberships(id, status, activated_at)
     `,
     )
     .eq("gym_id", gymId)
-    .eq("status", "Pending")
     .order("created_at", { ascending: false });
 
   if (error) return { success: false as const, error: error.message };
-  return { success: true as const, data };
+  return {
+    success: true as const,
+    data: data,
+  };
+}
+
+export async function getApplicationById(id: string) {
+  const supabase = await createServerClient();
+
+  const { data, error } = await supabase
+    .from("membership_applications")
+    .select(
+      `
+      *,
+      members(
+        id, full_name, contact_email, contact_phone, photo_url,
+        gender, date_of_birth, member_code,
+        height_cm, weight_kg, fitness_goal, medical_conditions, allergies,
+        emergency_contact_name, emergency_contact_relationship, emergency_contact_phone,
+        address, city, state
+      ),
+      membership_plans(
+        id, plan_name, plan_price, duration_months, joining_fee,
+        plan_color, plan_icon, selected_features, custom_features, validity_starts
+      ),
+      gym_memberships(
+        id, status, activated_at, start_date, end_date, final_amount, activated_by,
+        payments(
+          id, amount, method, status, payment_date, transaction_ref,
+          rejection_reason, verified_at, verified_by,
+          payment_receipts(id, file_url, file_type, is_current, uploaded_at)
+        )
+      ),
+      reviewer:reviewed_by(id, full_name)
+    `,
+    )
+    .eq("id", id)
+    .single();
+
+  if (error) return { success: false as const, error: error.message };
+  return { success: true as const, data: data };
 }
 
 export async function getPendingPayments(gymId: string) {

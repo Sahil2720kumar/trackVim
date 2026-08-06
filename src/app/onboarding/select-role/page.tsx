@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Building2,
-  Dumbbell,
   CheckCircle2,
   User,
   ChevronRight,
   Loader2,
 } from "lucide-react";
+import { setUserRole } from "@/actions/onboarding.action";
+import { toast } from "sonner";
+import { useClerk } from "@clerk/nextjs";
 
 interface Role {
   id: "gym_owner" | "member";
@@ -108,21 +110,25 @@ export default function SelectRolePage() {
   const [selectedRole, setSelectedRole] = useState<Role["id"] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-
+  const { session } = useClerk();
   const handleContinue = async () => {
     if (!selectedRole) return;
-
     setIsLoading(true);
-    // Simulate a small delay for better UX
-    await new Promise((resolve) => setTimeout(resolve, 300));
 
-    // Store the selected role (you can use localStorage, context, or pass via query param)
+    const result = await setUserRole(selectedRole);
+
+    if (!result.success) {
+      setIsLoading(false);
+      toast.error(result.error);
+      return;
+    }
+
+    await session?.reload();
     localStorage.setItem("selectedRole", selectedRole);
 
-    // Navigate to the next onboarding step
     if (selectedRole === "gym_owner") {
       router.push("/onboarding/register-gym");
-    } else if (selectedRole === "member") {
+    } else {
       router.push("/onboarding/member-profile");
     }
   };

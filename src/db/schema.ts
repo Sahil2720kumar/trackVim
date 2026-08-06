@@ -453,6 +453,11 @@ export const gyms = pgTable(
       to: authenticatedRole,
       using: sql`id in ${MY_GYM_IDS} or owner_id = ${CURRENT_USER_ID}`,
     }),
+    pgPolicy("Anyone can discover active gyms", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`status = 'Active'`,
+    }),
     pgPolicy("Users can create a gym they own", {
       for: "insert",
       to: authenticatedRole,
@@ -509,6 +514,11 @@ export const gymPhotos = pgTable(
       for: "select",
       to: authenticatedRole,
       using: sql`gym_id in ${MY_GYM_IDS} or gym_id in (select id from gyms where owner_id = ${CURRENT_USER_ID})`,
+    }),
+    pgPolicy("Anyone can view gym photos", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`deleted_at is null`,
     }),
     pgPolicy("Owners can upload photos to their own gym", {
       for: "insert",
@@ -680,6 +690,15 @@ export const membershipPlans = pgTable(
       to: authenticatedRole,
       using: sql`gym_id in ${MY_GYM_IDS}`,
     }),
+    pgPolicy("Anyone can view public membership plans", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`
+    status = 'Active'
+    and deleted_at is null
+    and visibility = 'Visible to Everyone'
+  `,
+    }),
     pgPolicy("Gym staff can manage plans", {
       for: "insert",
       to: authenticatedRole,
@@ -801,6 +820,13 @@ export const trainers = pgTable(
       to: authenticatedRole,
       using: sql`gym_id in ${MY_GYM_IDS}`,
     }),
+    pgPolicy("Anyone can view active trainers", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`
+    status = 'Active'
+  `,
+    }),
     pgPolicy("Gym owners can invite/manage trainers", {
       for: "insert",
       to: authenticatedRole,
@@ -896,6 +922,17 @@ export const members = pgTable(
       to: authenticatedRole,
       using: sql`id in (select member_id from gym_memberships where gym_id in ${STAFF_GYM_IDS})`,
     }),
+    pgPolicy("Gym staff can view profiles of applicants", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`
+        id in (
+          select member_id
+          from membership_applications
+          where gym_id in ${STAFF_GYM_IDS}
+        )
+      `,
+    }),
     pgPolicy("Users can create their own member profile", {
       for: "insert",
       to: authenticatedRole,
@@ -936,7 +973,7 @@ export const membershipApplications = pgTable(
 
     status: applicationStatusEnum("status").notNull().default("Pending"),
     message: text("message"),
-
+    applicantNotes: jsonb("applicant_notes"),
     reviewedBy: uuid("reviewed_by").references(() => users.id),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     rejectionReason: text("rejection_reason"),
