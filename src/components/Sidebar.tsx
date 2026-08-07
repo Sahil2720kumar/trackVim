@@ -61,9 +61,7 @@ const navigationConfig: NavConfig = {
     {
       icon: <FileText className="h-5 w-5" />,
       label: "Applications",
-      children: [
-        { icon: <></>, label: "Applications", href: "/owner/applications" },
-      ],
+      href: "/owner/applications",
     },
     {
       icon: <Users className="h-5 w-5" />,
@@ -424,16 +422,19 @@ export function Sidebar({
   const [isPending, startTransition] = useTransition();
   const { signOut, session } = useClerk();
   const router = useRouter();
-  const handleSignOut = async () => {
+
+  const handleSignOut = () => {
     if (isPending) return;
-    try {
-      await signOut();
-      toast.success("Logged out successfully");
-      router.push("/sign-in");
-    } catch (error) {
-      console.error("Sign out failed:", error);
-      toast.error("Something went wrong signing out");
-    }
+    startTransition(async () => {
+      try {
+        await signOut();
+        toast.success("Logged out successfully");
+        router.push("/sign-in");
+      } catch (error) {
+        console.error("Sign out failed:", error);
+        toast.error("Something went wrong signing out");
+      }
+    });
   };
 
   const navItems = navigationConfig[role] || navigationConfig.owner;

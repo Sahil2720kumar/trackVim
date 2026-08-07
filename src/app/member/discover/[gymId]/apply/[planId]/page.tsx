@@ -38,7 +38,7 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
   const { gymId, planId } = await params;
 
   const data = await MembershipApplicationPageDataByPlanId(gymId, planId);
-  if (!data) throw new Error("Data not found");
+  if (!data) notFound();
 
   const { gym, plan, member, existingApplicationStatus, gymMembership } = data;
 
@@ -49,7 +49,8 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
         ? 4
         : 2; // "none" or "rejected" → still reviewing/reapplying
 
-  const { title, subtitle } = HEADER_COPY[existingApplicationStatus];
+  const { title, subtitle } =
+    HEADER_COPY[existingApplicationStatus] ?? HEADER_COPY.none;
 
   return (
     <div className="min-h-screen bg-background">
@@ -85,20 +86,20 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
 
         {(existingApplicationStatus === "none" ||
           existingApplicationStatus === "rejected") && (
-          <ReviewApplicationStep
-            gym={gym}
-            plan={plan}
-            member={member}
-            gymId={gym.id}
-            planId={plan.id}
-            rejected={existingApplicationStatus === "rejected"}
-          />
-        )}
+            <ReviewApplicationStep
+              gym={gym}
+              plan={plan}
+              member={member}
+              gymId={gym.id}
+              planId={plan.id}
+              rejected={existingApplicationStatus === "rejected"}
+            />
+          )}
       </div>
 
       <div className="bg-background/95 backdrop-blur-sm border-t border-border">
         <div className="px-4 py-4 flex flex-col sm:flex-row gap-3 items-center justify-between max-w-[1400px] mx-auto">
-          <Link href={`/discover/${gym.id}`} className="w-full sm:w-auto">
+          <Link href={`/member/discover/${gym.id}`} className="w-full sm:w-auto">
             <Button variant="outline" className="w-full sm:w-auto gap-2">
               <ChevronLeft className="w-4 h-4" />
               Back to Gym Details

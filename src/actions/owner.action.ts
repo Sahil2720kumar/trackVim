@@ -1173,7 +1173,8 @@ export async function rejectMembershipApplicationAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/owner/applications/[applicationId]`);
+  revalidatePath("/owner/applications/[applicationId]", "page");
+  revalidatePath("/owner/applications");
   return { success: true, data: undefined };
 }
 

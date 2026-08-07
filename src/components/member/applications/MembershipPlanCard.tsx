@@ -49,15 +49,16 @@ export function MembershipPlanCard({ plan }: MembershipPlanCardProps) {
                 <div className="mt-2 space-y-0.5">
                   <p className="text-3xl font-bold text-foreground">
                     {plan.currency}
-                    {plan.price}
+                    {plan.price.toLocaleString("en-IN")}
                     <span className="text-base font-normal text-muted-foreground">
                       /{plan.period}
                     </span>
                   </p>
                   {hasJoiningFee && (
                     <p className="text-sm text-muted-foreground">
-                      + {plan.currency}
-                      {plan.joiningFee!} one-time joining fee
+                      {plan.currency}
+                      {plan.joiningFee!.toLocaleString("en-IN")} one-time
+                      joining fee
                     </p>
                   )}
                 </div>

@@ -135,6 +135,14 @@ export async function getApplicationById(id: string) {
     gymId?: string;
   };
 
+  if (ownerMeta.role !== "owner" || !ownerMeta.gymId) {
+    return {
+      success: false as const,
+      error: "Not authorized to view this application.",
+    };
+  }
+  const gymId = ownerMeta.gymId;
+
   const { data, error } = await supabase
     .from("membership_applications")
     .select(
@@ -163,12 +171,11 @@ export async function getApplicationById(id: string) {
     `,
     )
     .eq("id", id)
-    .eq("gym_id", ownerMeta.gymId!)
+    .eq("gym_id", gymId)
     .single();
 
   if (error) return { success: false as const, error: error.message };
-  return { success: true as const, data: data };
-}
+  return { success: true as const, data: data };}
 
 export async function getPendingPayments(gymId: string) {
   const supabase = await createServerClient();

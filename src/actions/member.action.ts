@@ -401,6 +401,27 @@ export async function submitMembershipApplicationAction(
  *   - A payment_receipts row is created (old one's is_current flipped to false)
  */
 
+const PAYMENT_ERROR_MESSAGES: Record<string, string> = {
+  "Payment not found.":
+    "We couldn't find this payment. Please refresh and try again.",
+  "Not authorized to submit this payment.":
+    "You're not authorized to submit this payment.",
+};
+
+function getPaymentErrorMessage(rawMessage: string | undefined): string {
+  const message = rawMessage?.trim() ?? "";
+
+  if (PAYMENT_ERROR_MESSAGES[message]) {
+    return PAYMENT_ERROR_MESSAGES[message];
+  }
+
+  if (message.startsWith("Payment is not awaiting submission")) {
+    return "This payment has already been submitted or is no longer awaiting submission.";
+  }
+
+  return "Something went wrong submitting your payment. Please try again.";
+}
+
 type SubmitPaymentInput = {
   gymMembershipId: string;
   gymId: string;
@@ -460,31 +481,44 @@ export async function submitPaymentAction(
     .limit(1)
     .maybeSingle();
 
-  if (paymentError || !payment) {
-    console.error("payment error ", paymentError);
-    return { success: false, error: "Noo pending payment was found." };
+  if (paymentError) {
+    console.error("Failed to load pending payment", paymentError);
+    return {
+      success: false,
+      error: "We could not load your payment. Please try again.",
+    };
+  }
+  if (!payment) {
+    return { success: false, error: "No pending payment was found." };
   }
 
   // Upload receipt first (if provided)
-  let receiptUrl: string | null = null;
+  let receiptUrl = "";
 
   if (files.receipt) {
-    const uploaded = await uploadFile(
-      files.receipt,
-      `trackVim/members/${userId}/payment-receipts`,
-    );
+    try {
+      const uploaded = await uploadFile(
+        files.receipt,
+        `trackVim/members/${userId}/payment-receipts`,
+      );
 
-    if (!uploaded) {
+      if (!uploaded) {
+        return {
+          success: false,
+          error: "Failed to upload receipt. Please try again.",
+        };
+      }
+
+      receiptUrl = uploaded;
+    } catch (err) {
+      console.error("Receipt upload failed", err);
       return {
         success: false,
         error: "Failed to upload receipt. Please try again.",
       };
     }
-
-    receiptUrl = uploaded;
-  }
-
-  if (!receiptUrl) {
+  } else if (input.method !== "Cash") {
+    // Should be unreachable given the earlier validation, but guard anyway.
     return {
       success: false,
       error: "A receipt is required to submit this payment.",
@@ -495,7 +529,7 @@ export async function submitPaymentAction(
   const { error } = await supabase.rpc("submit_payment", {
     p_payment_id: payment.id,
     p_method: input.method,
-    p_receipt_file_url: receiptUrl,
+    p_receipt_file_url: receiptUrl, // empty string for Cash with no receipt
     p_file_type: files.receipt?.type ?? "image",
     ...(input.transactionRef
       ? { p_transaction_ref: input.transactionRef }
@@ -506,7 +540,7 @@ export async function submitPaymentAction(
     console.error(error);
     return {
       success: false,
-      error: error.message,
+      error: getPaymentErrorMessage(error.message),
     };
   }
 

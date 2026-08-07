@@ -1,4 +1,3 @@
-// components/member/apply-steps/ReviewApplicationStep.tsx
 import GymSummary from "@/components/member/GymSummary";
 import SelectedMembershipPlan from "@/components/member/SelectedMembershipPlan";
 import ApplyFormSection from "@/components/member/ApplyFormSection";
@@ -26,7 +25,7 @@ export default function ReviewApplicationStep({
     <>
       {rejected && (
         <StatusBanner variant="rejected">
-          Your previous application to {gym.name} wasn't approved. You can
+          Your previous application to {gym.name} wasn&apos;t approved. You can
           submit a new one below.
         </StatusBanner>
       )}

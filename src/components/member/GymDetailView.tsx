@@ -342,7 +342,7 @@ function TrainersSection({ trainers }: { trainers: GymDetail["trainers"] }) {
                     </p>
                   )}
                 </div>
-                {trainer.average_rating && (
+                {trainer.average_rating != null && (
                   <div className="flex items-center gap-1 text-xs">
                     <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                     <span className="font-semibold">
@@ -384,7 +384,7 @@ export function GymDetailView({
     custom_features: Json;
   } | null;
 }) {
-  const [status] = useState<DisplayStatus | "none">(initialDisplayStatus);
+  const status = initialDisplayStatus;
   const router = useRouter();
 
   const cheapestGymMembershipPlan = gym.membership_plans.length
@@ -411,7 +411,15 @@ export function GymDetailView({
     .filter(Boolean)
     .join(", ");
 
-  const hasBlockingMembership = status === "Active" || status === "Frozen";
+  // const hasBlockingMembership = status === "Active" || status === "Frozen";
+    const hasBlockingMembership =
+    status === "Active" ||
+    status === "Frozen" ||
+    status === "Pending" ||
+    status === "Approved" ||
+    status === "PaymentPending" ||
+    status === "PaymentUploaded" ||
+    status === "PaymentRejected";
 
   return (
     <div className="min-h-screen bg-background">

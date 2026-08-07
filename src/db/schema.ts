@@ -279,7 +279,7 @@ export const primaryGoalEnum = pgEnum("primary_goal", [
 
 export const subscriptionBillingStatusEnum = pgEnum(
   "subscription_billing_status",
-  ["Pending", "Paid", "Overdue", "Cancelled"],
+  ["Pending", "Paid", "Overdue", "Cancelled"]
 );
 
 export const gatewayPaymentStatusEnum = pgEnum("gateway_payment_status", [
@@ -349,7 +349,7 @@ export const users = pgTable(
       using: sql`clerk_id = (select auth.jwt()->>'sub')`,
       withCheck: sql`clerk_id = (select auth.jwt()->>'sub')`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 export const profiles = users;
@@ -419,7 +419,7 @@ export const gyms = pgTable(
 
     billingStartDate: date("billing_start_date"),
     currentPlanId: uuid("current_plan_id").references(
-      () => subscriptionPlans.id,
+      () => subscriptionPlans.id
     ),
 
     isVerified: boolean("is_verified").notNull().default(false),
@@ -453,6 +453,11 @@ export const gyms = pgTable(
       to: authenticatedRole,
       using: sql`id in ${MY_GYM_IDS} or owner_id = ${CURRENT_USER_ID}`,
     }),
+    // Scope the discovery policy or expose gyms through a narrowed surface.
+    // RLS policies are permissive and OR-combined.
+    // This policy grants every authenticated user select on all columns of every Active gym row.
+    // That includes gstin, legal_business_name, billing_address, business_email, business_phone,
+    // sac_code, and payment_qr_url. Public discovery only needs the narrow column set already returned by get_public_gyms.
     pgPolicy("Anyone can discover active gyms", {
       for: "select",
       to: authenticatedRole,
@@ -469,7 +474,7 @@ export const gyms = pgTable(
       using: sql`owner_id = ${CURRENT_USER_ID}`,
       withCheck: sql`owner_id = ${CURRENT_USER_ID}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 export const gymPhotos = pgTable(
@@ -536,7 +541,7 @@ export const gymPhotos = pgTable(
       to: authenticatedRole,
       using: sql`gym_id in (select id from gyms where owner_id = ${CURRENT_USER_ID})`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 export const gymLocations = pgTable(
@@ -571,7 +576,7 @@ export const gymLocations = pgTable(
       using: sql`gym_id in ${STAFF_GYM_IDS}`,
       withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 export const gymQrCodes = pgTable(
@@ -618,7 +623,7 @@ export const gymQrCodes = pgTable(
       using: sql`gym_id in ${STAFF_GYM_IDS}`,
       withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -641,7 +646,7 @@ export const membershipPlans = pgTable(
 
     planPrice: numeric("plan_price", { precision: 10, scale: 2 }).notNull(),
     joiningFee: numeric("joining_fee", { precision: 10, scale: 2 }).default(
-      "0",
+      "0"
     ),
     securityDeposit: numeric("security_deposit", {
       precision: 10,
@@ -710,7 +715,7 @@ export const membershipPlans = pgTable(
       using: sql`gym_id in ${STAFF_GYM_IDS}`,
       withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -838,7 +843,7 @@ export const trainers = pgTable(
       using: sql`gym_id in ${STAFF_GYM_IDS} or profile_id = ${CURRENT_USER_ID}`,
       withCheck: sql`gym_id in ${STAFF_GYM_IDS} or profile_id = ${CURRENT_USER_ID}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -887,14 +892,14 @@ export const members = pgTable(
 
     emergencyContactName: text("emergency_contact_name"),
     emergencyContactRelationship: relationshipEnum(
-      "emergency_contact_relationship",
+      "emergency_contact_relationship"
     ),
     emergencyContactPhone: varchar("emergency_contact_phone", { length: 20 }),
     emergencyContactAddress: text("emergency_contact_address"),
 
     activeGymMembershipId: uuid("active_gym_membership_id").references(
       (): any => gymMemberships.id,
-      { onDelete: "set null" },
+      { onDelete: "set null" }
     ),
 
     accountStatus: generalStatusEnum("account_status")
@@ -950,7 +955,7 @@ export const members = pgTable(
         or id in (select member_id from gym_memberships where gym_id in ${STAFF_GYM_IDS})
       `,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -1013,7 +1018,7 @@ export const membershipApplications = pgTable(
       using: sql`gym_id in ${STAFF_GYM_IDS}`,
       withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -1035,7 +1040,7 @@ export const gymMemberships = pgTable(
       .references(() => membershipPlans.id, { onDelete: "restrict" }),
     applicationId: uuid("application_id").references(
       () => membershipApplications.id,
-      { onDelete: "set null" },
+      { onDelete: "set null" }
     ),
 
     startDate: date("start_date").notNull(),
@@ -1043,7 +1048,7 @@ export const gymMemberships = pgTable(
     durationMonths: smallint("duration_months").notNull(),
 
     joiningFee: numeric("joining_fee", { precision: 10, scale: 2 }).default(
-      "0",
+      "0"
     ),
     planPrice: numeric("plan_price", { precision: 10, scale: 2 }).notNull(),
     discount: numeric("discount", { precision: 10, scale: 2 }).default("0"),
@@ -1115,7 +1120,7 @@ export const gymMemberships = pgTable(
       using: sql`gym_id in ${STAFF_GYM_IDS}`,
       withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -1172,7 +1177,7 @@ export const trainerAssignments = pgTable(
       using: sql`gym_id in ${STAFF_GYM_IDS}`,
       withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -1191,7 +1196,7 @@ export const payments = pgTable(
       .references(() => members.id, { onDelete: "restrict" }),
     gymMembershipId: uuid("gym_membership_id").references(
       () => gymMemberships.id,
-      { onDelete: "set null" },
+      { onDelete: "set null" }
     ),
 
     receiptId: varchar("receipt_id", { length: 20 }), //this is temporarily unnecessary
@@ -1255,7 +1260,7 @@ export const payments = pgTable(
       using: sql`gym_id in ${STAFF_GYM_IDS}`,
       withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 export const paymentReceipts = pgTable(
@@ -1306,7 +1311,7 @@ export const paymentReceipts = pgTable(
         )
       `,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -1352,7 +1357,7 @@ export const attendance = pgTable(
     uniqueIndex("attendance_member_gym_date_idx").on(
       t.memberId,
       t.gymId,
-      t.attendanceDate,
+      t.attendanceDate
     ),
     index("attendance_gym_date_idx").on(t.gymId, t.attendanceDate),
     // NEW — a member's attendance history across ALL gyms, most recent
@@ -1360,7 +1365,7 @@ export const attendance = pgTable(
     // between memberId and attendanceDate in that one.
     index("attendance_member_date_idx").on(
       t.memberId,
-      sql`${t.attendanceDate} desc`,
+      sql`${t.attendanceDate} desc`
     ),
     pgPolicy("Members can view their own attendance", {
       for: "select",
@@ -1383,7 +1388,7 @@ export const attendance = pgTable(
       using: sql`member_id = ${CURRENT_MEMBER_ID} or gym_id in ${STAFF_GYM_IDS}`,
       withCheck: sql`member_id = ${CURRENT_MEMBER_ID} or gym_id in ${STAFF_GYM_IDS}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -1429,7 +1434,7 @@ export const exercises = pgTable(
       using: sql`gym_id in ${STAFF_GYM_IDS}`,
       withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -1485,7 +1490,7 @@ export const workoutTemplates = pgTable(
       using: sql`gym_id in ${STAFF_GYM_IDS}`,
       withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 export const templateExercises = pgTable(
@@ -1526,7 +1531,7 @@ export const templateExercises = pgTable(
       using: sql`template_id in (select id from workout_templates where gym_id in ${STAFF_GYM_IDS})`,
       withCheck: sql`template_id in (select id from workout_templates where gym_id in ${STAFF_GYM_IDS})`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -1608,7 +1613,7 @@ export const trainingSessions = pgTable(
       using: sql`gym_id in ${STAFF_GYM_IDS}`,
       withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 export const sessionExercises = pgTable(
@@ -1653,7 +1658,7 @@ export const sessionExercises = pgTable(
       using: sql`session_id in (select id from training_sessions where gym_id in ${STAFF_GYM_IDS})`,
       withCheck: sql`session_id in (select id from training_sessions where gym_id in ${STAFF_GYM_IDS})`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -1706,7 +1711,7 @@ export const messages = pgTable(
       using: sql`receiver_id = ${CURRENT_USER_ID}`,
       withCheck: sql`receiver_id = ${CURRENT_USER_ID}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 export const notifications = pgTable(
@@ -1746,7 +1751,7 @@ export const notifications = pgTable(
       using: sql`user_id = ${CURRENT_USER_ID}`,
       withCheck: sql`user_id = ${CURRENT_USER_ID}`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -1794,14 +1799,14 @@ export const subscriptionPlans = pgTable(
           AND flat_price IS NOT NULL
           AND price_per_member IS NULL
         )
-      `,
+      `
     ),
     pgPolicy("Any signed-in user can view subscription plans", {
       for: "select",
       to: authenticatedRole,
       using: sql`true`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 export const gymSubscriptions = pgTable(
@@ -1847,7 +1852,7 @@ export const gymSubscriptions = pgTable(
     // here directly as unique instead of keeping both.
     uniqueIndex("gym_subscriptions_gym_period_idx").on(
       t.gymId,
-      t.billingPeriodStart,
+      t.billingPeriodStart
     ),
     // NEW — the critical index for the daily mark_overdue_gym_subscriptions()
     // cron: WHERE status = 'Pending' AND due_date < current_date. Was
@@ -1861,7 +1866,7 @@ export const gymSubscriptions = pgTable(
       to: authenticatedRole,
       using: sql`gym_id in (select id from gyms where owner_id = ${CURRENT_USER_ID})`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 export const subscriptionPayments = pgTable(
@@ -1904,7 +1909,7 @@ export const subscriptionPayments = pgTable(
         )
       `,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -1945,7 +1950,7 @@ export const systemSettings = pgTable(
       using: sql`gym_id in (select id from gyms where owner_id = ${CURRENT_USER_ID})`,
       withCheck: sql`gym_id in (select id from gyms where owner_id = ${CURRENT_USER_ID})`,
     }),
-  ],
+  ]
 ).enableRLS();
 
 // ============================================================================
@@ -1985,7 +1990,7 @@ export const gymLocationsRelations = relations(
   ({ one, many }) => ({
     gym: one(gyms, { fields: [gymLocations.gymId], references: [gyms.id] }),
     qrCodes: many(gymQrCodes),
-  }),
+  })
 );
 
 export const gymQrCodesRelations = relations(gymQrCodes, ({ one }) => ({
@@ -2002,7 +2007,7 @@ export const membershipPlansRelations = relations(
     gym: one(gyms, { fields: [membershipPlans.gymId], references: [gyms.id] }),
     applications: many(membershipApplications),
     memberships: many(gymMemberships),
-  }),
+  })
 );
 
 export const trainersRelations = relations(trainers, ({ one, many }) => ({
@@ -2053,7 +2058,7 @@ export const membershipApplicationsRelations = relations(
       references: [users.id],
     }),
     resultingMembership: many(gymMemberships),
-  }),
+  })
 );
 
 export const gymMembershipsRelations = relations(
@@ -2074,7 +2079,7 @@ export const gymMembershipsRelations = relations(
     }),
     payments: many(payments),
     attendanceRecords: many(attendance),
-  }),
+  })
 );
 
 export const trainerAssignmentsRelations = relations(
@@ -2092,7 +2097,7 @@ export const trainerAssignmentsRelations = relations(
       fields: [trainerAssignments.trainerId],
       references: [trainers.id],
     }),
-  }),
+  })
 );
 
 export const paymentsRelations = relations(payments, ({ one, many }) => ({
@@ -2119,7 +2124,7 @@ export const paymentReceiptsRelations = relations(
       fields: [paymentReceipts.uploadedBy],
       references: [users.id],
     }),
-  }),
+  })
 );
 
 export const attendanceRelations = relations(attendance, ({ one }) => ({
@@ -2154,7 +2159,7 @@ export const workoutTemplatesRelations = relations(
     }),
     exercises: many(templateExercises),
     sessions: many(trainingSessions),
-  }),
+  })
 );
 
 export const templateExercisesRelations = relations(
@@ -2168,7 +2173,7 @@ export const templateExercisesRelations = relations(
       fields: [templateExercises.exerciseId],
       references: [exercises.id],
     }),
-  }),
+  })
 );
 
 export const trainingSessionsRelations = relations(
@@ -2188,7 +2193,7 @@ export const trainingSessionsRelations = relations(
       references: [workoutTemplates.id],
     }),
     exercises: many(sessionExercises),
-  }),
+  })
 );
 
 export const sessionExercisesRelations = relations(
@@ -2202,7 +2207,7 @@ export const sessionExercisesRelations = relations(
       fields: [sessionExercises.exerciseId],
       references: [exercises.id],
     }),
-  }),
+  })
 );
 
 export const messagesRelations = relations(messages, ({ one }) => ({
@@ -2228,7 +2233,7 @@ export const subscriptionPlansRelations = relations(
   subscriptionPlans,
   ({ many }) => ({
     gymSubscriptions: many(gymSubscriptions),
-  }),
+  })
 );
 
 export const gymSubscriptionsRelations = relations(
@@ -2240,7 +2245,7 @@ export const gymSubscriptionsRelations = relations(
       references: [subscriptionPlans.id],
     }),
     payments: many(subscriptionPayments),
-  }),
+  })
 );
 
 export const subscriptionPaymentsRelations = relations(
@@ -2250,7 +2255,7 @@ export const subscriptionPaymentsRelations = relations(
       fields: [subscriptionPayments.gymSubscriptionId],
       references: [gymSubscriptions.id],
     }),
-  }),
+  })
 );
 
 export const systemSettingsRelations = relations(systemSettings, ({ one }) => ({

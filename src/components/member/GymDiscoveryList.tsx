@@ -128,11 +128,6 @@ const filterChips: {
   },
 ];
 
-function applyHref(gymId: string, planId?: string | null) {
-  return planId
-    ? `/member/discover/${gymId}/apply?planId=${planId}`
-    : `/member/discover/${gymId}`;
-}
 
 function GymLogo({ gym }: { gym: Gym }) {
   if (gym.logoUrl) {
@@ -428,7 +423,6 @@ function GymCard({
       }}
       className="bg-card border border-border rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row gap-4 hover:border-primary/40 hover:bg-muted/30 transition-colors duration-150 cursor-pointer group"
     >
-      {" "}
       <div className="flex gap-4 flex-1 min-w-0">
         <GymLogo gym={gym} />
 

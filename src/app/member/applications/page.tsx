@@ -2,8 +2,9 @@ import { ApplicationsList } from "@/components/member/ApplicationsList";
 import { getMyApplications } from "@/services/member.query";
 
 export default async function ApplicationsPage() {
-  const { success, data } = await getMyApplications();
-  const applications = success && data ? data : [];
+  const { success, data, error } = await getMyApplications();
+    if (!success) throw new Error(error ?? "Unable to load your applications.");
+   const applications = data ?? [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -16,7 +17,7 @@ export default async function ApplicationsPage() {
             Track your gym membership requests and their approval status.
           </p>
         </div>
-        <ApplicationsList applications={applications} />{" "}
+        <ApplicationsList applications={applications} />
       </div>
     </div>
   );

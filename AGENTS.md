@@ -1046,6 +1046,7 @@ This architecture is well structured: **user-facing actions** (approvals, paymen
 
 <!-- END:nextjs-agent-rules -->
 
+```text
 APPLICATION
 Pending
 │
@@ -1086,3 +1087,4 @@ Member uploads:
   PendingVerification
   MEMBERSHIP
   PaymentUploaded
+```

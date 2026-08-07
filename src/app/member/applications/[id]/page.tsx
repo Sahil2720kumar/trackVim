@@ -7,6 +7,8 @@ import { HelpCard } from "@/components/member/applications/HelpCard";
 import { PaymentSection } from "@/components/member/applications/PaymentSection";
 import { getMyApplicationById } from "@/services/member.query";
 import { AppStatus } from "@/types";
+import { notFound } from "next/navigation";
+
 
 function formatDate(iso: string | null) {
   if (!iso) return "";
@@ -25,16 +27,21 @@ function formatTime(iso: string | null) {
 }
 
 function resolveStatus(
+  applicationStatus: string,
   membershipStatus: string | null,
   rejectionReason: string | null,
   latestPaymentStatus: string | null,
 ): AppStatus {
   // Application rejected — no membership row will exist yet.
-  if (rejectionReason) return "rejected";
+  // if (rejectionReason) return "rejected";
 
-  // No membership row yet = application hasn't been approved.
-  if (!membershipStatus) return "pending_review";
-
+  // // No membership row yet = application hasn't been approved.
+  // if (!membershipStatus) return "pending_review";
+  //New
+  if (applicationStatus === "Rejected") return "rejected";
+  if (applicationStatus === "Pending") return "pending_review";
+  if (!membershipStatus) return "approved_awaiting_payment";
+  //End News
   // Payment-level rejection takes priority over whatever the
   // membership row's status currently says.
   if (latestPaymentStatus === "Rejected") return "payment_rejected";
@@ -55,6 +62,7 @@ function resolveStatus(
   }
 }
 
+
 export default async function ApplicationDetailsPage({
   params,
 }: {
@@ -62,8 +70,14 @@ export default async function ApplicationDetailsPage({
 }) {
   const { id } = await params;
 
-  const { success, data } = await getMyApplicationById(id);
-  if (!success || !data) throw new Error("Unable to Fetch Data");
+  const { success, data, error } = await getMyApplicationById(id);
+
+  if (!success || !data) {
+    if (error === "Application not found." || error === "You must be signed in to view your applications.") {
+      notFound();
+    }
+    throw new Error("Unable to load this application.");
+  }
 
   const gymRow = data.gyms;
   const planRow = data.membership_plans;
@@ -82,6 +96,7 @@ export default async function ApplicationDetailsPage({
     : Number(planRow?.plan_price ?? 0);
 
   const status = resolveStatus(
+    data.status,
     membershipRow?.status ?? null,
     data.rejection_reason,
     currentPayment?.status ?? null,
@@ -244,18 +259,18 @@ export default async function ApplicationDetailsPage({
               receipt={
                 currentReceipt
                   ? {
-                      url: currentReceipt.file_url,
-                      uploadedAt: formatDate(currentReceipt.uploaded_at),
-                      amount: currentPayment?.amount
-                        ? Number(currentPayment.amount)
-                        : undefined,
-                      method: currentPayment?.method ?? undefined,
-                      verifiedAt: currentPayment?.verified_at
-                        ? formatDate(currentPayment.verified_at)
-                        : undefined,
-                      rejectedAt: paymentRejectedAt,
-                      rejectionReason: paymentRejectionReason,
-                    }
+                    url: currentReceipt.file_url,
+                    uploadedAt: formatDate(currentReceipt.uploaded_at),
+                    amount: currentPayment?.amount
+                      ? Number(currentPayment.amount)
+                      : undefined,
+                    method: currentPayment?.method ?? undefined,
+                    verifiedAt: currentPayment?.verified_at
+                      ? formatDate(currentPayment.verified_at)
+                      : undefined,
+                    rejectedAt: paymentRejectedAt,
+                    rejectionReason: paymentRejectionReason,
+                  }
                   : null
               }
             />

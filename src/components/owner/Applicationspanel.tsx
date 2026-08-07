@@ -66,7 +66,7 @@ function StatusTimeline({
   const stageDates: Record<TimelineStage, string | undefined> = {
     submitted: appliedDate,
     review: reviewedAt ?? undefined,
-    payment: activatedAt ?? undefined,
+    payment: activatedAt ?? undefined,//later fix it
     active: displayStatus === "Active" ? (activatedAt ?? undefined) : undefined,
   };
 
@@ -300,7 +300,10 @@ function ApplicationCard({
       )}
       onClick={() => onClick(application.id)}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onClick(application.id);
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick(application.id)
+        };
       }}
     >
       <div className="flex flex-col lg:flex-row lg:items-center gap-4">

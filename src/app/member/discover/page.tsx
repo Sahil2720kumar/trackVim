@@ -3,7 +3,9 @@ import { GymDiscoveryList } from "@/components/member/GymDiscoveryList";
 import { getDiscoverGyms } from "@/services/member.query";
 
 export default async function DiscoverPage() {
-  const gyms = await getDiscoverGyms();
+  const { success, data: gyms } = await getDiscoverGyms();
+
+  if (!success) throw new Error("Failed to fetch gyms");
 
   return (
     <div className="min-h-screen bg-background">

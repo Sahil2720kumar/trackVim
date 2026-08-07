@@ -121,7 +121,9 @@ export function ApplicationTimeline({
           ? "Current Step"
           : (payment?.uploadedAt ?? payment?.verifiedAt),
       description:
-        "Please complete the payment and upload receipt for verification.",
+        isPaymentUploadedOnward
+          ? "You uploaded your payment receipt."
+          : "Please complete the payment and upload receipt for verification.",
       variant:
         status === "approved_awaiting_payment" || status === "payment_pending"
           ? "current"
@@ -133,7 +135,6 @@ export function ApplicationTimeline({
           ? "Current Step"
           : undefined,
     });
-
     if (isPaymentRejected) {
       events.push({
         icon: <XCircle className="w-4 h-4" />,

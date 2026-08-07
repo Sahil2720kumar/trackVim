@@ -130,11 +130,12 @@ export function ApplicationsList({
         onConfirm={confirmReject}
         title="Reject Application"
         description="Please provide a reason for rejecting this membership application."
-        placeholder="Enter rejection reason (optional)..."
+        placeholder="Enter rejection reason (required)..."
         confirmLabel={isPending ? "Rejecting..." : "Reject Application"}
         icon={<XCircle data-icon="inline-start" />}
         variant="destructive"
-      />
-    </>
+        required
+      />    
+      </>
   );
 }

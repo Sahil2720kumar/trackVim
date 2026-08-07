@@ -141,7 +141,7 @@ export default function ApplyFormSection({
   const termOne = watch("termOne");
   const termTwo = watch("termTwo");
 
-  const canSubmit = termOne && termTwo && !isSubmitting;
+  const canSubmit = termOne && termTwo && !isSubmitting && !isSuccess;
 
   async function onSubmit(data: MemberFormValues) {
     setSubmitError(null);
@@ -187,7 +187,7 @@ export default function ApplyFormSection({
               label="Emergency Contact"
               placeholder="+91 00000 00000"
               {...register("emergencyContact")}
-              error={errors.emergencyContact?.message}
+              error={errors.emergencyContact}
             />
             <FormInput
               label="Phone Number"

@@ -3,6 +3,7 @@ import {
   getGymDetail,
   getMyMembershipStatusWithPlanDetails,
 } from "@/services/member.query";
+import { notFound } from "next/navigation";
 
 export default async function GymDetailPage({
   params,
@@ -16,7 +17,7 @@ export default async function GymDetailPage({
     getMyMembershipStatusWithPlanDetails(gymId),
   ]);
 
-  if (!gymResult.success) throw new Error("Failed to fetch gym details");
+  if (!gymResult.success || !gymResult.data) notFound();
 
   return (
     <GymDetailView

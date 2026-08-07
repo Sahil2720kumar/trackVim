@@ -29,7 +29,7 @@ export async function findGymByCode(code: string) {
       membership_plans(id, plan_name, short_description, plan_price, duration_months,
         joining_fee, plan_category, plan_color, selected_features, custom_features,
         enrollment_mode, status, is_featured)
-    `,
+    `
     )
     .eq("code", code.toUpperCase())
     .eq("status", "Active")
@@ -127,7 +127,7 @@ export async function getDiscoverGyms(city?: string) {
   const supabase = await createServerClient();
 
   const result = await listActiveGyms({ city, limit: 500 });
-  if (!result.success) return [];
+  if (!result.success) return { success: false as const, error: result.error };
 
   type Entry = {
     applicationStatus: ApplicationStatus;
@@ -151,7 +151,7 @@ export async function getDiscoverGyms(city?: string) {
         final_amount,
         duration_months
       )
-    `,
+    `
     )
     .eq("member_id", meta.memberId!)
     .order("created_at", { ascending: false });
@@ -178,12 +178,12 @@ export async function getDiscoverGyms(city?: string) {
         a.status === "Approved"
           ? "approved"
           : a.status === "Rejected"
-            ? "rejected"
-            : "pending",
+          ? "rejected"
+          : "pending",
       selectedPlan: plan
         ? {
             id: plan.id,
-            name: plan.name,
+            name: plan.plan_name,
             // gym_memberships.final_amount is what was actually charged
             // (plan_price minus discount, locked in at approval time).
             // Before a membership row exists, fall back to the plan's
@@ -193,7 +193,7 @@ export async function getDiscoverGyms(city?: string) {
             finalAmount: Number(
               membership?.final_amount ??
                 membership?.plan_price ??
-                plan.plan_price,
+                plan.plan_price
             ),
             durationMonths: membership?.duration_months ?? plan.duration_months,
           }
@@ -212,7 +212,7 @@ export async function getDiscoverGyms(city?: string) {
     };
   });
 
-  return data;
+  return { success: true as const, data };
 }
 
 //Member/discover/[id] Queries
@@ -264,7 +264,7 @@ export async function getGymDetail(gymId: string) {
         sort_order,
         status
       )
-      `,
+      `
     )
     .eq("id", gymId)
     .eq("status", "Active")
@@ -337,7 +337,7 @@ export type MembershipApplicationByPlanIdPageData = {
 
 export async function MembershipApplicationPageDataByPlanId(
   gymId: string,
-  planId: string,
+  planId: string
 ): Promise<MembershipApplicationByPlanIdPageData | null> {
   const supabase = await createServerClient();
   const { data, error } = await supabase.rpc(
@@ -345,7 +345,7 @@ export async function MembershipApplicationPageDataByPlanId(
     {
       p_gym_id: gymId,
       p_plan_id: planId,
-    },
+    }
   );
 
   if (error || !data) return null;
@@ -370,14 +370,15 @@ export type MyMembershipStatusResult = {
   } | null;
 };
 
-export async function getMyMembershipStatusWithPlanDetails(
-  gymId: string,
-): Promise<MyMembershipStatusResult> {
+export async function getMyMembershipStatusWithPlanDetails(gymId: string) {
   const { userId, sessionClaims } = await auth();
   const meta = (sessionClaims?.publicMetadata ?? {}) as { memberId?: string };
 
   if (!userId || !meta.memberId) {
-    return { success: true, displayStatus: "none", planId: null };
+    return {
+      success: false,
+      error: "You must be signed in to view your applications.",
+    };
   }
 
   const supabase = await createServerClient();
@@ -403,7 +404,7 @@ export async function getMyMembershipStatusWithPlanDetails(
         selected_features,
         custom_features
       )
-    `,
+    `
     )
     .eq("gym_id", gymId)
     .eq("member_id", meta.memberId)
@@ -441,7 +442,7 @@ export async function getMyProfile() {
         membership_plans(plan_name, plan_color),
         gyms(id, name, logo_url)
       )
-    `,
+    `
     )
     .maybeSingle();
 
@@ -461,7 +462,7 @@ export async function getMyMemberships() {
       membership_plans(id, plan_name, plan_color, plan_price, duration_months,
         selected_features, custom_features),
       payments(id, status, amount, method, payment_date, due_date)
-    `,
+    `
     )
     .order("created_at", { ascending: false });
 
@@ -474,7 +475,10 @@ export async function getMyApplications() {
   const meta = (sessionClaims?.publicMetadata ?? {}) as { memberId?: string };
 
   if (!userId || !meta.memberId) {
-    return { success: true, data: [] };
+    return {
+      success: false,
+      error: "You must be signed in to view your applications.",
+    };
   }
 
   const supabase = await createServerClient();
@@ -555,7 +559,7 @@ export async function getMyApplications() {
           )
         )
       )
-    `,
+    `
     )
     .eq("member_id", meta.memberId)
     .order("created_at", { ascending: false });
@@ -572,7 +576,10 @@ export async function getMyApplicationById(applicationId: string) {
   const meta = (sessionClaims?.publicMetadata ?? {}) as { memberId?: string };
 
   if (!userId || !meta.memberId) {
-    return { success: false, data: null, error: "Not signed in." };
+    return {
+      success: false,
+      error: "You must be signed in to view your applications.",
+    };
   }
 
   const supabase = await createServerClient();
@@ -583,6 +590,7 @@ export async function getMyApplicationById(applicationId: string) {
       `
       id,
       message,
+      status,
       rejection_reason,
       created_at,
       reviewed_at,
@@ -643,7 +651,7 @@ export async function getMyApplicationById(applicationId: string) {
           )
         )
       )
-    `,
+    `
     )
     .eq("id", applicationId)
     .eq("member_id", meta.memberId)
@@ -679,7 +687,7 @@ export async function getPaymentForMembership(gymMembershipId: string) {
       `
       *,
       payment_receipts(id, file_url, file_type, is_current, uploaded_at)
-    `,
+    `
     )
     .eq("gym_membership_id", gymMembershipId)
     .order("created_at", { ascending: false })
@@ -701,7 +709,7 @@ export async function getMyPayments() {
       gyms(id, name, logo_url),
       gym_memberships(id, status, start_date, end_date),
       payment_receipts(id, file_url, file_type, is_current, uploaded_at)
-    `,
+    `
     )
     .order("created_at", { ascending: false });
 
@@ -718,7 +726,7 @@ export async function getMyAttendance(gymId?: string) {
       `
       *,
       gyms(id, name, logo_url)
-    `,
+    `
     )
     .order("attendance_date", { ascending: false })
     .limit(30);
@@ -744,7 +752,7 @@ export async function getMyTrainingSessions() {
         *,
         exercises(id, name, muscle_group, equipment)
       )
-    `,
+    `
     )
     .order("session_date", { ascending: false });
 
@@ -762,7 +770,7 @@ export async function getMyUpcomingSessions() {
       gym_memberships:active_gym_membership_id(
         gyms(timezone)
       )
-    `,
+    `
     )
     .maybeSingle();
 
@@ -777,7 +785,7 @@ export async function getMyUpcomingSessions() {
       *,
       trainers(id, professional_title,
         users:profile_id(full_name, avatar_url))
-    `,
+    `
     )
     .eq("status", "Upcoming")
     .gte("session_date", today)
@@ -802,7 +810,7 @@ export async function getMyAssignedTrainers() {
         users:profile_id(full_name, avatar_url, phone)
       ),
       gyms(id, name, logo_url)
-    `,
+    `
     )
     .eq("is_active", true);
 
@@ -833,7 +841,7 @@ export async function getMyMessages() {
       *,
       sender:sender_id(id, full_name, avatar_url),
       receiver:receiver_id(id, full_name, avatar_url)
-    `,
+    `
     )
     .order("created_at", { ascending: false });
 

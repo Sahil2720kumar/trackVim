@@ -149,7 +149,7 @@ export default function PaymentPendingStep({
   return (
     <>
       <StatusBanner variant="approved">
-        You're approved at {gym.name}! Complete payment to activate your
+        You&apos;re approved at {gym.name}! Complete payment to activate your
         membership.
       </StatusBanner>
 

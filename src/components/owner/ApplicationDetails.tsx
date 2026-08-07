@@ -1090,6 +1090,7 @@ function OwnerActionsCard({
           variant="outline"
           className="w-full gap-2 border-destructive text-destructive hover:bg-destructive/5"
           onClick={onReject}
+          disabled={isPending}
         >
           <XCircle className="size-4" /> Reject Application
         </Button>
