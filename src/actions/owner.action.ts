@@ -1199,7 +1199,7 @@ export async function verifyPaymentAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/owner/applications/[applicationId]`);
+  revalidatePath(`/owner/applications/[applicationId]`,"page");
   return { success: true, data: undefined };
 }
 
@@ -1222,7 +1222,7 @@ export async function rejectPaymentAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/owner/applications/[applicationId]`);
+  revalidatePath(`/owner/applications/[applicationId]`,"page");
   return { success: true, data: undefined };
 }
 

@@ -143,6 +143,7 @@ export function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
+    timeZone: "Asia/Kolkata",
     year: "numeric",
   });
 }
@@ -247,6 +248,7 @@ export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-IN", {
     day: "numeric",
     month: "short",
+    timeZone: "Asia/Kolkata",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
