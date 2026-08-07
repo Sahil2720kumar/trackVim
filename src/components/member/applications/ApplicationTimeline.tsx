@@ -31,6 +31,8 @@ interface ApplicationTimelineProps {
   payment?: {
     uploadedAt?: string;
     verifiedAt?: string;
+    rejectedAt?: string;
+    rejectionReason?: string;
   };
   membership?: {
     activatedAt?: string;
@@ -41,7 +43,16 @@ interface ApplicationTimelineProps {
 
 const APPROVED_ONWARD: AppStatus[] = [
   "approved_awaiting_payment",
+  "payment_pending",
   "payment_uploaded",
+  "payment_rejected",
+  "payment_verified",
+  "cancelled",
+];
+
+const PAYMENT_UPLOADED_ONWARD: AppStatus[] = [
+  "payment_uploaded",
+  "payment_rejected",
   "payment_verified",
   "cancelled",
 ];
@@ -54,7 +65,9 @@ export function ApplicationTimeline({
 }: ApplicationTimelineProps) {
   const isRejected = status === "rejected";
   const isCancelled = status === "cancelled";
+  const isPaymentRejected = status === "payment_rejected";
   const isApprovedOnward = APPROVED_ONWARD.includes(status);
+  const isPaymentUploadedOnward = PAYMENT_UPLOADED_ONWARD.includes(status);
 
   const events: TimelineEvent[] = [
     {
@@ -102,40 +115,52 @@ export function ApplicationTimeline({
 
     events.push({
       icon: <Clock3 className="w-4 h-4" />,
-      title: "Payment Pending",
+      title: isPaymentUploadedOnward ? "Payment Uploaded" : "Payment Pending",
       date:
-        status === "approved_awaiting_payment"
+        status === "approved_awaiting_payment" || status === "payment_pending"
           ? "Current Step"
           : (payment?.uploadedAt ?? payment?.verifiedAt),
       description:
         "Please complete the payment and upload receipt for verification.",
       variant:
-        status === "approved_awaiting_payment"
+        status === "approved_awaiting_payment" || status === "payment_pending"
           ? "current"
-          : ["payment_uploaded", "payment_verified", "cancelled"].includes(
-                status,
-              )
+          : isPaymentUploadedOnward
             ? "completed"
             : "pending",
       badge:
-        status === "approved_awaiting_payment" ? "Current Step" : undefined,
+        status === "approved_awaiting_payment" || status === "payment_pending"
+          ? "Current Step"
+          : undefined,
     });
 
-    events.push({
-      icon: <ShieldCheck className="w-4 h-4" />,
-      title: "Payment Verification",
-      date:
-        status === "payment_verified" || status === "cancelled"
-          ? payment?.verifiedAt
-          : undefined,
-      description: "Your payment will be verified by the gym owner.",
-      variant:
-        status === "payment_uploaded"
-          ? "current"
-          : status === "payment_verified" || status === "cancelled"
-            ? "completed"
-            : "pending",
-    });
+    if (isPaymentRejected) {
+      events.push({
+        icon: <XCircle className="w-4 h-4" />,
+        title: "Payment Rejected",
+        date: payment?.rejectedAt,
+        description:
+          payment?.rejectionReason ??
+          "The gym owner rejected this payment. Please upload a new payment.",
+        variant: "rejected",
+      });
+    } else {
+      events.push({
+        icon: <ShieldCheck className="w-4 h-4" />,
+        title: "Payment Verification",
+        date:
+          status === "payment_verified" || status === "cancelled"
+            ? payment?.verifiedAt
+            : undefined,
+        description: "Your payment will be verified by the gym owner.",
+        variant:
+          status === "payment_uploaded"
+            ? "current"
+            : status === "payment_verified" || status === "cancelled"
+              ? "completed"
+              : "pending",
+      });
+    }
 
     events.push({
       icon: <CheckCircle2 className="w-4 h-4" />,

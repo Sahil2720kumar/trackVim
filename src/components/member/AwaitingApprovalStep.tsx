@@ -14,7 +14,7 @@ export default function AwaitingApprovalStep({ gym, plan }: Props) {
     <>
       <StatusBanner variant="pending">
         You already have a pending application at {gym.name}. The gym owner is
-        reviewing it — we'll notify you once there's an update.
+        reviewing it — we&apos;ll notify you once there&apos;s an update.
       </StatusBanner>
       <GymSummary gym={gym} />
       <SelectedMembershipPlan plan={plan} />

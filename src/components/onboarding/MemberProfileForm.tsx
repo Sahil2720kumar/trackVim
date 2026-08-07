@@ -117,7 +117,7 @@ export default function MemberProfileForm({
         }
         toast.success("Profile saved successfully");
         await session?.reload();
-        router.push("/member/home");
+        router.replace("/member/home");
       } catch (error) {
         console.error("Error saving profile:", error);
         toast.error("Error saving profile. Please try again.");
@@ -126,7 +126,8 @@ export default function MemberProfileForm({
   };
 
   const handleSkip = () => {
-    window.location.href = "/member/home";
+    toast.error("Please fill all the required fields");
+    // window.location.href = "/member/home";
   };
 
   return (

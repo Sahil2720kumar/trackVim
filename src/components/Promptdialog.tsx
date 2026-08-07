@@ -69,6 +69,7 @@ export function PromptDialog({
         </DialogHeader>
         <div className="py-2">
           <textarea
+            aria-label={title}
             className="w-full min-h-[100px] rounded-xl border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground resize-none outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
             placeholder={placeholder}
             value={value}

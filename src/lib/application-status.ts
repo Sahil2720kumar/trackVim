@@ -224,11 +224,25 @@ export function getDetailTimelineState(status: DisplayStatus): {
       };
     case "Rejected":
       return { completed: ["submitted"], active: null, rejected: ["review"] };
+    case "Frozen":
+    case "Expired":
+    case "Cancelled":
+      return {
+        completed: [
+          "submitted",
+          "review",
+          "paymentPending",
+          "paymentUploaded",
+          "paymentVerified",
+          "active",
+        ],
+        active: null,
+        rejected: [],
+      };
     default:
       return { completed: ["submitted"], active: null, rejected: [] };
   }
 }
-
 export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-IN", {
     day: "numeric",

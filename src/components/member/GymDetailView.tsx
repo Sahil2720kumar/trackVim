@@ -400,7 +400,7 @@ export function GymDetailView({
   const handleApply = (planId?: string) => {
     const id = planId ?? targetPlanId;
     if (!id) return;
-    router.push(`/member/discover/${gym.id}/apply?planId=${id}`);
+    router.push(`/member/discover/${gym.id}/apply/${id}`);
   };
 
   const handleDashboard = () => {

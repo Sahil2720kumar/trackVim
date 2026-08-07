@@ -2,10 +2,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Headphones, Mail, Phone } from "lucide-react";
 
-export function HelpCard({ gym }) {
+interface HelpCardProps {
+  gym: {
+    contact_phone?: string | null;
+    contact_email?: string | null;
+  };
+}
+
+export function HelpCard({ gym }: HelpCardProps) {
   const hasPhone = Boolean(gym.contact_phone);
   const hasEmail = Boolean(gym.contact_email);
-
   return (
     <Card className="shadow-sm">
       <CardHeader className="pb-3">

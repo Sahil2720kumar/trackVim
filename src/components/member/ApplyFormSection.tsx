@@ -26,6 +26,7 @@ import {
   SectionCard,
 } from "@/components/GymFormFields";
 import { submitMembershipApplicationAction } from "@/actions/member.action"; // adjust to wherever you put it
+import { toast } from "sonner";
 
 interface Member {
   name: string | null;
@@ -89,19 +90,18 @@ function SuccessDialog({
             gym owner will review your application and contact you if additional
             information or payment is required.
           </DialogDescription>
+          <div className="flex flex-col gap-3 mt-4">
+            <Button
+              asChild
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Link href="/member/applications">View Applications</Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/member/discover">Discover More Gyms</Link>
+            </Button>
+          </div>
         </DialogHeader>
-        <div className="flex flex-col gap-3 mt-4">
-          <Link href="/member/discover">
-            <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-              View Applications
-            </Button>
-          </Link>
-          <Link href="/member/discover">
-            <Button variant="outline" className="w-full">
-              Discover More Gyms
-            </Button>
-          </Link>
-        </div>
       </DialogContent>
     </Dialog>
   );
@@ -147,25 +147,30 @@ export default function ApplyFormSection({
     setSubmitError(null);
     setIsSubmitting(true);
 
-    const result = await submitMembershipApplicationAction({
-      gymId,
-      planId,
-      message: data.message || undefined,
-      emergencyContactPhone: data.emergencyContact || undefined,
-      fitnessGoal: data.fitnessGoal || undefined,
-      medicalNotes: data.medicalNotes || undefined,
-    });
+    try {
+      const result = await submitMembershipApplicationAction({
+        gymId,
+        planId,
+        message: data.message || undefined,
+        emergencyContactPhone: data.emergencyContact || undefined,
+        fitnessGoal: data.fitnessGoal || undefined,
+        medicalNotes: data.medicalNotes || undefined,
+      });
 
-    setIsSubmitting(false);
+      if (!result.success) {
+        setSubmitError(result.error);
+        return;
+      }
 
-    if (!result.success) {
-      setSubmitError(result.error);
-      return;
+      setIsSuccess(true);
+      toast.success("Application submitted successfully");
+    } catch {
+      setSubmitError("Could not submit the application. Try again.");
+      toast.error("Failed to submit application");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsSuccess(true);
   }
-
   return (
     <>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">

@@ -13,6 +13,7 @@ interface ProgressTimelineProps {
   payment?: {
     uploadedAt?: string;
     verifiedAt?: string;
+    rejectedAt?: string;
   };
 
   payment_receipt?: {
@@ -33,6 +34,22 @@ interface ProgressStep {
   state: StepState;
 }
 
+const APPROVED_ONWARD: AppStatus[] = [
+  "approved_awaiting_payment",
+  "payment_pending",
+  "payment_uploaded",
+  "payment_rejected",
+  "payment_verified",
+  "cancelled",
+];
+
+const PAYMENT_UPLOADED_ONWARD: AppStatus[] = [
+  "payment_uploaded",
+  "payment_rejected",
+  "payment_verified",
+  "cancelled",
+];
+
 export function ProgressTimeline({
   status,
   application,
@@ -42,13 +59,10 @@ export function ProgressTimeline({
 }: ProgressTimelineProps) {
   const isRejected = status === "rejected";
   const isCancelled = status === "cancelled";
+  const isPaymentRejected = status === "payment_rejected";
 
-  const isApprovedOnward = [
-    "approved_awaiting_payment",
-    "payment_uploaded",
-    "payment_verified",
-    "cancelled",
-  ].includes(status);
+  const isApprovedOnward = APPROVED_ONWARD.includes(status);
+  const isPaymentUploadedOnward = PAYMENT_UPLOADED_ONWARD.includes(status);
 
   const steps: ProgressStep[] = [
     {
@@ -82,30 +96,26 @@ export function ProgressTimeline({
         state: isApprovedOnward ? "completed" : "upcoming",
       },
       {
-        label:
-          status === "payment_uploaded" ||
-          status === "payment_verified" ||
-          status === "cancelled"
-            ? "Payment Uploaded"
-            : "Payment Pending",
+        label: isPaymentUploadedOnward ? "Payment Uploaded" : "Payment Pending",
         date: payment_receipt?.uploaded_at,
         state:
-          status === "approved_awaiting_payment"
+          status === "approved_awaiting_payment" || status === "payment_pending"
             ? "active"
-            : ["payment_uploaded", "payment_verified", "cancelled"].includes(
-                  status,
-                )
+            : isPaymentUploadedOnward
               ? "completed"
               : "upcoming",
       },
       {
-        label: "Payment Verification",
+        label: isPaymentRejected ? "Payment Rejected" : "Payment Verification",
         date:
           status === "payment_verified" || status === "cancelled"
             ? payment?.verifiedAt
-            : undefined,
-        state:
-          status === "payment_uploaded"
+            : isPaymentRejected
+              ? payment?.rejectedAt
+              : undefined,
+        state: isPaymentRejected
+          ? "rejected"
+          : status === "payment_uploaded"
             ? "active"
             : status === "payment_verified" || status === "cancelled"
               ? "completed"
@@ -123,12 +133,14 @@ export function ProgressTimeline({
     );
   }
 
-  const note =
-    status === "cancelled"
-      ? "This membership was cancelled."
+  const note = isCancelled
+    ? "This membership was cancelled."
+    : isPaymentRejected
+      ? "Your payment was rejected by the gym owner. Please review the reason below and upload a new payment."
       : [
             "pending_review",
             "approved_awaiting_payment",
+            "payment_pending",
             "payment_uploaded",
           ].includes(status)
         ? "Application approval does not activate your membership. Your membership becomes active only after payment verification by the gym owner."

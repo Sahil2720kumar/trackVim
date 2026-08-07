@@ -1,6 +1,7 @@
 import { ActionResult } from "@/actions/member.action";
 import { createServerClient } from "@/lib/supabase/server";
 import { MembershipApplication } from "@/types";
+import { auth } from "@clerk/nextjs/server";
 
 // ============================================================================
 // Read-only data-fetching functions
@@ -128,6 +129,11 @@ export async function getApplications(gymId: string) {
 
 export async function getApplicationById(id: string) {
   const supabase = await createServerClient();
+  const { sessionClaims } = await auth();
+  const ownerMeta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
 
   const { data, error } = await supabase
     .from("membership_applications")
@@ -157,6 +163,7 @@ export async function getApplicationById(id: string) {
     `,
     )
     .eq("id", id)
+    .eq("gym_id", ownerMeta.gymId!)
     .single();
 
   if (error) return { success: false as const, error: error.message };

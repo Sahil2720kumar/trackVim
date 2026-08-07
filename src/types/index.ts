@@ -131,5 +131,7 @@ export type AppStatus =
   | "approved_awaiting_payment"
   | "payment_uploaded"
   | "payment_verified"
+  | "payment_rejected"
+  | "payment_pending"
   | "rejected"
   | "cancelled";

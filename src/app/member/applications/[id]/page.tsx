@@ -1,7 +1,3 @@
-import { notFound } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-
 import { ProgressTimeline } from "@/components/member/applications/ProgressTimeline";
 import { ApplicationSummary } from "@/components/member/applications/ApplicationSummary";
 import { MembershipPlanCard } from "@/components/member/applications/MembershipPlanCard";
@@ -29,11 +25,20 @@ function formatTime(iso: string | null) {
 }
 
 function resolveStatus(
-  appStatus: string,
   membershipStatus: string | null,
+  rejectionReason: string | null,
+  latestPaymentStatus: string | null,
 ): AppStatus {
-  if (appStatus === "Pending") return "pending_review";
-  if (appStatus === "Rejected") return "rejected";
+  // Application rejected — no membership row will exist yet.
+  if (rejectionReason) return "rejected";
+
+  // No membership row yet = application hasn't been approved.
+  if (!membershipStatus) return "pending_review";
+
+  // Payment-level rejection takes priority over whatever the
+  // membership row's status currently says.
+  if (latestPaymentStatus === "Rejected") return "payment_rejected";
+
   switch (membershipStatus) {
     case "PaymentUploaded":
       return "payment_uploaded";
@@ -42,7 +47,9 @@ function resolveStatus(
     case "Cancelled":
       return "cancelled";
     case "PaymentRejected":
+      return "payment_rejected";
     case "PaymentPending":
+      return "payment_pending";
     default:
       return "approved_awaiting_payment";
   }
@@ -61,17 +68,24 @@ export default async function ApplicationDetailsPage({
   const gymRow = data.gyms;
   const planRow = data.membership_plans;
   const membershipRow = data.gym_memberships?.[0] ?? null;
-  const payments = membershipRow?.payments ?? [];
-  const paymentReceipt = payments?.[0]?.payment_receipts?.[0] ?? null;
-  const pendingPayment = payments.find((p) => p.status === "Pending") ?? null;
-  const paidTotal = payments
-    .filter((p) => p.status === "Verified")
-    .reduce((sum, p) => sum + Number(p.amount), 0);
+
+  // Payment is a single row, updated in place — not a history array.
+  const currentPayment = membershipRow?.payments?.[0] ?? null;
+  // Receipts DO accumulate (one per upload), but the query already limits
+  // this to the single latest receipt, so [0] is the current one.
+  const currentReceipt = currentPayment?.payment_receipts?.[0] ?? null;
+
+  const paidTotal =
+    currentPayment?.status === "Verified" ? Number(currentPayment.amount) : 0;
   const remaining = membershipRow
     ? Number(membershipRow.final_amount) - paidTotal
     : Number(planRow?.plan_price ?? 0);
 
-  const status = resolveStatus(data.status, membershipRow?.status ?? null);
+  const status = resolveStatus(
+    membershipRow?.status ?? null,
+    data.rejection_reason,
+    currentPayment?.status ?? null,
+  );
 
   const plan = {
     name: planRow?.plan_name ?? "",
@@ -110,18 +124,17 @@ export default async function ApplicationDetailsPage({
     rejectionReason: data.rejection_reason ?? undefined,
   };
 
-  const verifiedPayment = membershipRow?.payments?.find(
-    (p) => p.status === "Verified",
-  );
-
-  const currentPayment =
-    membershipRow?.payments?.find((p) => p.status === "Verified") ??
-    membershipRow?.payments?.find((p) => p.status === "PendingVerification") ??
-    pendingPayment;
-
-  const currentReceipt = currentPayment?.payment_receipts?.find(
-    (r) => r.is_current,
-  );
+  // NOTE: payments has no rejected_at column — created_at is the payment
+  // row's original creation time, not the moment it was rejected. Swap
+  // this for a real rejected_at/updated_at once that column exists.
+  const paymentRejectedAt =
+    currentPayment?.status === "Rejected" && currentPayment?.updated_at
+      ? formatDate(currentPayment.updated_at)
+      : undefined;
+  const paymentRejectionReason =
+    currentPayment?.status === "Rejected"
+      ? (currentPayment?.rejection_reason ?? undefined)
+      : undefined;
 
   return (
     <div className="min-h-screen bg-background">
@@ -151,16 +164,17 @@ export default async function ApplicationDetailsPage({
             approvedAt: application.approvedDate,
           }}
           payment={{
-            uploadedAt: pendingPayment?.created_at
-              ? formatDate(pendingPayment.created_at)
+            uploadedAt: currentPayment?.created_at
+              ? formatDate(currentPayment.created_at)
               : undefined,
-            verifiedAt: verifiedPayment?.verified_at
-              ? formatDate(verifiedPayment.verified_at)
+            verifiedAt: currentPayment?.verified_at
+              ? formatDate(currentPayment.verified_at)
               : undefined,
+            rejectedAt: paymentRejectedAt,
           }}
           payment_receipt={{
             uploaded_at: currentReceipt?.uploaded_at
-              ? formatDate(currentReceipt?.uploaded_at)
+              ? formatDate(currentReceipt.uploaded_at)
               : undefined,
           }}
           membership={{
@@ -191,18 +205,14 @@ export default async function ApplicationDetailsPage({
                 rejectionReason: application.rejectionReason,
               }}
               payment={{
-                uploadedAt: pendingPayment?.created_at
-                  ? formatDate(pendingPayment.created_at)
+                uploadedAt: currentPayment?.created_at
+                  ? formatDate(currentPayment.created_at)
                   : undefined,
-                verifiedAt: membershipRow?.payments?.find(
-                  (p) => p.status === "Verified",
-                )?.verified_at
-                  ? formatDate(
-                      membershipRow.payments.find(
-                        (p) => p.status === "Verified",
-                      )!.verified_at,
-                    )
+                verifiedAt: currentPayment?.verified_at
+                  ? formatDate(currentPayment.verified_at)
                   : undefined,
+                rejectedAt: paymentRejectedAt,
+                rejectionReason: paymentRejectionReason,
               }}
               membership={{
                 activatedAt: membershipRow?.activated_at
@@ -228,7 +238,7 @@ export default async function ApplicationDetailsPage({
               plan={plan}
               gymId={gymRow.id}
               gymMembershipId={membershipRow?.id ?? null}
-              pendingPaymentId={pendingPayment?.id ?? null}
+              pendingPaymentId={currentPayment?.id ?? null}
               remainingAmount={remaining}
               joiningFee={plan.joiningFee}
               receipt={
@@ -243,6 +253,8 @@ export default async function ApplicationDetailsPage({
                       verifiedAt: currentPayment?.verified_at
                         ? formatDate(currentPayment.verified_at)
                         : undefined,
+                      rejectedAt: paymentRejectedAt,
+                      rejectionReason: paymentRejectionReason,
                     }
                   : null
               }

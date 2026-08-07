@@ -2,7 +2,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MessageSquare } from "lucide-react";
 
-export function OwnerNotes({ owner }) {
+interface OwnerNotesProps {
+  owner: { note?: string | null };
+}
+
+export function OwnerNotes({ owner }: OwnerNotesProps) {
+  if (!owner.note) return null;
+
   return (
     <Card className="shadow-sm">
       <CardHeader className="pb-3">
@@ -15,7 +21,7 @@ export function OwnerNotes({ owner }) {
         <div className="rounded-xl border border-border bg-muted/20 p-4">
           <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">
             {owner.note}
-          </p>
+          </p>{" "}
         </div>
       </CardContent>
     </Card>

@@ -810,19 +810,19 @@ export async function addMemberAction(
 ): Promise<ActionResult<{ memberId: string; membershipId: string }>> {
   // 1. Auth
   const { sessionClaims } = await auth();
-  const staffMeta = (sessionClaims?.publicMetadata ?? {}) as {
+  const ownerMeta = (sessionClaims?.publicMetadata ?? {}) as {
     role?: string;
     gymId?: string;
   };
-  const isOwner = staffMeta.role === "owner";
+  const isOwner = ownerMeta.role === "owner";
 
-  if ((!isOwner && staffMeta.role !== "trainer") || !staffMeta.gymId) {
+  if ((!isOwner && ownerMeta.role !== "trainer") || !ownerMeta.gymId) {
     return {
       success: false,
       error: "Not authorized to add members for a gym.",
     };
   }
-  const gymId = staffMeta.gymId;
+  const gymId = ownerMeta.gymId;
 
   // 2. Validate
   const parsed = inviteMemberFormSchema.safeParse(data);
@@ -1150,7 +1150,8 @@ export async function approveMembershipApplicationAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/owner/applications/[applicationId]`);
+  revalidatePath(`/owner/applications/${applicationId}`);
+  revalidatePath("/owner/applications");
   return { success: true, data: { membershipId: data as string } };
 }
 

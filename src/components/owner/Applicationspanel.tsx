@@ -77,11 +77,18 @@ function StatusTimeline({
   return (
     <div className="flex items-start gap-0 min-w-0">
       {TIMELINE_STAGES.map((stage, idx) => {
-        const isDone = completed.includes(stage.key);
-        const isActive = activeStage === stage.key;
-        const rejected = isRejected(stage.key);
+        // const isDone = completed.includes(stage.key);
+        // const isActive = activeStage === stage.key;
+        // const rejected = isRejected(stage.key);
         const isLast = idx === TIMELINE_STAGES.length - 1;
         const dateStr = stageDates[stage.key];
+
+        const rejected = isRejected(stage.key);
+
+        const isDone =
+          completed.includes(stage.key) ||
+          (displayStatus === "Active" && stage.key === "active");
+        const isActive = activeStage === stage.key && !isDone;
 
         // Pick an icon for every possible visual state — no branch
         // is allowed to fall through with nothing rendered.

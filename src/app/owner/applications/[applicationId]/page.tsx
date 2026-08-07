@@ -1,6 +1,5 @@
 import { ApplicationDetails } from "@/components/owner/ApplicationDetails";
 import { getApplicationById } from "@/services/owner.query";
-import { notFound } from "next/navigation";
 
 export default async function ApplicationDetailPage({
   params,

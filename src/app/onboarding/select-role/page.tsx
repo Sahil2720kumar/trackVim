@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -108,29 +108,35 @@ function RoleCard({ role, isSelected, onSelect }: RoleCardProps) {
 
 export default function SelectRolePage() {
   const [selectedRole, setSelectedRole] = useState<Role["id"] | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const { session } = useClerk();
-  const handleContinue = async () => {
-    if (!selectedRole) return;
-    setIsLoading(true);
 
-    const result = await setUserRole(selectedRole);
+  const handleContinue = () => {
+    if (!selectedRole || isPending) return;
 
-    if (!result.success) {
-      setIsLoading(false);
-      toast.error(result.error);
-      return;
-    }
+    startTransition(async () => {
+      try {
+        const result = await setUserRole(selectedRole);
 
-    await session?.reload();
-    localStorage.setItem("selectedRole", selectedRole);
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
 
-    if (selectedRole === "gym_owner") {
-      router.push("/onboarding/register-gym");
-    } else {
-      router.push("/onboarding/member-profile");
-    }
+        await session?.reload();
+        localStorage.setItem("selectedRole", selectedRole);
+
+        if (selectedRole === "gym_owner") {
+          router.push("/onboarding/register-gym");
+        } else {
+          router.push("/onboarding/member-profile");
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to select role");
+      }
+    });
   };
 
   return (

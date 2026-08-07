@@ -10,8 +10,7 @@ import PaymentPendingStep from "@/components/member/PaymentPendingStep";
 import { MembershipApplicationPageDataByPlanId } from "@/services/member.query";
 
 interface ApplyPageProps {
-  params: Promise<{ gymId: string }>;
-  searchParams: Promise<{ planId?: string }>;
+  params: Promise<{ gymId: string; planId: string }>;
 }
 
 const HEADER_COPY = {
@@ -35,14 +34,8 @@ const HEADER_COPY = {
   },
 } as const;
 
-export default async function ApplyPage({
-  params,
-  searchParams,
-}: ApplyPageProps) {
-  const { gymId } = await params;
-  const { planId } = await searchParams;
-
-  if (!planId) throw new Error("Plan not found");
+export default async function ApplyPage({ params }: ApplyPageProps) {
+  const { gymId, planId } = await params;
 
   const data = await MembershipApplicationPageDataByPlanId(gymId, planId);
   if (!data) throw new Error("Data not found");

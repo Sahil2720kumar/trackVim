@@ -197,6 +197,7 @@ export async function createMemberProfileAction(
       },
     });
   } catch (err) {
+    console.log(" error from auth update", err);
     return {
       success: false,
       error:
@@ -381,8 +382,8 @@ export async function submitMembershipApplicationAction(
     };
   }
 
-  revalidatePath(`/discover/${input.gymId}/apply?planId=${input.planId}`);
-
+  revalidatePath(`/member/discover/${input.gymId}/apply`);
+  revalidatePath("/member/applications");
   return { success: true, applicationId: data as string };
 }
 
@@ -449,6 +450,21 @@ export async function submitPaymentAction(
     };
   }
 
+  const { data: payment, error: paymentError } = await supabase
+    .from("payments")
+    .select("id, status")
+    .eq("gym_membership_id", input.gymMembershipId)
+    .eq("member_id", meta.memberId)
+    .in("status", ["Pending", "Rejected", "PendingVerification"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (paymentError || !payment) {
+    console.error("payment error ", paymentError);
+    return { success: false, error: "Noo pending payment was found." };
+  }
+
   // Upload receipt first (if provided)
   let receiptUrl: string | null = null;
 
@@ -468,20 +484,10 @@ export async function submitPaymentAction(
     receiptUrl = uploaded;
   }
 
-  const { data: payment, error: paymentError } = await supabase
-    .from("payments")
-    .select("id")
-    .eq("gym_membership_id", input.gymMembershipId)
-    .eq("member_id", meta.memberId)
-    .eq("status", "Pending")
-    .single();
-
-  if (paymentError || !payment) {
-    console.error(paymentError);
-
+  if (!receiptUrl) {
     return {
       success: false,
-      error: "No pending payment was found.",
+      error: "A receipt is required to submit this payment.",
     };
   }
 
@@ -489,22 +495,23 @@ export async function submitPaymentAction(
   const { error } = await supabase.rpc("submit_payment", {
     p_payment_id: payment.id,
     p_method: input.method,
-    p_receipt_file_url: receiptUrl as string,
-    p_file_type: "image" as string,
-    p_transaction_ref: input.transactionRef as string,
+    p_receipt_file_url: receiptUrl,
+    p_file_type: files.receipt?.type ?? "image",
+    ...(input.transactionRef
+      ? { p_transaction_ref: input.transactionRef }
+      : {}),
   });
 
   if (error) {
     console.error(error);
-
     return {
       success: false,
-      error: error.message || "Could not submit payment.",
+      error: error.message,
     };
   }
 
-  revalidatePath(`/discover/${input.gymId}/apply`);
-
+  revalidatePath(`/member/discover/${input.gymId}/apply`);
+  revalidatePath("/member/applications");
   return {
     success: true,
     paymentId: payment.id,
@@ -525,6 +532,7 @@ export async function submitPaymentAction(
  *
  * Returns: { action: 'checked_in' | 'checked_out' | 'already_done', ... }
  */
+
 export async function checkInOrOutAction(qrIdentifier: string): Promise<
   ActionResult<{
     action: "checked_in" | "checked_out" | "already_done";

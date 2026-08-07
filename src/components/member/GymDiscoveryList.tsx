@@ -131,7 +131,7 @@ const filterChips: {
 function applyHref(gymId: string, planId?: string | null) {
   return planId
     ? `/member/discover/${gymId}/apply?planId=${planId}`
-    : `/member/discover/${gymId}/apply`;
+    : `/member/discover/${gymId}`;
 }
 
 function GymLogo({ gym }: { gym: Gym }) {
@@ -416,80 +416,80 @@ function GymCard({
   onViewDetails: (id: string) => void;
 }) {
   return (
-    <Link asChild href={`/member/discover/${gym.id}/`}>
-      <div
-        onClick={() => onViewDetails(gym.id)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") onViewDetails(gym.id);
-        }}
-        className="bg-card border border-border rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row gap-4 hover:border-primary/40 hover:bg-muted/30 transition-colors duration-150 cursor-pointer group"
-      >
-        <div className="flex gap-4 flex-1 min-w-0">
-          <GymLogo gym={gym} />
+    <div
+      onClick={() => onViewDetails(gym.id)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onViewDetails(gym.id);
+        }
+      }}
+      className="bg-card border border-border rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row gap-4 hover:border-primary/40 hover:bg-muted/30 transition-colors duration-150 cursor-pointer group"
+    >
+      {" "}
+      <div className="flex gap-4 flex-1 min-w-0">
+        <GymLogo gym={gym} />
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-1">
-              <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors">
-                {gym.name}
-              </h3>
-              {gym.isVerified && (
-                <span className="inline-flex items-center gap-1 text-xs text-primary font-medium">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Verified
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors">
+              {gym.name}
+            </h3>
+            {gym.isVerified && (
+              <span className="inline-flex items-center gap-1 text-xs text-primary font-medium">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Verified
+              </span>
+            )}
+          </div>
+
+          {gym.city && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+              <MapPin className="w-3 h-3" />
+              {gym.city}
+            </div>
+          )}
+
+          {gym.description && (
+            <p className="text-sm text-muted-foreground mb-3 line-clamp-2 leading-relaxed">
+              {gym.description}
+            </p>
+          )}
+
+          {gym.amenities.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {gym.amenities.map((amenity) => (
+                <span
+                  key={amenity}
+                  className="px-2.5 py-0.5 rounded-full border border-border text-xs text-foreground bg-muted/50 font-medium"
+                >
+                  {amenity}
                 </span>
-              )}
+              ))}
             </div>
+          )}
 
-            {gym.city && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
-                <MapPin className="w-3 h-3" />
-                {gym.city}
-              </div>
-            )}
-
-            {gym.description && (
-              <p className="text-sm text-muted-foreground mb-3 line-clamp-2 leading-relaxed">
-                {gym.description}
-              </p>
-            )}
-
-            {gym.amenities.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {gym.amenities.map((amenity) => (
-                  <span
-                    key={amenity}
-                    className="px-2.5 py-0.5 rounded-full border border-border text-xs text-foreground bg-muted/50 font-medium"
-                  >
-                    {amenity}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Users className="w-3.5 h-3.5" />
-                {formatMemberCount(gym.memberCount)} Members
-              </span>
-              <span className="flex items-center gap-1">
-                <Dumbbell className="w-3.5 h-3.5" />
-                {gym.trainerCount} Trainers
-              </span>
-            </div>
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Users className="w-3.5 h-3.5" />
+              {formatMemberCount(gym.memberCount)} Members
+            </span>
+            <span className="flex items-center gap-1">
+              <Dumbbell className="w-3.5 h-3.5" />
+              {gym.trainerCount} Trainers
+            </span>
           </div>
         </div>
-
-        <div className="hidden sm:flex flex-col justify-between items-end pl-4 border-l border-border">
-          <ActionSection gym={gym} onApply={onApply} />
-        </div>
-
-        <div className="sm:hidden pt-3 border-t border-border">
-          <ActionSection gym={gym} onApply={onApply} />
-        </div>
       </div>
-    </Link>
+      <div className="hidden sm:flex flex-col justify-between items-end pl-4 border-l border-border">
+        <ActionSection gym={gym} onApply={onApply} />
+      </div>
+      <div className="sm:hidden pt-3 border-t border-border">
+        <ActionSection gym={gym} onApply={onApply} />
+      </div>
+    </div>
   );
 }
 
@@ -561,7 +561,7 @@ export function GymDiscoveryList({ initialGyms }: GymDiscoveryListProps) {
   };
 
   const handleApply = (id: string, planId?: string | null) => {
-    router.push(applyHref(id, planId));
+    router.push(`/member/discover/${id}/`);
   };
 
   const filteredGyms = useMemo(() => {

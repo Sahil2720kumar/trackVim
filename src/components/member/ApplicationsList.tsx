@@ -423,7 +423,7 @@ function ApplicationActions({
 
   const viewDetailsBtn = (
     <Button size="sm" variant="outline" className={btnClass} asChild>
-      <Link href={`/applications/${app.id}`}>View Details</Link>
+      <Link href={`/member/applications/${app.id}`}>View Details</Link>
     </Button>
   );
 
@@ -481,7 +481,7 @@ function ApplicationActions({
           >
             <Link
               className="flex flex-row items-center gap-x-1"
-              href={`member/applications/${app.id}`}
+              href={`/member/applications/${app.id}`}
             >
               <CreditCard className="w-3.5 h-3.5" />
               {status === "PaymentRejected"
@@ -498,14 +498,14 @@ function ApplicationActions({
     return (
       <div className="flex flex-col gap-2 w-full">
         <Button size="sm" variant="outline" className={btnClass} asChild>
-          <Link href={`member/applications/${app.id}`}>View Membership</Link>
+          <Link href={`/member/applications/${app.id}`}>View Membership</Link>
         </Button>
         <Button
           size="sm"
           className={`${btnClass} bg-primary hover:bg-primary/90`}
           asChild
         >
-          <Link href={`member/discover/${app.gyms.id}`}>Go to Gym</Link>
+          <Link href={`/member/discover/${app.gyms.id}`}>Go to Gym</Link>
         </Button>
       </div>
     );
@@ -520,7 +520,7 @@ function ApplicationActions({
           className={`${btnClass} bg-primary hover:bg-primary/90`}
           asChild
         >
-          <Link href={`member/discover/${app.gyms.id}`}>Apply Again</Link>
+          <Link href={`/member/discover/${app.gyms.id}`}>Apply Again</Link>
         </Button>
       </div>
     );
@@ -540,115 +540,114 @@ function ApplicationCard({ app }: { app: MembershipApplication }) {
   const noteText = status === "Rejected" ? app.rejection_reason : app.message;
 
   return (
-    <Link asChild href={`/member/applications/${app.id}`}>
-      <Card className="rounded-3xl border border-border bg-card p-5 hover:border-primary/40 transition-all">
-        <CardContent className="p-0 space-y-4">
-          <div className="flex items-stretch gap-4">
-            {/* Left: gym info + plan meta */}
-            <div className="w-full max-w-[460px] flex-shrink-0 space-y-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 bg-muted border border-border flex items-center justify-center">
-                  {app.gyms.logo_url ? (
-                    <img
-                      src={app.gyms.logo_url}
-                      alt={app.gyms.name}
-                      className="w-full h-full object-cover"
+    <Card
+      onClick={() => router.push(`/member/applications/${app.id}`)}
+      className="rounded-3xl border border-border bg-card p-5 hover:border-primary/40 transition-all"
+    >
+      <CardContent className="p-0 space-y-4">
+        <div className="flex items-stretch gap-4">
+          {/* Left: gym info + plan meta */}
+          <div className="w-full max-w-[460px] flex-shrink-0 space-y-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 bg-muted border border-border flex items-center justify-center">
+                {app.gyms.logo_url ? (
+                  <img
+                    src={app.gyms.logo_url}
+                    alt={app.gyms.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {getInitials(app.gyms.name)}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h3 className="font-semibold text-foreground leading-tight truncate">
+                    {app.gyms.name}
+                  </h3>
+                  {app.gyms.is_verified && (
+                    <BadgeCheck
+                      className="w-4 h-4 text-primary flex-shrink-0"
+                      title="Verified gym"
                     />
-                  ) : (
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      {getInitials(app.gyms.name)}
-                    </span>
                   )}
                 </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <h3 className="font-semibold text-foreground leading-tight truncate">
-                      {app.gyms.name}
-                    </h3>
-                    {app.gyms.is_verified && (
-                      <BadgeCheck
-                        className="w-4 h-4 text-primary flex-shrink-0"
-                        title="Verified gym"
-                      />
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <MapPin className="w-3 h-3 flex-shrink-0" />
-                    <span className="truncate">
-                      {[app.gyms.city, app.gyms.state]
-                        .filter(Boolean)
-                        .join(", ")}
-                    </span>
-                  </div>
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                  <span className="truncate">
+                    {[app.gyms.city, app.gyms.state].filter(Boolean).join(", ")}
+                  </span>
                 </div>
               </div>
-
-              {app.membership_plans && (
-                <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-                  <InfoRow
-                    icon={ClipboardList}
-                    value={app.membership_plans.plan_name}
-                    label="Plan"
-                  />
-                  <InfoRow
-                    icon={IndianRupee}
-                    value={
-                      formatPrice(app.membership_plans.plan_price) +
-                      "+" +
-                      formatPrice(app.membership_plans.joining_fee ?? 0) +
-                      "(Only Joining Fee)"
-                    }
-                    label="Price"
-                  />
-                  <InfoRow
-                    icon={Timer}
-                    value={app.membership_plans.membership_duration}
-                    label="Duration"
-                  />
-                  <InfoRow
-                    icon={CalendarDays}
-                    value={formatDate(app.created_at)}
-                    label="Applied On"
-                  />
-                </div>
-              )}
             </div>
 
-            {/* Middle: vertical timeline */}
-            <div className="flex-1 min-w-0 border-l border-border pl-5">
-              <VerticalTimeline entries={timeline} theme={theme} />
-            </div>
-
-            {/* Right: status + actions */}
-            <div
-              className="w-[190px] flex-shrink-0 flex flex-col gap-2 items-stretch"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <StatusBadge status={status} />
-              <ApplicationActions app={app} status={status} />
-            </div>
-
-            <div className="flex items-center flex-shrink-0 text-muted-foreground">
-              <ChevronRight className="w-5 h-5" />
-            </div>
+            {app.membership_plans && (
+              <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                <InfoRow
+                  icon={ClipboardList}
+                  value={app.membership_plans.plan_name}
+                  label="Plan"
+                />
+                <InfoRow
+                  icon={IndianRupee}
+                  value={
+                    formatPrice(app.membership_plans.plan_price) +
+                    "+" +
+                    formatPrice(app.membership_plans.joining_fee ?? 0) +
+                    "(Only Joining Fee)"
+                  }
+                  label="Price"
+                />
+                <InfoRow
+                  icon={Timer}
+                  value={app.membership_plans.membership_duration}
+                  label="Duration"
+                />
+                <InfoRow
+                  icon={CalendarDays}
+                  value={formatDate(app.created_at)}
+                  label="Applied On"
+                />
+              </div>
+            )}
           </div>
 
-          {noteText && (
-            <div
-              className={`flex items-start gap-1.5 rounded-lg border px-3 py-2 ${THEME_CLASSES[theme].box}`}
-            >
-              <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-              <p className="text-xs">
-                <span className="font-semibold">
-                  {status === "Rejected" ? "Owner message: " : "Note: "}
-                </span>
-                {noteText}
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </Link>
+          {/* Middle: vertical timeline */}
+          <div className="flex-1 min-w-0 border-l border-border pl-5">
+            <VerticalTimeline entries={timeline} theme={theme} />
+          </div>
+
+          {/* Right: status + actions */}
+          <div
+            className="w-[190px] flex-shrink-0 flex flex-col gap-2 items-stretch"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <StatusBadge status={status} />
+            <ApplicationActions app={app} status={status} />
+          </div>
+
+          <div className="flex items-center flex-shrink-0 text-muted-foreground">
+            <ChevronRight className="w-5 h-5" />
+          </div>
+        </div>
+
+        {noteText && (
+          <div
+            className={`flex items-start gap-1.5 rounded-lg border px-3 py-2 ${THEME_CLASSES[theme].box}`}
+          >
+            <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+            <p className="text-xs">
+              <span className="font-semibold">
+                {status === "Rejected" ? "Owner message: " : "Note: "}
+              </span>
+              {noteText}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -669,7 +668,7 @@ function EmptyState({ isAll }: { isAll: boolean }) {
           your first membership application.
         </p>
         <Button className="bg-primary hover:bg-primary/90" asChild>
-          <Link href="member/discover">Discover Gyms</Link>
+          <Link href="/member/discover">Discover Gyms</Link>
         </Button>
       </div>
     );

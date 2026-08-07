@@ -25,11 +25,22 @@ function getStatusConfig(status) {
       color: "bg-primary/10 text-primary border-primary/20",
       dot: "bg-primary",
     },
+    payment_pending: {
+      label: "Payment Pending",
+      color: "bg-primary/10 text-primary border-primary/20",
+      dot: "bg-primary",
+    },
     payment_uploaded: {
       label: "Payment Uploaded",
       color:
         "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800",
       dot: "bg-blue-500",
+    },
+    payment_rejected: {
+      label: "Payment Rejected",
+      color:
+        "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800",
+      dot: "bg-red-500",
     },
     payment_verified: {
       label: "Active Member",

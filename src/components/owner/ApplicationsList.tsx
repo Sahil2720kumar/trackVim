@@ -1,12 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, XCircle, Users } from "lucide-react";
 import { ApplicationsPanel } from "@/components/owner/Applicationspanel";
 import { ConfirmDialog } from "@/components/Confirmdialog";
 import { PromptDialog } from "@/components/Promptdialog";
 import { MembershipApplication } from "@/types";
+import { toast } from "sonner";
+import {
+  approveMembershipApplicationAction,
+  rejectMembershipApplicationAction,
+} from "@/actions/owner.action";
 
 export function ApplicationsList({
   initialApplications,
@@ -15,11 +20,11 @@ export function ApplicationsList({
 }) {
   const router = useRouter();
 
-  const [applications, setApplications] =
-    useState<MembershipApplication[]>(initialApplications);
+  const applications = initialApplications;
 
   const [approveTarget, setApproveTarget] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const handleApprove = (id: string) => setApproveTarget(id);
   const handleReject = (id: string) => setRejectTarget(id);
@@ -29,39 +34,50 @@ export function ApplicationsList({
     router.push(`/owner/applications/${id}`);
 
   const confirmApprove = () => {
-    if (!approveTarget) return;
-    setApplications((prev) =>
-      prev.map((a) =>
-        a.id === approveTarget
-          ? {
-              ...a,
-              status: "Approved",
-              reviewed_at: new Date().toISOString(),
-            }
-          : a,
-      ),
-    );
-    setApproveTarget(null);
-    // TODO: server action — update membership_applications.status/reviewed_by/reviewed_at,
-    // then insert the corresponding gym_memberships row (status: 'PaymentPending')
+    if (!approveTarget || isPending) return;
+
+    startTransition(async () => {
+      try {
+        const result = await approveMembershipApplicationAction(approveTarget);
+
+        if (!result.success) {
+          toast.error(result.error ?? "Failed to approve application.");
+          return;
+        }
+
+        setApproveTarget(null);
+        toast.success("Application approved.");
+        router.refresh();
+      } catch (err) {
+        console.error(err);
+        toast.error("Something went wrong. Please try again.");
+      }
+    });
   };
 
   const confirmReject = (reason: string) => {
-    if (!rejectTarget) return;
-    setApplications((prev) =>
-      prev.map((a) =>
-        a.id === rejectTarget
-          ? {
-              ...a,
-              status: "Rejected",
-              reviewed_at: new Date().toISOString(),
-              rejection_reason: reason || null,
-            }
-          : a,
-      ),
-    );
-    setRejectTarget(null);
-    // TODO: server action — update membership_applications status/reviewed_by/reviewed_at/rejection_reason
+    if (!rejectTarget || isPending) return;
+
+    startTransition(async () => {
+      try {
+        const result = await rejectMembershipApplicationAction(
+          rejectTarget,
+          reason,
+        );
+
+        if (!result.success) {
+          toast.error(result.error ?? "Failed to reject application.");
+          return;
+        }
+
+        setRejectTarget(null);
+        toast.success("Application rejected.");
+        router.refresh();
+      } catch (err) {
+        console.error(err);
+        toast.error("Something went wrong. Please try again.");
+      }
+    });
   };
 
   const approveTargetApp = applications.find((a) => a.id === approveTarget);
@@ -91,7 +107,7 @@ export function ApplicationsList({
 
       <ConfirmDialog
         open={!!approveTarget}
-        onOpenChange={(open) => !open && setApproveTarget(null)}
+        onOpenChange={(open) => !open && !isPending && setApproveTarget(null)}
         onConfirm={confirmApprove}
         title="Approve Application"
         description={
@@ -104,18 +120,18 @@ export function ApplicationsList({
             their payment.
           </>
         }
-        confirmLabel="Approve"
+        confirmLabel={isPending ? "Approving..." : "Approve"}
         icon={<CheckCircle2 data-icon="inline-start" />}
       />
 
       <PromptDialog
         open={!!rejectTarget}
-        onOpenChange={(open) => !open && setRejectTarget(null)}
+        onOpenChange={(open) => !open && !isPending && setRejectTarget(null)}
         onConfirm={confirmReject}
         title="Reject Application"
         description="Please provide a reason for rejecting this membership application."
         placeholder="Enter rejection reason (optional)..."
-        confirmLabel="Reject Application"
+        confirmLabel={isPending ? "Rejecting..." : "Reject Application"}
         icon={<XCircle data-icon="inline-start" />}
         variant="destructive"
       />

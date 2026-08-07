@@ -1,16 +1,22 @@
-// components/member/apply-steps/PaymentPendingStep.tsx
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { BadgeIndianRupee, QrCode } from "lucide-react";
+import { BadgeIndianRupee, QrCode, Maximize2, Download } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
   FormInput,
   FormSelect,
@@ -28,15 +34,15 @@ import { PaymentMethod } from "@/actions/staff.action";
 // TODO: align these values with your actual `paymentMethodEnum` in the schema
 const PAYMENT_METHODS = [
   { value: "UPI", label: "UPI" },
-  { value: "Cash", label: "Cash (pay at gym)" },
-  { value: "Card", label: "Card" },
-  { value: "BankTransfer", label: "Bank Transfer" },
+  // { value: "Cash", label: "Cash (pay at gym)" },
+  // { value: "Card", label: "Card" },
+  // { value: "BankTransfer", label: "Bank Transfer" },
 ] as const;
 
 const paymentSchema = z
   .object({
     method: z.enum(["UPI", "Cash", "Card", "BankTransfer"], {
-      required_error: "Select a payment method",
+      error: "Select a payment method",
     }),
     transactionRef: z.string().optional(),
     notes: z.string().optional(),
@@ -65,6 +71,9 @@ export default function PaymentPendingStep({
   const [isPending, startTransition] = useTransition();
   const receipt = useSingleUpload();
 
+  const [qrZoomOpen, setQrZoomOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -77,6 +86,29 @@ export default function PaymentPendingStep({
 
   const method = watch("method");
   const totalDue = plan.price + plan.joiningFee;
+
+  const handleDownloadQr = async () => {
+    if (!gym.paymentQrUrl) return;
+    setIsDownloading(true);
+    try {
+      const res = await fetch(gym.paymentQrUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${gym.name.replace(/\s+/g, "-").toLowerCase()}-payment-qr.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading QR:", error);
+      // fallback: open in new tab if fetch/blob fails (e.g. CORS)
+      window.open(gym.paymentQrUrl, "_blank");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const onSubmit = (data: PaymentFormInput) => {
     if (isPending) return;
@@ -136,7 +168,8 @@ export default function PaymentPendingStep({
               {method === "UPI" && gym.paymentQrUrl && (
                 <div className="flex flex-col items-center gap-2 rounded-lg border border-border p-4">
                   <QrCode className="w-4 h-4 text-muted-foreground" />
-                  <div className="relative h-40 w-40 bg-white">
+
+                  <div className="relative h-40 w-40 bg-white group">
                     <Image
                       src={gym.paymentQrUrl}
                       alt="Gym payment QR code"
@@ -144,7 +177,37 @@ export default function PaymentPendingStep({
                       unoptimized
                       className="object-contain"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setQrZoomOpen(true)}
+                      className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors"
+                      aria-label="Zoom QR code"
+                    >
+                      <Maximize2 className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
                   </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQrZoomOpen(true)}
+                      className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                    >
+                      <Maximize2 className="w-3 h-3" />
+                      Zoom
+                    </button>
+                    <span className="text-muted-foreground/40">·</span>
+                    <button
+                      type="button"
+                      onClick={handleDownloadQr}
+                      disabled={isDownloading}
+                      className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <Download className="w-3 h-3" />
+                      {isDownloading ? "Downloading…" : "Download"}
+                    </button>
+                  </div>
+
                   <p className="text-xs text-muted-foreground text-center">
                     Scan to pay {gym.name}, then upload proof below.
                   </p>
@@ -214,6 +277,42 @@ export default function PaymentPendingStep({
           </div>
         </div>
       </form>
+
+      <Dialog open={qrZoomOpen} onOpenChange={setQrZoomOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Payment QR Code</DialogTitle>
+            <DialogDescription>
+              Scan to pay {gym.name}, then upload your receipt.
+            </DialogDescription>
+          </DialogHeader>
+
+          {gym.paymentQrUrl && (
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative h-72 w-72 bg-white rounded-md overflow-hidden">
+                <Image
+                  src={gym.paymentQrUrl}
+                  alt="Gym payment QR code"
+                  fill
+                  unoptimized
+                  className="object-contain"
+                />
+              </div>
+
+              <Button
+                type="button"
+                onClick={handleDownloadQr}
+                disabled={isDownloading}
+                variant="outline"
+                className="w-full"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {isDownloading ? "Downloading…" : "Download QR"}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

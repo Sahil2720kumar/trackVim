@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useClerk } from "@clerk/nextjs";
 import {
   LayoutDashboard,
   Users,
@@ -18,6 +19,7 @@ import {
   Menu,
   X,
   FileText,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -33,6 +35,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { toast } from "sonner";
 
 // Types
 interface NavItem {
@@ -418,6 +421,21 @@ export function Sidebar({
     new Set(["Members"]), // default open
   );
 
+  const [isPending, startTransition] = useTransition();
+  const { signOut, session } = useClerk();
+  const router = useRouter();
+  const handleSignOut = async () => {
+    if (isPending) return;
+    try {
+      await signOut();
+      toast.success("Logged out successfully");
+      router.push("/sign-in");
+    } catch (error) {
+      console.error("Sign out failed:", error);
+      toast.error("Something went wrong signing out");
+    }
+  };
+
   const navItems = navigationConfig[role] || navigationConfig.owner;
 
   const toggleExpand = (label: string) => {
@@ -525,9 +543,17 @@ export function Sidebar({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl cursor-pointer text-destructive hover:bg-destructive/10 transition-all duration-150">
-                    <LogOut className="h-5 w-5" />
-                  </div>
+                  <button
+                    onClick={handleSignOut}
+                    disabled={isPending}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl cursor-pointer text-destructive hover:bg-destructive/10 transition-all duration-150"
+                  >
+                    {isPending ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <LogOut className="h-5 w-5" />
+                    )}
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent
                   side="right"
@@ -538,12 +564,20 @@ export function Sidebar({
               </Tooltip>
             </TooltipProvider>
           ) : (
-            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 cursor-pointer text-destructive hover:bg-destructive/10 group">
+            <button
+              onClick={handleSignOut}
+              disabled={isPending}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 cursor-pointer text-destructive hover:bg-destructive/10 group"
+            >
               <span className="flex h-8 w-8 items-center justify-center rounded-lg text-destructive bg-destructive/10 flex-shrink-0">
-                <LogOut className="h-4 w-4" />
+                {isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <LogOut className="h-4 w-4" />
+                )}
               </span>
               <span className="text-sm font-medium">Sign Out</span>
-            </div>
+            </button>
           )}
         </div>
       </aside>

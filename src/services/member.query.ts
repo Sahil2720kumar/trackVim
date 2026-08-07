@@ -292,6 +292,7 @@ export type MembershipApplicationByPlanIdPageData = {
     city: string | null;
     address: string | null;
     isVerified: boolean;
+    paymentQrUrl: string | null;
     memberCount: number;
     trainerCount: number;
   };
@@ -581,14 +582,12 @@ export async function getMyApplicationById(applicationId: string) {
     .select(
       `
       id,
-      status,
       message,
       rejection_reason,
       created_at,
       reviewed_at,
       reviewer:users (
-        full_name,
-        avatar_url
+        full_name
       ),
       gyms (
         id,
@@ -623,12 +622,7 @@ export async function getMyApplicationById(applicationId: string) {
       gym_memberships (
         id,
         status,
-        start_date,
-        end_date,
         final_amount,
-        joining_fee,
-        plan_price,
-        discount,
         activated_at,
         cancelled_at,
         cancellation_reason,
@@ -637,12 +631,10 @@ export async function getMyApplicationById(applicationId: string) {
           amount,
           status,
           method,
-          transaction_ref,
-          payment_date,
           verified_at,
           rejection_reason,
-          notes,
           created_at,
+          updated_at,
           payment_receipts (
             id,
             file_url,
@@ -655,6 +647,13 @@ export async function getMyApplicationById(applicationId: string) {
     )
     .eq("id", applicationId)
     .eq("member_id", meta.memberId)
+    .order("uploaded_at", {
+      referencedTable: "gym_memberships.payments.payment_receipts",
+      ascending: false,
+    })
+    .limit(1, {
+      referencedTable: "gym_memberships.payments.payment_receipts",
+    })
     .maybeSingle();
 
   if (error) {
