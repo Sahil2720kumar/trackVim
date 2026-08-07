@@ -1045,3 +1045,46 @@ extend_gym_trial()
 This architecture is well structured: **user-facing actions** (approvals, payments, attendance, renewals) are handled through RPCs, **automatic row-level reactions** (defaults, notifications) are handled by triggers, and **time-based operations** (billing, expiration, overdue checks) are handled by scheduled cron jobs.
 
 <!-- END:nextjs-agent-rules -->
+
+```text
+APPLICATION
+Pending
+│
+├── Reject → Rejected
+│
+└── Approve
+↓
+GYM MEMBERSHIP
+PaymentPending
+↓
+PAYMENT
+Pending
+↓
+Member uploads:
+
+- Transaction Reference
+- Payment Screenshot
+- Notes
+  ↓
+  PAYMENT
+  PendingVerification
+  GYM MEMBERSHIP
+  PaymentUploaded
+  ↓
+  Owner
+  / \
+   Reject Verify
+  ↓ ↓
+  PAYMENT PAYMENT
+  Rejected Verified
+  ↓ ↓
+  MEMBERSHIP MEMBERSHIP
+  PaymentRejected Active
+  │
+  │ Member uploads again
+  ↓
+  PAYMENT
+  PendingVerification
+  MEMBERSHIP
+  PaymentUploaded
+```

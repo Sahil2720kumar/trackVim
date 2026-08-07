@@ -810,19 +810,19 @@ export async function addMemberAction(
 ): Promise<ActionResult<{ memberId: string; membershipId: string }>> {
   // 1. Auth
   const { sessionClaims } = await auth();
-  const staffMeta = (sessionClaims?.publicMetadata ?? {}) as {
+  const ownerMeta = (sessionClaims?.publicMetadata ?? {}) as {
     role?: string;
     gymId?: string;
   };
-  const isOwner = staffMeta.role === "owner";
+  const isOwner = ownerMeta.role === "owner";
 
-  if ((!isOwner && staffMeta.role !== "trainer") || !staffMeta.gymId) {
+  if ((!isOwner && ownerMeta.role !== "trainer") || !ownerMeta.gymId) {
     return {
       success: false,
       error: "Not authorized to add members for a gym.",
     };
   }
-  const gymId = staffMeta.gymId;
+  const gymId = ownerMeta.gymId;
 
   // 2. Validate
   const parsed = inviteMemberFormSchema.safeParse(data);
@@ -866,7 +866,7 @@ export async function addMemberAction(
   // 4. Step 2 — "Membership", Option A (no application). Creates the
   // gym_membership (PaymentPending) AND the Pending payment stub together.
   const { data: membershipId, error: membershipError } = await supabase.rpc(
-    "create_walkin_membership_v2",
+    "create_walkin_membership",
     {
       p_gym_id: gymId,
       p_member_id: member.id,
@@ -1150,8 +1150,8 @@ export async function approveMembershipApplicationAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/applications");
-  revalidatePath("/dashboard/members");
+  revalidatePath(`/owner/applications/${applicationId}`);
+  revalidatePath("/owner/applications");
   return { success: true, data: { membershipId: data as string } };
 }
 
@@ -1173,7 +1173,8 @@ export async function rejectMembershipApplicationAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/applications");
+  revalidatePath("/owner/applications/[applicationId]", "page");
+  revalidatePath("/owner/applications");
   return { success: true, data: undefined };
 }
 
@@ -1198,8 +1199,7 @@ export async function verifyPaymentAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/payments");
-  revalidatePath("/dashboard/members");
+  revalidatePath(`/owner/applications/[applicationId]`,"page");
   return { success: true, data: undefined };
 }
 
@@ -1222,7 +1222,7 @@ export async function rejectPaymentAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/payments");
+  revalidatePath(`/owner/applications/[applicationId]`,"page");
   return { success: true, data: undefined };
 }
 
@@ -1250,7 +1250,7 @@ export async function renewMembershipAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/members");
+  revalidatePath("/owner/members");
   return { success: true, data: { membershipId: data as string } };
 }
 

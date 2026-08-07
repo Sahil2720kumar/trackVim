@@ -4,10 +4,19 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   reactStrictMode: false,
   experimental: {
-    turbopackFileSystemCacheForDev: true,
     serverActions: {
       bodySizeLimit: "30mb",
     },
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        port: "",
+        pathname: "/**",
+      },
+    ],
   },
 };
 

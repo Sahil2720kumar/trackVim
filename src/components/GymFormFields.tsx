@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import { AlertCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -19,6 +20,7 @@ export const FormInput = ({
   placeholder,
   type = "text",
   error,
+  className,
   ...props
 }: any) => (
   <div className="flex flex-col gap-1.5 min-w-0">
@@ -29,11 +31,13 @@ export const FormInput = ({
     <input
       type={type}
       placeholder={placeholder}
-      className={`w-full px-3 py-2 rounded-lg border transition-colors ${
+      className={cn(
+        "w-full px-3 py-2 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20",
         error
           ? "border-destructive bg-destructive/5"
-          : "border-border bg-background hover:border-border/80 focus:border-primary"
-      } focus:outline-none focus:ring-2 focus:ring-primary/20 `}
+          : "border-border bg-background hover:border-border/80 focus:border-primary",
+        className,
+      )}
       {...props}
     />
     {error && (

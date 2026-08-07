@@ -197,6 +197,7 @@ export async function createMemberProfileAction(
       },
     });
   } catch (err) {
+    console.log(" error from auth update", err);
     return {
       success: false,
       error:
@@ -329,54 +330,61 @@ export async function switchActiveGymMembershipAction(
  * Submit a membership application to a gym.
  * RLS: member_id must equal current_member_id().
  */
-export async function applyForMembershipAction(payload: {
+
+type SubmitApplicationInput = {
   gymId: string;
-  memberId: string;
   planId: string;
   message?: string;
-}): Promise<ActionResult<{ id: string }>> {
+  emergencyContactPhone?: string;
+  fitnessGoal?: string;
+  medicalNotes?: string;
+};
+
+export type SubmitApplicationResult =
+  | { success: true; applicationId: string }
+  | { success: false; error: string };
+
+// Maps the RPC's `raise exception 'code'` text to something a member should
+// actually see. Anything not in this map (a real DB error, a typo'd
+// exception, etc.) falls through to a generic message rather than leaking
+// Postgres internals to the client.
+const ERROR_MESSAGES: Record<string, string> = {
+  member_not_found:
+    "We couldn't find your member profile. Please sign in again.",
+  gym_not_found: "This gym is no longer accepting applications.",
+  plan_not_found: "This plan is no longer available.",
+  already_applied:
+    "You already have a pending or approved application at this gym.",
+};
+
+export async function submitMembershipApplicationAction(
+  input: SubmitApplicationInput,
+): Promise<SubmitApplicationResult> {
   const supabase = await createServerClient();
 
-  // Prevent duplicate pending applications
-  const { data: existing } = await supabase
-    .from("membership_applications")
-    .select("id, status")
-    .eq("gym_id", payload.gymId)
-    .eq("member_id", payload.memberId)
-    .eq("status", "Pending")
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("submit_membership_application", {
+    p_gym_id: input.gymId,
+    p_plan_id: input.planId,
+    p_emergency_contact_phone: input.emergencyContactPhone ?? "",
+    p_fitness_goal: input.fitnessGoal ?? "",
+    p_medical_notes: input.medicalNotes ?? "",
+    p_message: input.message ?? "",
+  });
 
-  if (existing) {
+  if (error) {
+    const code = error.message?.trim();
+    console.log(error);
     return {
       success: false,
-      error: "You already have a pending application to this gym.",
+      error:
+        ERROR_MESSAGES[code] ??
+        "Something went wrong submitting your application. Please try again.",
     };
   }
 
-  const { data, error } = await supabase
-    .from("membership_applications")
-    .insert({
-      gym_id: payload.gymId,
-      member_id: payload.memberId,
-      plan_id: payload.planId,
-      message: payload.message,
-      status: "Pending",
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    if (error.code === "23505") {
-      return {
-        success: false,
-        error: "You already have a pending application to this gym.",
-      };
-    }
-    return { success: false, error: error.message };
-  }
-
-  revalidatePath("/my/applications");
-  return { success: true, data: { id: data.id } };
+  revalidatePath(`/member/discover/${input.gymId}/apply`);
+  revalidatePath("/member/applications");
+  return { success: true, applicationId: data as string };
 }
 
 // ============================================================================
@@ -392,35 +400,156 @@ export async function applyForMembershipAction(payload: {
  *   - status is set server-side to PendingVerification (cannot be faked)
  *   - A payment_receipts row is created (old one's is_current flipped to false)
  */
-export async function submitPaymentAction(
-  paymentId: string,
-  payload: {
-    method:
-      | "Cash"
-      | "UPI"
-      | "Card"
-      | "Bank Transfer"
-      | "Net Banking"
-      | "Razorpay";
-    receiptFileUrl: string;
-    fileType?: string;
-    transactionRef?: string;
-  },
-): Promise<ActionResult> {
-  const supabase = await createServerClient();
 
-  const { error } = await (supabase.rpc as any)("submit_payment", {
-    p_payment_id: paymentId,
-    p_method: payload.method,
-    p_receipt_file_url: payload.receiptFileUrl,
-    p_file_type: payload.fileType ?? "image",
-    p_transaction_ref: payload.transactionRef ?? undefined,
+const PAYMENT_ERROR_MESSAGES: Record<string, string> = {
+  "Payment not found.":
+    "We couldn't find this payment. Please refresh and try again.",
+  "Not authorized to submit this payment.":
+    "You're not authorized to submit this payment.",
+};
+
+function getPaymentErrorMessage(rawMessage: string | undefined): string {
+  const message = rawMessage?.trim() ?? "";
+
+  if (PAYMENT_ERROR_MESSAGES[message]) {
+    return PAYMENT_ERROR_MESSAGES[message];
+  }
+
+  if (message.startsWith("Payment is not awaiting submission")) {
+    return "This payment has already been submitted or is no longer awaiting submission.";
+  }
+
+  return "Something went wrong submitting your payment. Please try again.";
+}
+
+type SubmitPaymentInput = {
+  gymMembershipId: string;
+  gymId: string;
+  amount: number;
+  method:
+    | "UPI"
+    | "Cash"
+    | "Card"
+    | "Bank Transfer"
+    | "Net Banking"
+    | "Razorpay";
+  transactionRef?: string;
+  notes?: string;
+};
+
+type SubmitPaymentFiles = {
+  receipt: File | null;
+};
+
+export type SubmitPaymentResult =
+  | { success: true; paymentId: string }
+  | { success: false; error: string };
+
+export async function submitPaymentAction(
+  input: SubmitPaymentInput,
+  files: SubmitPaymentFiles,
+): Promise<SubmitPaymentResult> {
+  const supabase = await createServerClient();
+  const { userId, sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    memberId?: string;
+  };
+
+  if (!userId || !meta.memberId) {
+    return {
+      success: false,
+      error: "You must be signed in to submit a payment.",
+    };
+  }
+
+  // Server-side validation
+  if (input.method !== "Cash" && !files.receipt) {
+    return {
+      success: false,
+      error:
+        "A payment screenshot or receipt is required for this payment method.",
+    };
+  }
+
+  const { data: payment, error: paymentError } = await supabase
+    .from("payments")
+    .select("id, status")
+    .eq("gym_membership_id", input.gymMembershipId)
+    .eq("member_id", meta.memberId)
+    .in("status", ["Pending", "Rejected", "PendingVerification"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (paymentError) {
+    console.error("Failed to load pending payment", paymentError);
+    return {
+      success: false,
+      error: "We could not load your payment. Please try again.",
+    };
+  }
+  if (!payment) {
+    return { success: false, error: "No pending payment was found." };
+  }
+
+  // Upload receipt first (if provided)
+  let receiptUrl = "";
+
+  if (files.receipt) {
+    try {
+      const uploaded = await uploadFile(
+        files.receipt,
+        `trackVim/members/${userId}/payment-receipts`,
+      );
+
+      if (!uploaded) {
+        return {
+          success: false,
+          error: "Failed to upload receipt. Please try again.",
+        };
+      }
+
+      receiptUrl = uploaded;
+    } catch (err) {
+      console.error("Receipt upload failed", err);
+      return {
+        success: false,
+        error: "Failed to upload receipt. Please try again.",
+      };
+    }
+  } else if (input.method !== "Cash") {
+    // Should be unreachable given the earlier validation, but guard anyway.
+    return {
+      success: false,
+      error: "A receipt is required to submit this payment.",
+    };
+  }
+
+  // Submit payment via RPC
+  const { error } = await supabase.rpc("submit_payment", {
+    p_payment_id: payment.id,
+    p_method: input.method,
+    p_receipt_file_url: receiptUrl, // empty string for Cash with no receipt
+    p_file_type: files.receipt?.type ?? "image",
+    ...(input.transactionRef
+      ? { p_transaction_ref: input.transactionRef }
+      : {}),
   });
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    console.error(error);
+    return {
+      success: false,
+      error: getPaymentErrorMessage(error.message),
+    };
+  }
 
-  revalidatePath("/my/payments");
-  return { success: true, data: undefined };
+  revalidatePath(`/member/discover/${input.gymId}/apply`);
+  revalidatePath("/member/applications");
+  return {
+    success: true,
+    paymentId: payment.id,
+  };
 }
 
 // ============================================================================
@@ -437,6 +566,7 @@ export async function submitPaymentAction(
  *
  * Returns: { action: 'checked_in' | 'checked_out' | 'already_done', ... }
  */
+
 export async function checkInOrOutAction(qrIdentifier: string): Promise<
   ActionResult<{
     action: "checked_in" | "checked_out" | "already_done";

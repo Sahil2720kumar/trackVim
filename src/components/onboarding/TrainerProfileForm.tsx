@@ -175,7 +175,7 @@ export default function TrainerProfileForm({
 
         await session?.reload();
         toast.success("Profile saved successfully");
-        router.push("/trainer/dashboard");
+        router.replace("/trainer/dashboard");
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");
@@ -184,7 +184,8 @@ export default function TrainerProfileForm({
   };
 
   const handleSkip = () => {
-    router.push("/trainer/dashboard");
+    toast.error("Please fill all the required fields");
+    // router.push("/trainer/dashboard");
   };
 
   return (

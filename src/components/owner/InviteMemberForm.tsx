@@ -143,7 +143,8 @@ export default function InviteMemberForm({
 
   const calculateTotalAmount = () => {
     if (!selectedPlan) return 0;
-    return Number(selectedPlan.plan_price) * durationMonths;
+    return Number(selectedPlan.plan_price);
+    // return Number(selectedPlan.plan_price) * durationMonths;
   };
 
   // Percentage discounts scale with the total (price × duration); flat

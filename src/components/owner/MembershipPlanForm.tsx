@@ -214,7 +214,6 @@ export default function MembershipPlanForm() {
     if (isPending) return;
     startTransition(async () => {
       try {
-        console.log(data);
         const result = await createMembershipPlanAction(data);
         if (!result.success) {
           console.log(result.error);
@@ -336,13 +335,6 @@ export default function MembershipPlanForm() {
               placeholder="₹0"
               {...register("joiningFee")}
               error={errors.joiningFee}
-            />
-            <FormInput
-              label="Security Deposit"
-              type="number"
-              placeholder="₹0"
-              {...register("securityDeposit")}
-              error={errors.securityDeposit}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

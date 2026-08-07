@@ -828,6 +828,7 @@ export type Database = {
       }
       membership_applications: {
         Row: {
+          applicant_notes: Json | null
           created_at: string
           gym_id: string
           id: string
@@ -841,6 +842,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          applicant_notes?: Json | null
           created_at?: string
           gym_id: string
           id?: string
@@ -854,6 +856,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          applicant_notes?: Json | null
           created_at?: string
           gym_id?: string
           id?: string
@@ -2101,6 +2104,27 @@ export type Database = {
         Args: { p_period_end: string; p_period_start: string }
         Returns: number
       }
+      get_membership_application_page_data: {
+        Args: { p_gym_id: string; p_plan_id: string }
+        Returns: Json
+      }
+      get_public_gyms: {
+        Args: { p_city?: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          amenities: Json
+          city: string
+          code: string
+          gym_description: string
+          id: string
+          is_verified: boolean
+          logo_url: string
+          member_count: number
+          name: string
+          starting_price: number
+          state: string
+          trainer_count: number
+        }[]
+      }
       gym_subscription_plan_for: {
         Args: { p_gym_id: string }
         Returns: {
@@ -2162,6 +2186,17 @@ export type Database = {
         Returns: string
       }
       staff_gym_ids: { Args: never; Returns: string[] }
+      submit_membership_application: {
+        Args: {
+          p_emergency_contact_phone: string
+          p_fitness_goal: string
+          p_gym_id: string
+          p_medical_notes: string
+          p_message: string
+          p_plan_id: string
+        }
+        Returns: string
+      }
       submit_payment: {
         Args: {
           p_file_type?: string
