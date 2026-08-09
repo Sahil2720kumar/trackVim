@@ -141,6 +141,20 @@
       "when": 1786008893519,
       "tag": "0019_cynical_tiger_shark",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786262723383,
+      "tag": "0020_eager_lockjaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1786278725256,
+      "tag": "0021_robust_junta",
+      "breakpoints": true
     }
   ]
 }

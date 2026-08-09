@@ -382,13 +382,9 @@ export type Database = {
           gym_id: string
           id: string
           is_active: boolean
-          label: string | null
+          label: string
           location_id: string | null
-          qr_identifier: string
-          rotating_token: string | null
-          signature_secret: string
-          token_expires_at: string | null
-          type: Database["public"]["Enums"]["qr_code_type"]
+          token: string
           updated_at: string
         }
         Insert: {
@@ -396,13 +392,9 @@ export type Database = {
           gym_id: string
           id?: string
           is_active?: boolean
-          label?: string | null
+          label?: string
           location_id?: string | null
-          qr_identifier: string
-          rotating_token?: string | null
-          signature_secret: string
-          token_expires_at?: string | null
-          type?: Database["public"]["Enums"]["qr_code_type"]
+          token?: string
           updated_at?: string
         }
         Update: {
@@ -410,13 +402,9 @@ export type Database = {
           gym_id?: string
           id?: string
           is_active?: boolean
-          label?: string | null
+          label?: string
           location_id?: string | null
-          qr_identifier?: string
-          rotating_token?: string | null
-          signature_secret?: string
-          token_expires_at?: string | null
-          type?: Database["public"]["Enums"]["qr_code_type"]
+          token?: string
           updated_at?: string
         }
         Relationships: [
@@ -2012,7 +2000,9 @@ export type Database = {
         Args: { p_gym_id: string; p_new_plan_id: string }
         Returns: undefined
       }
-      check_in_or_out: { Args: { qr_identifier: string }; Returns: Json }
+      check_in_or_out:
+        | { Args: { p_token: string }; Returns: Json }
+        | { Args: { qr_identifier: string }; Returns: Json }
       create_gym_invoice: {
         Args: {
           p_gym_id: string
@@ -2172,6 +2162,25 @@ export type Database = {
           p_transaction_ref?: string
         }
         Returns: undefined
+      }
+      regenerate_gym_qr_code: {
+        Args: { p_gym_id: string; p_label?: string }
+        Returns: {
+          created_at: string
+          gym_id: string
+          id: string
+          is_active: boolean
+          label: string
+          location_id: string | null
+          token: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "gym_qr_codes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       reject_membership_application: {
         Args: { p_application_id: string; p_reason: string }

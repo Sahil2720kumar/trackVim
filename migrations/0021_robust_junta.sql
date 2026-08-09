@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "one_active_membership_per_member_gym" ON "gym_memberships" USING btree ("member_id","gym_id") WHERE "gym_memberships"."status" = 'Active';

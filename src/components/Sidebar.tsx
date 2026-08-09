@@ -20,6 +20,7 @@ import {
   X,
   FileText,
   Loader2,
+  QrCode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -101,6 +102,11 @@ const navigationConfig: NavConfig = {
         { icon: <></>, label: "All Payments", href: "/owner/payments" },
         { icon: <></>, label: "Add New Payment", href: "/owner/payments/new" },
       ],
+    },
+    {
+      icon: <QrCode className="h-5 w-5" />,
+      label: "QR Codes",
+      href: "/owner/qr-codes",
     },
     {
       icon: <Settings className="h-5 w-5" />,
@@ -419,22 +425,21 @@ export function Sidebar({
     new Set(["Members"]), // default open
   );
 
-  const [isPending, startTransition] = useTransition();
-  const { signOut, session } = useClerk();
-  const router = useRouter();
+  const [isPending, setIsPending] = useState(false);
 
-  const handleSignOut = () => {
-    if (isPending) return;
-    startTransition(async () => {
-      try {
-        await signOut();
-        toast.success("Logged out successfully");
-        router.push("/sign-in");
-      } catch (error) {
-        console.error("Sign out failed:", error);
-        toast.error("Something went wrong signing out");
-      }
-    });
+  const { signOut } = useClerk();
+  const handleSignOut = async () => {
+    try {
+      setIsPending(true);
+      await signOut();
+
+      window.location.replace("/sign-in");
+    } catch (error) {
+      console.error("Sign out failed:", error);
+      toast.error("Something went wrong signing out");
+    } finally {
+      setIsPending(false);
+    }
   };
 
   const navItems = navigationConfig[role] || navigationConfig.owner;
