@@ -17,10 +17,9 @@ export default async function ScanPage({
 
   if (!userId) {
     redirect(
-      `/sign-in?redirect_url=${encodeURIComponent(`/scan?token=${token}`)}`,
+      `/sign-in?redirect_url=${encodeURIComponent(`/member/scan?token=${token}`)}`,
     );
   }
-
   const result = await processAttendance(token);
 
   return <ScanResultView result={result} />;

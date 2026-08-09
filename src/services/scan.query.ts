@@ -475,3 +475,12 @@ export async function getMemberHomeState(): Promise<MemberHomeState> {
 //                      ▼    ▼    ▼
 //                   Not    In   Out
 //                   check
+
+// CodeRabbit
+// Resolve the current gym membership via activeGymMembershipId, not by scanning all memberships.
+
+// This code derives gymTimezone/todayIso from the most recently created membership row, then searches all memberships — across any gym — for one active today. Two problems follow from this:
+
+// If the most recently created membership belongs to a different gym than the one that is actually active today, date comparisons use the wrong gym's timezone. Near a day boundary, this can misclassify a membership as active or inactive.
+// If a member has simultaneously Active memberships at two different gyms, this returns whichever one happens to sort first by created_at, not necessarily the member's currently selected gym.
+// Per the architecture, members.active_gym_membership_id is the canonical pointer for a member's current gym. Fetch that column and resolve the "active" membership and its gym's timezone from it directly, falling back to the existing heuristic only when the pointer is unset.
