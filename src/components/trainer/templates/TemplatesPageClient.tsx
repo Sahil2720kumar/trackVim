@@ -330,6 +330,7 @@ function ExpandableExercisesRow({ template }: ExpandableRowProps) {
 // ============================================================================
 
 function EmptyState() {
+  const router = useRouter();
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-12 text-center">
       <div className="rounded-lg bg-muted p-3">
@@ -343,7 +344,10 @@ function EmptyState() {
           Create your first workout template to quickly build future sessions.
         </p>
       </div>
-      <Button className="mt-4">
+      <Button
+        onClick={() => router.push("/trainer/templates/new")}
+        className="mt-4"
+      >
         <Plus className="mr-2 size-4" />
         Create Template
       </Button>

@@ -67,7 +67,7 @@ const getMembershipStatusColor = (status: string | null) => {
 export function TrainerAssignedMembersTable({
   initialMembers,
 }: TrainerAssignedMembersTableProps) {
-  const [members] = useState<AssignedMember[]>(initialMembers);
+  const members = initialMembers;
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -112,11 +112,18 @@ export function TrainerAssignedMembersTable({
       m.membershipStatus ?? "",
       `${m.attendanceRate}%`,
       m.progressLabel,
-      formatDate(m.assignedAt),
+      formatDateStr(m.assignedAt),
       m.notes ?? "",
     ]);
+
+    const escapeCsvCell = (value: unknown) => {
+      const text = String(value ?? "");
+      const safeText = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+      return `"${safeText.replace(/"/g, '""')}"`;
+    };
+
     const csvContent = [headers, ...rows]
-      .map((row) => row.map((val) => `"${val}"`).join(","))
+      .map((row) => row.map(escapeCsvCell).join(","))
       .join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });

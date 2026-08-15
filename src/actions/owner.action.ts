@@ -812,10 +812,19 @@ export async function deactivateTrainerAction(trainerId: string) {
 
 export async function deleteTrainerAction(trainerId: string) {
   const supabase = await createServerClient();
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || !meta.gymId) {
+    return { success: false as const, error: "Not authorized." };
+  }
   const { error } = await supabase
     .from("trainers")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", trainerId);
+    .eq("id", trainerId)
+    .eq("gym_id", meta.gymId);
 
   if (error) return { success: false as const, error: error.message };
   revalidatePath("/owner/trainers");
