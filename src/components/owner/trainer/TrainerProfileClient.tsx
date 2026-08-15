@@ -38,13 +38,34 @@ import { QuickActionsGrid } from "@/components/QuickActionsGrid";
 import { trainerDetailQuickActions } from "@/components/owner/quick-actions-data";
 import { bigSquareButton } from "@/lib/styles";
 import { TrainerAssignedMembersTable } from "@/components/owner/TrainerAssignedMembersTable";
-import { initialAssignedMembers } from "@/mock/trainerAssignedMembers"; // still mock — see note below
 import {
   deactivateTrainerAction,
   deleteTrainerAction,
 } from "@/actions/owner.action";
-import { type TrainerDetail } from "@/services/owner.query";
+import {
+  type TrainerDetail,
+  type AssignedMember,
+} from "@/services/owner.query";
+import { getInitials } from "@/lib/utils";
+import { type trainerStatusEnum } from "@/db/schema";
 
+export type TrainerStatus = (typeof trainerStatusEnum.enumValues)[number];
+
+export const TRAINER_STATUS_COLORS: Record<TrainerStatus, string> = {
+  Active: "bg-emerald-100 text-emerald-700 border-0",
+  Busy: "bg-amber-100 text-amber-700 border-0",
+  "On Leave": "bg-blue-100 text-blue-700 border-0",
+  Offline: "bg-gray-100 text-gray-600 border-0",
+  Invited: "bg-purple-100 text-purple-700 border-0",
+  Inactive: "bg-rose-100 text-rose-700 border-0",
+};
+
+export function getTrainerStatusColor(status: string) {
+  return (
+    TRAINER_STATUS_COLORS[status as TrainerStatus] ??
+    "bg-gray-100 text-gray-600 border-0"
+  );
+}
 const SPEC_COLORS = [
   "bg-purple-100 text-purple-700",
   "bg-blue-100 text-blue-700",
@@ -58,7 +79,7 @@ type Props = {
   initialTrainer: TrainerDetail;
   initialStats: { sessionsThisMonth: number; attendanceRate: number };
   monthlySessions: { month: string; sessions: number }[];
-  assignedMembersCount: number;
+  assignedMembers: AssignedMember[];
 };
 
 export function TrainerProfileClient({
@@ -66,7 +87,7 @@ export function TrainerProfileClient({
   initialTrainer,
   initialStats,
   monthlySessions,
-  assignedMembersCount,
+  assignedMembers,
 }: Props) {
   const router = useRouter();
 
@@ -103,7 +124,7 @@ export function TrainerProfileClient({
           return;
         }
         toast.success("Trainer deleted");
-        router.push("/trainers");
+        router.push("/owner/trainers");
       } catch (error) {
         console.error("Error deleting trainer:", error);
         toast.error("Error deleting trainer. Please try again.");
@@ -111,12 +132,6 @@ export function TrainerProfileClient({
     });
   };
 
-  const initials = (trainer.full_name ?? "")
-    .split(" ")
-    .map((p) => p[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
   const workingHours =
     trainer.start_time && trainer.end_time
       ? `${trainer.start_time} - ${trainer.end_time}`
@@ -133,14 +148,16 @@ export function TrainerProfileClient({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
               <Avatar className="h-20 w-20 border-2 border-border sm:h-24 sm:w-24">
                 <AvatarImage src={trainer.photo_url ?? undefined} />
-                <AvatarFallback>{initials || "NA"}</AvatarFallback>
+                <AvatarFallback>
+                  {getInitials(trainer.full_name || "NA")}
+                </AvatarFallback>
               </Avatar>
               <div className="sm:pt-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-xl font-bold text-foreground sm:text-2xl">
-                    {trainer.full_name}
+                    {trainer.full_name ?? "-"}
                   </h1>
-                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                  <Badge className={getTrainerStatusColor(trainer.status)}>
                     {trainer.status}
                   </Badge>
                 </div>
@@ -169,7 +186,7 @@ export function TrainerProfileClient({
               <Button
                 variant="ghost"
                 className={bigSquareButton}
-                onClick={() => router.push("/trainers")}
+                onClick={() => router.push("/owner/trainers")}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Trainers
@@ -177,7 +194,7 @@ export function TrainerProfileClient({
               <Button
                 variant="outline"
                 className={bigSquareButton}
-                onClick={() => router.push(`/trainers/${trainerId}/edit`)}
+                onClick={() => router.push(`/owner/trainers/${trainerId}/edit`)}
               >
                 <Edit3 className="w-4 h-4 mr-2" />
                 Edit Trainer
@@ -232,7 +249,7 @@ export function TrainerProfileClient({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               title="Assigned Members"
-              value={assignedMembersCount}
+              value={assignedMembers.length}
               icon={Users}
               iconBg="bg-violet-100 dark:bg-violet-500/15"
               iconColor="text-violet-600"
@@ -356,10 +373,8 @@ export function TrainerProfileClient({
             </Card>
           </div>
 
-          {/* Assigned Members — still mock; needs the assignment table noted above */}
-          <TrainerAssignedMembersTable
-            initialMembers={initialAssignedMembers}
-          />
+          {/* Assigned Members — live from trainer_assignments */}
+          <TrainerAssignedMembersTable initialMembers={assignedMembers} />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card className="p-4 sm:p-6">
@@ -383,7 +398,9 @@ export function TrainerProfileClient({
               <div className="text-center py-3">
                 <Avatar className="h-16 w-16 mx-auto mb-2 border-2 border-border">
                   <AvatarImage src={trainer.photo_url ?? undefined} />
-                  <AvatarFallback>{initials || "NA"}</AvatarFallback>
+                  <AvatarFallback>
+                    {getInitials(trainer.full_name || "NA")}
+                  </AvatarFallback>
                 </Avatar>
                 <p className="font-semibold text-foreground">
                   {trainer.full_name}
@@ -393,7 +410,7 @@ export function TrainerProfileClient({
                     Employee ID: {trainer.employee_id}
                   </p>
                 )}
-                <Badge className="mt-2 bg-emerald-100 text-emerald-700 border-0">
+                <Badge className={getTrainerStatusColor(trainer.status)}>
                   {trainer.status}
                 </Badge>
               </div>

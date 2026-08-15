@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { formatDate, getTodayDateStr } from "@/lib/utils";
 import { MembershipApplication } from "@/types";
 import { auth } from "@clerk/nextjs/server";
+import { meta } from "zod";
 
 // ============================================================================
 // Read-only data-fetching functions
@@ -275,6 +276,14 @@ export async function getGymAttendance(gymId: string, date?: string) {
 //Get Trainers
 export async function getAllTrainers(gymId: string) {
   const supabase = await createServerClient();
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== gymId) {
+    return { success: false as const, error: "Not authorized." };
+  }
 
   const { data, error } = await supabase
     .from("trainers")
@@ -291,6 +300,12 @@ export async function getAllTrainers(gymId: string) {
 
   return { success: true as const, data };
 }
+export type TrainerList = Extract<
+  Awaited<ReturnType<typeof getAllTrainers>>,
+  { success: true }
+>["data"];
+
+export type TrainerRow = TrainerList[number];
 
 export async function getTrainerStats(gymId: string) {
   const supabase = await createServerClient();
@@ -349,24 +364,143 @@ export async function getTrainerStats(gymId: string) {
   };
 }
 
+// ============================================================================
+// Trainer + Assigned Members — single query via FK embed
+// ============================================================================
+
+export type AssignedMember = {
+  assignmentId: string;
+  assignedAt: string;
+  notes: string | null;
+  id: string;
+  full_name: string | null;
+  photo_url: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  plan: string | null;
+  membershipStatus: string | null;
+  attendanceRate: number;
+  progressLabel: "Excellent" | "Good" | "Needs Attention";
+};
+
+function progressLabelFor(rate: number): AssignedMember["progressLabel"] {
+  if (rate >= 85) return "Excellent";
+  if (rate >= 60) return "Good";
+  return "Needs Attention";
+}
+
 export async function getTrainerById(trainerId: string, gymId: string) {
   const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("trainers")
-    .select("*")
+    .select(
+      `
+    *,
+    trainer_assignments!trainer_id (
+      id,
+      assigned_at,
+      notes,
+      is_active,
+      member:members (
+        id,
+        full_name,
+        photo_url,
+        contact_email,
+        contact_phone,
+        gym_memberships:gym_memberships!gym_memberships_member_id_members_id_fk (
+          status,
+          plan:membership_plans (
+            plan_name
+          )
+        )
+      )
+    )
+  `,
+    )
     .eq("id", trainerId)
     .eq("gym_id", gymId)
     .is("deleted_at", null)
+    .eq("trainer_assignments.is_active", true)
+    // scope the embedded memberships to the one that's actually current —
+    // a member can have years of Expired/Cancelled rows, we only want Active
+    .eq("trainer_assignments.member.gym_memberships.status", "Active")
+    .order("assigned_at", {
+      referencedTable: "trainer_assignments",
+      ascending: false,
+    })
     .single();
 
   if (error) return { success: false as const, error: error.message };
-  return { success: true as const, data };
+
+  const { trainer_assignments, ...trainer } = data;
+  const assignments = trainer_assignments ?? [];
+
+  const memberIds = assignments.map((a) => (a.member as { id: string }).id);
+
+  let attendanceByMember = new Map<string, number>();
+  const asOfDate = getTodayDateStr("Asia/Kolkata");
+  if (memberIds.length > 0) {
+    const { data: stats, error: statsError } = await supabase.rpc(
+      "get_member_attendance_stats",
+      { p_member_ids: memberIds, p_gym_id: gymId, p_as_of: asOfDate },
+    );
+    if (!statsError && stats) {
+      attendanceByMember = new Map(
+        stats.map((s) => [s.member_id, Number(s.attendance_rate)]),
+      );
+    }
+  }
+
+  const assignedMembers: AssignedMember[] = assignments.map((a) => {
+    const member = a.member as {
+      id: string;
+      full_name: string | null;
+      photo_url: string | null;
+      contact_email: string | null;
+      contact_phone: string | null;
+      gym_memberships: {
+        status: string;
+        plan: { plan_name: string } | null;
+      }[];
+    };
+    // Even scoped to status='Active' above, the FK filter only trims the
+    // array — a member with zero Active memberships still comes back as [].
+    // one_active_membership_per_member_gym guarantees at most one row here.
+    const activeMembership = member.gym_memberships?.[0] ?? null;
+    const rate = attendanceByMember.get(member.id) ?? 0;
+
+    return {
+      assignmentId: a.id,
+      assignedAt: a.assigned_at,
+      notes: a.notes,
+      id: member.id,
+      full_name: member.full_name,
+      photo_url: member.photo_url,
+      contact_email: member.contact_email,
+      contact_phone: member.contact_phone,
+      plan: activeMembership?.plan?.plan_name ?? null,
+      membershipStatus: activeMembership?.status ?? null,
+      attendanceRate: rate,
+      progressLabel: progressLabelFor(rate),
+    };
+  });
+
+  return { success: true as const, data: { trainer, assignedMembers } };
 }
 
-export type TrainerDetail = NonNullable<
-  Awaited<ReturnType<typeof getTrainerById>>["data"]
->;
+export type TrainerDetail = Extract<
+  Awaited<ReturnType<typeof getTrainerById>>,
+  { success: true }
+>["data"]["trainer"];
+
+export type TrainerAssignedMember = Extract<
+  Awaited<ReturnType<typeof getTrainerById>>,
+  { success: true }
+>["data"]["assignedMembers"][number];
+// ============================================================================
+// Session stats — kept as-is, separate queries
+// ============================================================================
 
 export async function getTrainerSessionStats(trainerId: string) {
   const supabase = await createServerClient();
@@ -401,16 +535,15 @@ export async function getTrainerSessionStats(trainerId: string) {
 export async function getMonthlySessionsForTrainer(trainerId: string) {
   const supabase = await createServerClient();
   const now = new Date();
-
-  const start = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-
-  const startDate = formatDate(start);
+  const start = formatDate(new Date(now.getFullYear(), now.getMonth() - 11, 1));
+  const end = formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
   const { data, error } = await supabase
     .from("training_sessions")
     .select("session_date")
     .eq("trainer_id", trainerId)
-    .gte("session_date", start.toISOString().slice(0, 10));
+    .gte("session_date", start)
+    .lte("session_date", end);
 
   if (error) return { success: false as const, error: error.message };
 
@@ -433,23 +566,5 @@ export async function getMonthlySessionsForTrainer(trainerId: string) {
       month,
       sessions,
     })),
-  };
-}
-
-// APPROXIMATION: there's no persistent trainer↔member assignment table in the schema
-// you've shown me, so "assigned members" here is the distinct set of members this
-// trainer has ever had a training_session with — not a true current-assignment count.
-// If members has (or should have) an assigned_trainer_id, swap this for a direct count.
-export async function getAssignedMembersCount(trainerId: string) {
-  const supabase = await createServerClient();
-  const { data, error } = await supabase
-    .from("training_sessions")
-    .select("member_id")
-    .eq("trainer_id", trainerId);
-
-  if (error) return { success: false as const, error: error.message };
-  return {
-    success: true as const,
-    data: new Set(data.map((r) => r.member_id)).size,
   };
 }

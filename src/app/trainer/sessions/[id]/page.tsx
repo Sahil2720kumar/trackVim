@@ -108,6 +108,7 @@ interface SessionDetails {
   timeRange: string;
   durationMinutes: number;
   sessionType: string;
+  workoutType: string;
   location: string;
   template: SessionTemplate;
   createdAt: string;
@@ -268,6 +269,7 @@ export function mapSessionDetails(row: any) {
     date: formatShortDate(row.session_date),
     timeRange: `${formatTime12h(row.start_time)} - ${formatTime12h(row.end_time)}`,
     durationMinutes,
+    workoutType: row.workout_type,
     sessionType: row.session_type,
     location: row.location || "—",
     template: {
@@ -772,7 +774,7 @@ export default function SessionDetailsPage({ params }: PageProps) {
   };
 
   const handleEdit = () => {
-    router.push(`/trainer/training-sessions/${sessionId}/edit`);
+    router.push(`/trainer/sessions/${sessionId}/edit`);
   };
 
   // These don't have corresponding server actions yet — wired to a
@@ -865,6 +867,11 @@ export default function SessionDetailsPage({ params }: PageProps) {
                           icon={Tag}
                           label={session.sessionType}
                           srLabel="Session type"
+                        />
+                        <MetaItem
+                          icon={Tag}
+                          label={session.workoutType}
+                          srLabel="Workout type"
                         />
                       </div>
                     </div>
@@ -987,8 +994,20 @@ export default function SessionDetailsPage({ params }: PageProps) {
                         {session.durationMinutes} min
                       </OverviewItem>
                       <OverviewItem icon={CheckCircle2} label="Status">
-                        <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1.5",
+                            STATUS_META[session.status]?.badgeClass ??
+                              STATUS_META.Missed.badgeClass,
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "h-1.5 w-1.5 rounded-full",
+                              STATUS_META[session.status]?.dotClass ??
+                                STATUS_META.Missed.dotClass,
+                            )}
+                          />
                           {session.status}
                         </span>
                       </OverviewItem>
@@ -1143,8 +1162,20 @@ export default function SessionDetailsPage({ params }: PageProps) {
                       {session.location}
                     </SummaryRow>
                     <SummaryRow icon={Gauge} label="Status">
-                      <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5",
+                          STATUS_META[session.status]?.badgeClass ??
+                            STATUS_META.Missed.badgeClass,
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full",
+                            STATUS_META[session.status]?.dotClass ??
+                              STATUS_META.Missed.dotClass,
+                          )}
+                        />
                         {session.status}
                       </span>
                     </SummaryRow>

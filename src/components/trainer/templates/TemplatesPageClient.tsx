@@ -253,100 +253,75 @@ function StatisticCard({
 
 interface ExpandableRowProps {
   template: WorkoutTemplate;
-  isOpen: boolean;
-  onToggle: () => void;
 }
 
-function ExpandableExercisesRow({
-  template,
-  isOpen,
-  onToggle,
-}: ExpandableRowProps) {
+function ExpandableExercisesRow({ template }: ExpandableRowProps) {
   return (
-    <>
-      <TableRow className="hover:bg-muted/50">
-        <TableCell colSpan={7}>
-          <button
-            onClick={onToggle}
-            className="flex w-full items-center gap-2 py-2 text-sm font-medium text-foreground hover:text-primary"
-          >
-            {isOpen ? (
-              <ChevronDown className="size-4" />
-            ) : (
-              <ChevronUp className="size-4" />
-            )}
-            Exercises Included ({template.exercises.length})
-          </button>
-        </TableCell>
-      </TableRow>
-      {isOpen && (
-        <TableRow className="bg-muted/30">
-          <TableCell colSpan={7}>
-            <div className="overflow-x-auto py-4">
-              <Table className="text-sm">
-                <TableHeader>
-                  <TableRow className="border-0 bg-transparent hover:bg-transparent">
-                    <TableHead className="text-xs font-semibold text-muted-foreground">
-                      Exercise
-                    </TableHead>
-                    <TableHead className="text-xs font-semibold text-muted-foreground">
-                      Muscle Group
-                    </TableHead>
-                    <TableHead className="text-xs font-semibold text-muted-foreground">
-                      Equipment
-                    </TableHead>
-                    <TableHead className="text-center text-xs font-semibold text-muted-foreground">
-                      Sets
-                    </TableHead>
-                    <TableHead className="text-center text-xs font-semibold text-muted-foreground">
-                      Reps
-                    </TableHead>
-                    <TableHead className="text-center text-xs font-semibold text-muted-foreground">
-                      Weight
-                    </TableHead>
-                    <TableHead className="text-center text-xs font-semibold text-muted-foreground">
-                      Rest
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {template.exercises.map((exercise) => (
-                    <TableRow
-                      key={exercise.id}
-                      className="border-0 hover:bg-muted/50"
-                    >
-                      <TableCell className="font-medium text-foreground">
-                        {exercise.name}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-xs">
-                          {exercise.muscleGroup}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {exercise.equipment}
-                      </TableCell>
-                      <TableCell className="text-center text-sm text-muted-foreground">
-                        {exercise.sets}
-                      </TableCell>
-                      <TableCell className="text-center text-sm text-muted-foreground">
-                        {exercise.reps}
-                      </TableCell>
-                      <TableCell className="text-center text-sm text-muted-foreground">
-                        {exercise.weight}
-                      </TableCell>
-                      <TableCell className="text-center text-sm text-muted-foreground">
-                        {exercise.rest}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </TableCell>
-        </TableRow>
-      )}
-    </>
+    <TableRow className="bg-muted/30">
+      <TableCell colSpan={7}>
+        <div className="overflow-x-auto py-4">
+          <Table className="text-sm">
+            <TableHeader>
+              <TableRow className="border-0 bg-transparent hover:bg-transparent">
+                <TableHead className="text-xs font-semibold text-muted-foreground">
+                  Exercise
+                </TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground">
+                  Muscle Group
+                </TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground">
+                  Equipment
+                </TableHead>
+                <TableHead className="text-center text-xs font-semibold text-muted-foreground">
+                  Sets
+                </TableHead>
+                <TableHead className="text-center text-xs font-semibold text-muted-foreground">
+                  Reps
+                </TableHead>
+                <TableHead className="text-center text-xs font-semibold text-muted-foreground">
+                  Weight
+                </TableHead>
+                <TableHead className="text-center text-xs font-semibold text-muted-foreground">
+                  Rest
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {template.exercises.map((exercise) => (
+                <TableRow
+                  key={exercise.id}
+                  className="border-0 hover:bg-muted/50"
+                >
+                  <TableCell className="font-medium text-foreground">
+                    {exercise.name}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="text-xs">
+                      {exercise.muscleGroup}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {exercise.equipment}
+                  </TableCell>
+                  <TableCell className="text-center text-sm text-muted-foreground">
+                    {exercise.sets}
+                  </TableCell>
+                  <TableCell className="text-center text-sm text-muted-foreground">
+                    {exercise.reps}
+                  </TableCell>
+                  <TableCell className="text-center text-sm text-muted-foreground">
+                    {exercise.weight}
+                  </TableCell>
+                  <TableCell className="text-center text-sm text-muted-foreground">
+                    {exercise.rest}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -997,11 +972,7 @@ export function TemplatesPageClient() {
                           ))}
                         </TableRow>
                         {expandedRows.has(row.original.id) && (
-                          <ExpandableExercisesRow
-                            template={row.original}
-                            isOpen={expandedRows.has(row.original.id)}
-                            onToggle={() => toggleRowExpansion(row.original.id)}
-                          />
+                          <ExpandableExercisesRow template={row.original} />
                         )}
                         <TableRow className="border-0 hover:bg-transparent">
                           <TableCell colSpan={7} className="py-0">

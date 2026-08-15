@@ -112,7 +112,11 @@ import {
   type WorkoutTemplate,
   type SessionType,
 } from "@/components/trainer/TrainingSessionFields";
-import { formatTime12h, getTomorrowDate } from "@/lib/utils";
+import {
+  formatTime12h,
+  getTomorrowDate,
+  restLabelToSeconds,
+} from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 
 // ============================================================================
@@ -230,11 +234,6 @@ function to24HourTime(time12h: string): string {
   let hours = parseInt(match[1], 10) % 12;
   if (match[3].toUpperCase() === "PM") hours += 12;
   return `${String(hours).padStart(2, "0")}:${match[2]}:00`;
-}
-
-function parseRestSeconds(label: string): number {
-  const match = label.match(/(\d+)/);
-  return match ? parseInt(match[1], 10) : 60;
 }
 
 function parseReminderMinutes(label: string): number | null {
@@ -603,9 +602,16 @@ export default function CreateSessionForm({
         const matchesTemplateDefaults =
           !!selectedTemplate &&
           exercises.length === selectedTemplate.exercises.length &&
-          exercises.every(
-            (ex, i) => ex.id === selectedTemplate.exercises[i].id,
-          );
+          exercises.every((ex, i) => {
+            const t = selectedTemplate.exercises[i];
+            return (
+              ex.id === t.id &&
+              ex.sets === t.sets &&
+              ex.reps === t.reps &&
+              ex.weight === t.weight &&
+              ex.rest === t.rest
+            );
+          });
 
         const sharedPayload = {
           gymId: activeGymId,
@@ -621,7 +627,7 @@ export default function CreateSessionForm({
           location: values.location || undefined,
           notes: values.notes || undefined,
           showRestTimer: values.restTimer === "Show Timer",
-          defaultRestSeconds: parseRestSeconds(values.defaultRestTime),
+          defaultRestSeconds: restLabelToSeconds(values.defaultRestTime),
           reminderMinutes: parseReminderMinutes(values.reminder) ?? undefined,
         };
 
@@ -631,7 +637,7 @@ export default function CreateSessionForm({
           sets: exercise.sets,
           reps: exercise.reps,
           weight: exercise.weight,
-          restSeconds: parseRestSeconds(exercise.rest),
+          restSeconds: restLabelToSeconds(exercise.rest),
         }));
 
         const result =
@@ -659,17 +665,21 @@ export default function CreateSessionForm({
             ? "Session updated successfully"
             : "Session created successfully",
         );
+
+        if (sessionId) {
+          queryClient.invalidateQueries({
+            queryKey: ["sessionWithExercises", sessionId],
+          });
+        }
+        queryClient.invalidateQueries({
+          queryKey: ["allSessions", activeGymId, activeTrainerId],
+        });
+
         router.push(
           mode === "edit" && sessionId
             ? `/trainer/sessions/${sessionId}`
             : "/trainer/sessions",
         );
-        queryClient.invalidateQueries({
-          queryKey: ["sessionWithExercises", sessionId],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["allSessions", activeGymId, activeTrainerId],
-        });
       } catch (error) {
         console.error("Error saving session:", error);
         toast.error("Error saving session. Please try again.");

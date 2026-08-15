@@ -79,7 +79,7 @@ export function mapTrainingSessions(rows: any[]) {
     },
     date: row.session_date,
     time: formatTime12h(row.start_time),
-    duration: `${row.duration_minutes} mins`,
+    duration: row.duration_minutes ? `${row.duration_minutes} mins` : "—",
     status: row.status,
     icon: WORKOUT_TYPE_ICONS[row.workout_type] ?? Dumbbell,
   }));
@@ -235,7 +235,7 @@ const UpcomingSessionsCard: React.FC<{ sessions: any[] }> = ({ sessions }) => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">
-                      {session.name}gg
+                      {session.name}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
                       {session.member.name}
@@ -261,6 +261,7 @@ const SessionOverviewCard: React.FC<{
   stats: {
     completed: number;
     upcoming: number;
+    inProgress: number;
     cancelled: number;
     total: number;
   };
@@ -269,6 +270,8 @@ const SessionOverviewCard: React.FC<{
     stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
   const upcomingPercent =
     stats.total > 0 ? Math.round((stats.upcoming / stats.total) * 100) : 0;
+  const inProgressPercent =
+    stats.total > 0 ? Math.round((stats.inProgress / stats.total) * 100) : 0;
   const cancelledPercent =
     stats.total > 0 ? Math.round((stats.cancelled / stats.total) * 100) : 0;
 
@@ -315,10 +318,29 @@ const SessionOverviewCard: React.FC<{
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="8"
+                  className="text-amber-500"
+                  strokeDasharray={`${(inProgressPercent / 100) * 339.29} 339.29`}
+                  strokeDashoffset={
+                    -(((completedPercent + upcomingPercent) / 100) * 339.29)
+                  }
+                />
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="54"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="8"
                   className="text-red-500"
                   strokeDasharray={`${(cancelledPercent / 100) * 339.29} 339.29`}
                   strokeDashoffset={
-                    -(((completedPercent + upcomingPercent) / 100) * 339.29)
+                    -(
+                      ((completedPercent +
+                        upcomingPercent +
+                        inProgressPercent) /
+                        100) *
+                      339.29
+                    )
                   }
                 />
               </svg>
@@ -346,6 +368,12 @@ const SessionOverviewCard: React.FC<{
                 value: stats.upcoming,
                 percent: upcomingPercent,
                 dot: "bg-blue-500",
+              },
+              {
+                label: "In Progress",
+                value: stats.inProgress,
+                percent: inProgressPercent,
+                dot: "bg-amber-500",
               },
               {
                 label: "Cancelled",
@@ -434,8 +462,15 @@ export default function SessionsPage() {
   const stats = useMemo(() => {
     const completed = sessions.filter((s) => s.status === "Completed").length;
     const upcoming = sessions.filter((s) => s.status === "Upcoming").length;
+    const inProgress = sessions.filter((s) => s.status === "InProgress").length;
     const cancelled = sessions.filter((s) => s.status === "Cancelled").length;
-    return { completed, upcoming, cancelled, total: sessions.length };
+    return {
+      completed,
+      upcoming,
+      inProgress,
+      cancelled,
+      total: sessions.length,
+    };
   }, [sessions]);
 
   const statisticCards: StatisticCardConfig[] = [
@@ -484,7 +519,7 @@ export default function SessionsPage() {
   const highlightedDates = sessions.map((s) => s.date);
 
   const handleCreateSession = () => {
-    router.push("/trainer/training-sessions/new");
+    router.push("/trainer/sessions/new");
   };
 
   if (isLoading) {

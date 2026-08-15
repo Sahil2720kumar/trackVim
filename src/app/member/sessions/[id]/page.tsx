@@ -8,7 +8,6 @@ export default async function SessionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  console.log("session id", id);
 
   const { success, data } = await getTrainingSessionById(id);
 

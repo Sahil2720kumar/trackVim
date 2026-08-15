@@ -147,6 +147,7 @@ function SessionAccordionCard({ session }: { session: any }) {
         className="w-full text-left cursor-pointer"
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             setOpen((v) => !v);
@@ -202,24 +203,23 @@ function SessionAccordionCard({ session }: { session: any }) {
             </span>
           </div>
 
-          {/* View Details — stops propagation so it navigates instead of
-              toggling the accordion, and lives outside the toggle logic
-              entirely. */}
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-shrink-0 gap-1.5 hidden sm:inline-flex"
-            asChild
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Link
-              className="flex flex-row gap-1 justify-center items-center"
-              href={`/member/sessions/${session.id}`}
+          <div className="hidden md:block">
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full gap-1.5"
+              asChild
+              onClick={(e) => e.stopPropagation()}
             >
-              <Eye className="w-3.5 h-3.5" />
-              View Details
-            </Link>
-          </Button>
+              <Link
+                className="flex flex-row gap-1 justify-center items-center"
+                href={`/member/sessions/${session.id}`}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                View Details
+              </Link>
+            </Button>
+          </div>
 
           <div className="flex-shrink-0 text-muted-foreground">
             {open ? (
@@ -240,7 +240,10 @@ function SessionAccordionCard({ session }: { session: any }) {
             asChild
             onClick={(e) => e.stopPropagation()}
           >
-            <Link href={`/trainer/sessions/${session.id}`}>
+            <Link
+              className="flex flex-row gap-1 justify-center items-center"
+              href={`/member/sessions/${session.id}`}
+            >
               <Eye className="w-3.5 h-3.5" />
               View Details
             </Link>
@@ -428,7 +431,7 @@ export function SessionsPanel({ sessions }) {
         new Set(
           sessions
             .map((s) => s.trainers?.full_name)
-            .filter((n) => n !== "Unassigned trainer"),
+            .filter((n): n is string => Boolean(n)),
         ),
       ),
     [sessions],
@@ -455,7 +458,7 @@ export function SessionsPanel({ sessions }) {
       result = result.filter(
         (s) =>
           s.session_name.toLowerCase().includes(q) ||
-          s.trainers?.full_name.toLowerCase().includes(q) ||
+          (s.trainers?.full_name ?? "").toLowerCase().includes(q) ||
           (s.session_exercises ?? []).some((e) =>
             e.exercises?.name?.toLowerCase().includes(q),
           ),
@@ -472,7 +475,9 @@ export function SessionsPanel({ sessions }) {
         case "name":
           return a.session_name.localeCompare(b.session_name);
         case "trainer":
-          return a.trainers?.full_name.localeCompare(b.trainers?.full_name);
+          return (a.trainers?.full_name ?? "").localeCompare(
+            b.trainers?.full_name ?? "",
+          );
         default:
           return 0;
       }

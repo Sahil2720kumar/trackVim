@@ -25,7 +25,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { TrainerRow } from "@/lib/queries/trainers";
+import type { TrainerRow } from "@/services/owner.query";
+
 import { useRouter } from "next/navigation";
 
 type TrainersTableProps = {
@@ -276,11 +277,14 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
 
             {/* "Add Trainer" now likely goes through an invite flow (clerkInvitationId, invitedEmail
                 on the schema) rather than a raw insert — wire this to that action separately. */}
-            <button className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium">
+            <Button
+              onClick={() => router.push("/owner/trainers/new")}
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium"
+            >
               <Plus className="w-4 h-4" />
               <span className="sm:hidden">Add</span>
               <span className="hidden sm:inline">Invite Trainer</span>
-            </button>
+            </Button>
           </div>
         </div>
 

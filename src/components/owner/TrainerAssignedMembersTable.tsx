@@ -3,21 +3,19 @@
 import { useState, useMemo } from "react";
 import {
   Search,
-  Filter,
   Download,
   MoreVertical,
   ChevronLeft,
   ChevronRight,
+  Mail,
+  Phone,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableBody,
@@ -32,77 +30,57 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  type AssignedMember,
-  initialAssignedMembers,
-  assignedMemberPlanOptions,
-  assignedMemberStatusOptions,
-  assignedMemberProgressOptions,
-} from "@/mock/trainerAssignedMembers";
+import { type AssignedMember } from "@/services/owner.query";
+import { formatDateStr, getInitials } from "@/lib/utils";
 
 type TrainerAssignedMembersTableProps = {
-  initialMembers?: AssignedMember[];
+  initialMembers: AssignedMember[];
 };
 
 const ITEMS_PER_PAGE = 10;
 
-const getPlanBadgeColor = (plan: string) => {
-  switch (plan) {
-    case "Gold Plan":
-      return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
-    case "Premium Plan":
-      return "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400";
-    case "Silver Plan":
-      return "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300";
+const getProgressBadgeColor = (label: AssignedMember["progressLabel"]) => {
+  switch (label) {
+    case "Excellent":
+      return "bg-emerald-100 text-emerald-700";
+    case "Good":
+      return "bg-blue-100 text-blue-700";
     default:
-      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
+      return "bg-amber-100 text-amber-700";
   }
 };
 
-const getProgressColor = (progress: string) => {
-  switch (progress) {
-    case "Excellent":
-      return "bg-emerald-500";
-    case "Good":
-      return "bg-blue-500";
-    case "Average":
-      return "bg-amber-500";
+const getMembershipStatusColor = (status: string | null) => {
+  switch (status) {
+    case "Active":
+      return "bg-emerald-100 text-emerald-700 border-0";
+    case "Frozen":
+      return "bg-sky-100 text-sky-700 border-0";
+    case "Expired":
+    case "Cancelled":
+      return "bg-rose-100 text-rose-700 border-0";
     default:
-      return "bg-gray-500";
+      return "bg-muted text-muted-foreground border-0";
   }
 };
 
 export function TrainerAssignedMembersTable({
-  initialMembers = initialAssignedMembers,
+  initialMembers,
 }: TrainerAssignedMembersTableProps) {
   const [members] = useState<AssignedMember[]>(initialMembers);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Advanced filter popover state
-  const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [planFilter, setPlanFilter] = useState("All Plans");
-  const [progressFilter, setProgressFilter] = useState("All Progress");
-
-  // Filter logic
   const filteredMembers = useMemo(() => {
-    return members.filter((member) => {
-      const matchesSearch =
-        member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        member.plan.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.toLowerCase();
+    return members.filter(
+      (member) =>
+        (member.full_name ?? "").toLowerCase().includes(q) ||
+        (member.contact_email ?? "").toLowerCase().includes(q) ||
+        (member.plan ?? "").toLowerCase().includes(q),
+    );
+  }, [members, searchQuery]);
 
-      const matchesStatus = !selectedStatus || member.status === selectedStatus;
-      const matchesPlan =
-        planFilter === "All Plans" || member.plan === planFilter;
-      const matchesProgress =
-        progressFilter === "All Progress" || member.progress === progressFilter;
-
-      return matchesSearch && matchesStatus && matchesPlan && matchesProgress;
-    });
-  }, [members, searchQuery, selectedStatus, planFilter, progressFilter]);
-
-  // Pagination logic
   const totalPages = Math.max(
     1,
     Math.ceil(filteredMembers.length / ITEMS_PER_PAGE),
@@ -114,33 +92,28 @@ export function TrainerAssignedMembersTable({
     startIdx + ITEMS_PER_PAGE,
   );
 
-  const activeFilterCount =
-    (planFilter !== "All Plans" ? 1 : 0) +
-    (progressFilter !== "All Progress" ? 1 : 0);
-
-  const resetAdvancedFilters = () => {
-    setPlanFilter("All Plans");
-    setProgressFilter("All Progress");
-    setCurrentPage(1);
-  };
-
-  // Export filtered members to CSV
   const handleExport = () => {
     const headers = [
       "Member Name",
+      "Email",
+      "Phone",
       "Plan",
+      "Membership Status",
       "Attendance Rate (%)",
       "Progress",
-      "Join Date",
-      "Status",
+      "Assigned On",
+      "Notes",
     ];
     const rows = filteredMembers.map((m) => [
-      m.name,
-      m.plan,
-      `${m.attendance}%`,
-      m.progress,
-      m.joinDate,
-      m.status,
+      m.full_name ?? "",
+      m.contact_email ?? "",
+      m.contact_phone ?? "",
+      m.plan ?? "",
+      m.membershipStatus ?? "",
+      `${m.attendanceRate}%`,
+      m.progressLabel,
+      formatDate(m.assignedAt),
+      m.notes ?? "",
     ]);
     const csvContent = [headers, ...rows]
       .map((row) => row.map((val) => `"${val}"`).join(","))
@@ -163,7 +136,6 @@ export function TrainerAssignedMembersTable({
 
   return (
     <Card className="p-4 sm:p-6 space-y-4">
-      {/* Card Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="font-semibold text-lg text-foreground">
           Assigned Members
@@ -177,152 +149,49 @@ export function TrainerAssignedMembersTable({
         </Button>
       </div>
 
-      {/* Search and Filters Header — mirrors MembersTable layout */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-card border border-border rounded-lg p-3 sm:p-4">
-          {/* Search Input */}
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search assigned members..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Filter Button + Popover */}
-            <Popover open={showFilterPanel} onOpenChange={setShowFilterPanel}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="relative gap-2 px-3 sm:px-4 py-2 h-auto text-sm font-normal"
-                >
-                  <Filter className="w-4 h-4" />
-                  <span className="hidden xs:inline">Filters</span>
-                  {activeFilterCount > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64" align="end">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-semibold text-foreground">
-                    Advanced filters
-                  </h4>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">
-                      Plan
-                    </label>
-                    <select
-                      value={planFilter}
-                      onChange={(e) => {
-                        setPlanFilter(e.target.value);
-                        setCurrentPage(1);
-                      }}
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      {assignedMemberPlanOptions.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">
-                      Progress
-                    </label>
-                    <select
-                      value={progressFilter}
-                      onChange={(e) => {
-                        setProgressFilter(e.target.value);
-                        setCurrentPage(1);
-                      }}
-                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      {assignedMemberProgressOptions.map((pr) => (
-                        <option key={pr} value={pr}>
-                          {pr}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <button
-                    onClick={resetAdvancedFilters}
-                    className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-                  >
-                    Reset filters
-                  </button>
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            {/* Export Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-card border border-border rounded-lg p-3 sm:p-4">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search assigned members..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+          />
+          {searchQuery && (
             <button
-              onClick={handleExport}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
             >
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Export</span>
+              <X className="w-4 h-4" />
             </button>
-          </div>
+          )}
         </div>
 
-        {/* Quick Filter Status Pills — matches MembersTable */}
-        <div className="flex gap-2 overflow-x-auto pb-2 -mx-3 px-3 sm:mx-0 sm:px-0">
-          {assignedMemberStatusOptions.map((status) => (
-            <button
-              key={status}
-              onClick={() => {
-                setSelectedStatus(status === "All Status" ? null : status);
-                setCurrentPage(1);
-              }}
-              className={`px-3 sm:px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors shrink-0 ${
-                (status === "All Status" && !selectedStatus) ||
-                status === selectedStatus
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-              }`}
-            >
-              {status}
-            </button>
-          ))}
-        </div>
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors shrink-0"
+        >
+          <Download className="w-4 h-4" />
+          <span className="hidden sm:inline">Export</span>
+        </button>
       </div>
 
-      {/* Table Container */}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         {/* Desktop table */}
         <div className="hidden md:block overflow-x-auto">
-          <Table className="w-full min-w-[720px]">
+          <Table className="w-full min-w-[860px]">
             <TableHeader>
               <TableRow className="bg-muted/50 border-b border-border">
                 <TableHead>Member</TableHead>
                 <TableHead>Plan</TableHead>
                 <TableHead>Attendance</TableHead>
                 <TableHead>Progress</TableHead>
-                <TableHead>Join Date</TableHead>
+                <TableHead>Assigned On</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -331,58 +200,60 @@ export function TrainerAssignedMembersTable({
               {paginatedMembers.length > 0 ? (
                 paginatedMembers.map((member) => (
                   <TableRow
-                    key={member.id}
+                    key={member.assignmentId}
                     className="border-b border-border hover:bg-muted/50 transition-colors"
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Avatar className="h-8 w-8 shrink-0">
-                          <AvatarImage src={member.avatar} />
-                          <AvatarFallback>{member.name[0]}</AvatarFallback>
+                          <AvatarImage src={member.photo_url ?? undefined} />
+                          <AvatarFallback>
+                            {getInitials(member.full_name ?? "—")}
+                          </AvatarFallback>
                         </Avatar>
                         <span className="font-medium text-foreground">
-                          {member.name}
+                          {member.full_name ?? "—"}
                         </span>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getPlanBadgeColor(member.plan)}>
-                        {member.plan}
-                      </Badge>
+                      {member.plan ? (
+                        <Badge variant="secondary">{member.plan}</Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          No active plan
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="w-12 h-1.5 bg-muted rounded overflow-hidden">
-                          <div
-                            className={`h-full rounded ${getProgressColor(member.progress)}`}
-                            style={{ width: `${member.attendance}%` }}
-                          />
-                        </div>
-                        <span className="text-sm font-medium text-foreground">
-                          {member.attendance}%
+                      <div className="flex items-center gap-2 w-32">
+                        <Progress
+                          value={member.attendanceRate}
+                          className="h-1.5"
+                        />
+                        <span className="text-sm font-medium text-foreground shrink-0">
+                          {member.attendanceRate}%
                         </span>
                       </div>
                     </TableCell>
                     <TableCell>
                       <Badge
                         variant="secondary"
-                        className={`${
-                          member.progress === "Excellent"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : member.progress === "Good"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-amber-100 text-amber-700"
-                        }`}
+                        className={getProgressBadgeColor(member.progressLabel)}
                       >
-                        {member.progress}
+                        {member.progressLabel}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {member.joinDate}
+                      {formatDateStr(member.assignedAt)}
                     </TableCell>
                     <TableCell>
-                      <Badge className="bg-emerald-100 text-emerald-700 border-0">
-                        {member.status}
+                      <Badge
+                        className={getMembershipStatusColor(
+                          member.membershipStatus,
+                        )}
+                      >
+                        {member.membershipStatus ?? "No membership"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -423,19 +294,21 @@ export function TrainerAssignedMembersTable({
         <div className="md:hidden divide-y divide-border">
           {paginatedMembers.length > 0 ? (
             paginatedMembers.map((member) => (
-              <div key={member.id} className="p-4 space-y-3">
+              <div key={member.assignmentId} className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-9 w-9 shrink-0">
-                      <AvatarImage src={member.avatar} />
-                      <AvatarFallback>{member.name[0]}</AvatarFallback>
+                      <AvatarImage src={member.photo_url ?? undefined} />
+                      <AvatarFallback>
+                        {getInitials(member.full_name ?? "—")}
+                      </AvatarFallback>
                     </Avatar>
                     <div>
                       <p className="font-medium text-sm text-foreground">
-                        {member.name}
+                        {member.full_name ?? "—"}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Joined {member.joinDate}
+                        Assigned {formatDateStr(member.assignedAt)}
                       </p>
                     </div>
                   </div>
@@ -454,40 +327,56 @@ export function TrainerAssignedMembersTable({
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap text-xs">
-                  <Badge className={getPlanBadgeColor(member.plan)}>
-                    {member.plan}
-                  </Badge>
+                  {member.plan && (
+                    <Badge variant="secondary">{member.plan}</Badge>
+                  )}
                   <Badge
                     variant="secondary"
-                    className={`${
-                      member.progress === "Excellent"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : member.progress === "Good"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-amber-100 text-amber-700"
-                    }`}
+                    className={getProgressBadgeColor(member.progressLabel)}
                   >
-                    {member.progress}
+                    {member.progressLabel}
                   </Badge>
-                  <Badge className="bg-emerald-100 text-emerald-700 border-0">
-                    {member.status}
+                  <Badge
+                    className={getMembershipStatusColor(
+                      member.membershipStatus,
+                    )}
+                  >
+                    {member.membershipStatus ?? "No membership"}
                   </Badge>
                 </div>
 
-                <div className="flex items-center justify-between pt-1 text-xs">
-                  <span className="text-muted-foreground">Attendance</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 h-1.5 bg-muted rounded overflow-hidden">
-                      <div
-                        className={`h-full rounded ${getProgressColor(member.progress)}`}
-                        style={{ width: `${member.attendance}%` }}
-                      />
-                    </div>
-                    <span className="font-medium text-foreground">
-                      {member.attendance}%
+                <div className="flex items-center justify-between pt-1 text-xs gap-3">
+                  <span className="text-muted-foreground shrink-0">
+                    Attendance
+                  </span>
+                  <div className="flex items-center gap-2 flex-1">
+                    <Progress value={member.attendanceRate} className="h-1.5" />
+                    <span className="font-medium text-foreground shrink-0">
+                      {member.attendanceRate}%
                     </span>
                   </div>
                 </div>
+
+                {(member.contact_email || member.contact_phone) && (
+                  <div className="flex flex-col gap-1 text-xs text-muted-foreground pt-1">
+                    {member.contact_email && (
+                      <span className="flex items-center gap-1.5">
+                        <Mail className="w-3 h-3" /> {member.contact_email}
+                      </span>
+                    )}
+                    {member.contact_phone && (
+                      <span className="flex items-center gap-1.5">
+                        <Phone className="w-3 h-3" /> {member.contact_phone}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {member.notes && (
+                  <p className="text-xs text-muted-foreground pt-1 border-t border-border/50">
+                    {member.notes}
+                  </p>
+                )}
               </div>
             ))
           ) : (
@@ -498,7 +387,7 @@ export function TrainerAssignedMembersTable({
         </div>
       </div>
 
-      {/* Pagination */}
+      {/* Pagination — unchanged from before */}
       {totalPages > 1 && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1 pt-2">
           <p className="text-sm text-muted-foreground">
@@ -521,7 +410,6 @@ export function TrainerAssignedMembersTable({
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-
             {Array.from({ length: totalPages }, (_, i) => i + 1)
               .filter(
                 (p) =>
@@ -555,7 +443,6 @@ export function TrainerAssignedMembersTable({
                   </button>
                 ),
               )}
-
             <button
               onClick={() => goToPage(safePage + 1)}
               disabled={safePage === totalPages}

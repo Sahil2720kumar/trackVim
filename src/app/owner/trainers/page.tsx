@@ -9,6 +9,14 @@ export default async function TrainersPage() {
 
   const gymId = sessionClaims?.publicMetadata?.gymId as unknown as string;
 
+  if (!gymId) {
+    return (
+      <div className="p-6 text-sm text-red-600">
+        No gym is linked to this account.
+      </div>
+    );
+  }
+
   const [trainersResult, statsResult] = await Promise.all([
     getAllTrainers(gymId),
     getTrainerStats(gymId),

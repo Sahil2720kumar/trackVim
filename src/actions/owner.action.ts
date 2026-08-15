@@ -791,13 +791,22 @@ export async function inviteTrainerAction(
 
 export async function deactivateTrainerAction(trainerId: string) {
   const supabase = await createServerClient();
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || !meta.gymId) {
+    return { success: false as const, error: "Not authorized." };
+  }
   const { error } = await supabase
     .from("trainers")
     .update({ status: "Inactive" })
-    .eq("id", trainerId);
+    .eq("id", trainerId)
+    .eq("gym_id", meta.gymId);
 
   if (error) return { success: false as const, error: error.message };
-  revalidatePath(`/trainers/${trainerId}`);
+  revalidatePath(`/owner/trainers/[id]`, "page");
   return { success: true as const };
 }
 
@@ -809,7 +818,7 @@ export async function deleteTrainerAction(trainerId: string) {
     .eq("id", trainerId);
 
   if (error) return { success: false as const, error: error.message };
-  revalidatePath("/trainers");
+  revalidatePath("/owner/trainers");
   return { success: true as const };
 }
 

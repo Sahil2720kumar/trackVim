@@ -458,6 +458,7 @@ export type TemplateExerciseInput = {
 };
 
 export type WorkoutTemplateInput = {
+  id?: string;
   name: string;
   type?:
     | "Strength"
@@ -588,7 +589,7 @@ export async function updateWorkoutTemplateWithExercises(
     .from("workout_templates")
     .update({
       name: payload.name,
-      category: payload.type ?? "General", // mirrors create — confirmed pattern
+      category: payload.type ?? "General",
       description: payload.description ?? "",
       workout_type: payload.type,
       primary_goal: payload.goal,
@@ -603,27 +604,26 @@ export async function updateWorkoutTemplateWithExercises(
       updated_at: new Date().toISOString(),
     })
     .eq("id", templateId)
-    .eq("gym_id", gymId) // defense in depth alongside RLS, matches insert's scoping
+    .eq("gym_id", gymId)
     .select("id")
     .single();
 
   if (error) return { success: false, error: error.message };
 
-  // Replace-all strategy: simpler than diffing rowIds client-side, but
-  // needs a DELETE policy on template_exercises — flagged last turn,
-  // not present in the schema you've shown me. This will fail at
-  // runtime (RLS silently returns 0 rows deleted, not an error, so
-  // watch for that specifically) until the policy is added.
-  const { error: deleteError } = await supabase
-    .from("template_exercises")
-    .delete()
-    .eq("template_id", templateId);
-
-  if (deleteError) return { success: false, error: deleteError.message };
-
-  const { error: exercisesError } = await supabase
-    .from("template_exercises")
-    .insert(toTemplateExerciseRows(templateId, payload.exercises));
+  const { error: exercisesError } = await supabase.rpc(
+    "replace_template_exercises",
+    {
+      p_template_id: templateId,
+      p_exercises: payload.exercises.map((ex, index) => ({
+        exercise_id: ex.exerciseId,
+        position: index,
+        sets: ex.sets,
+        reps: ex.reps,
+        weight: ex.weight ?? "",
+        rest_seconds: ex.restSeconds ?? 60,
+      })),
+    },
+  );
 
   if (exercisesError) return { success: false, error: exercisesError.message };
 
@@ -637,13 +637,17 @@ export async function removeExerciseFromTemplate(
 ): Promise<ActionResult> {
   const supabase = await createServerClient();
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("template_exercises")
     .delete()
-    .eq("id", templateExerciseId);
+    .eq("id", templateExerciseId)
+    .select("template_id")
+    .maybeSingle();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/trainer/templates/${templateExerciseId}`);
+  revalidatePath("/trainer/templates");
+  if (data?.template_id)
+    revalidatePath(`/trainer/templates/${data.template_id}`);
   return { success: true, data: undefined };
 }
 
@@ -804,8 +808,8 @@ export async function updateTrainingSessionWithExercises(
   );
 
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/trainer/sessions");
-  revalidatePath(`/trainer/training-sessions/${sessionId}`);
+  revalidatePath("/trainer/sessions");
+  revalidatePath(`/trainer/sessions/${sessionId}`);
   return { success: true, data: { id: data as string } };
 }
 
@@ -837,16 +841,18 @@ export async function toggleSessionExerciseCompletion(
 ): Promise<ActionResult> {
   const supabase = await createServerClient();
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("session_exercises")
     .update({
       completed,
       completed_at: completed ? new Date().toISOString() : null,
     })
-    .eq("id", sessionExerciseId);
+    .eq("id", sessionExerciseId)
+    .select("session_id")
+    .maybeSingle();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath(`/trainer/sessions/${sessionExerciseId}`);
+  if (data?.session_id) revalidatePath(`/trainer/sessions/${data.session_id}`);
   return { success: true, data: undefined };
 }
 

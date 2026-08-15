@@ -1,0 +1,1 @@
+CREATE POLICY "Members can update session status via exercise completion" ON "training_sessions" AS PERMISSIVE FOR UPDATE TO "authenticated" USING (member_id = public.current_member_id()) WITH CHECK (member_id = public.current_member_id());

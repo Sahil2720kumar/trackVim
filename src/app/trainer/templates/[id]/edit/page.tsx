@@ -34,6 +34,7 @@ export function mapTemplateRowToEditForm(row: any) {
   }));
 
   const initialValues = {
+    id: row.id,
     name: row.name,
     type: row.workout_type ?? row.category ?? "",
     goal: row.primary_goal ?? "",

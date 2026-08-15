@@ -14,6 +14,7 @@ import {
   Info,
   Timer,
   Layers,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -136,8 +137,8 @@ export function SessionDetailClient({ session }) {
   );
 
   const displayStatus = getDisplayStatus(session);
-  const trainerName = session.trainer?.user?.name ?? "Unknown Trainer";
-  const trainerPhoto = session.trainer?.user?.profile_url ?? "";
+  const trainerName = session.trainers?.full_name ?? "Unknown Trainer";
+  const trainerPhoto = session.trainers?.photo_url ?? "";
 
   const completedCount = useMemo(
     () => exercises.filter((e) => e.completed).length,
@@ -208,6 +209,7 @@ export function SessionDetailClient({ session }) {
   function markAll() {
     if (allDone || isPending) return;
     const remainingIds = exercises.filter((e) => !e.completed).map((e) => e.id);
+    const previous = exercises;
 
     setExercises((prev) =>
       prev.map((e) => ({
@@ -226,12 +228,14 @@ export function SessionDetailClient({ session }) {
         );
         if (!result.success) {
           toast.error(result.error);
+          setExercises(previous);
           return;
         }
         toast.success("All exercises marked complete");
       } catch (error) {
         console.error("Error marking all exercises complete:", error);
         toast.error("Error updating exercises. Please try again.");
+        setExercises(previous);
       }
     });
   }
@@ -436,7 +440,7 @@ export function SessionDetailClient({ session }) {
                   className="absolute right-3 top-3 text-green-500 hover:text-green-700"
                   aria-label="Dismiss"
                 >
-                  ×
+                  <X className="w-4 h-4" />
                 </button>
               </Alert>
             )}

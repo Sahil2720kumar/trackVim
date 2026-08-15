@@ -1,4 +1,4 @@
-import { TemplatesPageClient } from "@/components/owner/templates/TemplatesPageClient";
+import { TemplatesPageClient } from "@/components/trainer/templates/TemplatesPageClient";
 
 function TemplatesHeader() {
   return (

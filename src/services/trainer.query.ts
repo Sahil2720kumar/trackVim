@@ -60,8 +60,6 @@ export async function getMyAssignedMembers(
     .eq("trainer_id", trainerId)
     .eq("is_active", true);
 
-  console.log("data assigned members 2", data);
-  console.log("error assigned members", error);
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }

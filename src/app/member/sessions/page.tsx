@@ -2,21 +2,7 @@ import { CalendarDays, CheckCircle2, Dumbbell, Flame } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { SessionsPanel } from "@/components/member/sessions/SessionsPanel";
 import { getMyTrainingSessions } from "@/services/member.query";
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD", matches `date` column format
-}
-
-function isPastDate(dateStr: string) {
-  return dateStr < todayStr();
-}
-
-export function getDisplayStatus(session) {
-  if (session.status === "Upcoming" && isPastDate(session.session_date)) {
-    return "Missed";
-  }
-  return session.status;
-}
+import { getDisplayStatus } from "@/components/member/sessions/SessionsPanel";
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -57,6 +43,7 @@ export default async function SessionsPage() {
 
   const upcoming = sessions.filter((s) => getDisplayStatus(s) === "Upcoming");
   const completed = sessions.filter((s) => getDisplayStatus(s) === "Completed");
+
   const exerciseCount = sessions.reduce(
     (sum, s) => sum + (s.session_exercises?.length ?? 0),
     0,

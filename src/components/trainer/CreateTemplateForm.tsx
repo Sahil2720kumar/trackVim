@@ -106,6 +106,7 @@ import {
   updateWorkoutTemplateWithExercises,
   WorkoutTemplateInput,
 } from "@/actions/trainer.action";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Give the <form> a stable id so a header button rendered outside this
 // component (e.g. in the server page.tsx, following the MemberForm
@@ -578,6 +579,7 @@ export default function CreateTemplateForm({
   meta,
 }: CreateTemplateFormProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
 
   const { activeTrainerId, activeGymId } = useTrainerStore();
@@ -741,6 +743,10 @@ export default function CreateTemplateForm({
           })),
         };
 
+        if (mode === "edit" && !meta) {
+          toast.error("Missing template to update.");
+          return;
+        }
         const result =
           mode === "edit" && meta
             ? await updateWorkoutTemplateWithExercises(meta.id, payload)
@@ -757,6 +763,12 @@ export default function CreateTemplateForm({
             : "Template saved successfully",
         );
         router.push("/trainer/templates");
+        queryClient.invalidateQueries({
+          queryKey: ["workoutTemplates", activeGymId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["workoutTemplateById", meta?.id ?? ""],
+        });
       } catch (error) {
         console.error("Error saving template:", error);
         toast.error("Error saving template. Please try again.");

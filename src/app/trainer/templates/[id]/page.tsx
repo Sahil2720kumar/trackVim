@@ -980,11 +980,7 @@ export default function TemplateDetailPage({ params }: PageProps) {
               <Button
                 variant="outline"
                 className="w-full justify-start"
-                onClick={() =>
-                  router.push(
-                    `/trainer/training-sessions/new?templateId=${templateId}`,
-                  )
-                }
+                onClick={() => router.push(`/trainer/sessions/new`)}
               >
                 <Layers className="size-4 mr-2" />
                 Assign to Session

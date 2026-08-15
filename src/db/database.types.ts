@@ -2133,6 +2133,19 @@ export type Database = {
         Args: { p_period_end: string; p_period_start: string }
         Returns: number
       }
+      get_member_attendance_rate: {
+        Args: { p_as_of?: string; p_gym_id: string; p_member_id: string }
+        Returns: number
+      }
+      get_member_attendance_stats: {
+        Args: { p_as_of?: string; p_gym_id: string; p_member_ids: string[] }
+        Returns: {
+          attendance_rate: number
+          days_attended: number
+          member_id: string
+          total_days: number
+        }[]
+      }
       get_membership_application_page_data: {
         Args: { p_gym_id: string; p_plan_id: string }
         Returns: Json
@@ -2233,6 +2246,10 @@ export type Database = {
         Args: { p_gym_membership_id: string; p_plan_id?: string }
         Returns: string
       }
+      replace_template_exercises: {
+        Args: { p_exercises: Json; p_template_id: string }
+        Returns: undefined
+      }
       staff_gym_ids: { Args: never; Returns: string[] }
       submit_membership_application: {
         Args: {
@@ -2254,6 +2271,28 @@ export type Database = {
           p_transaction_ref?: string
         }
         Returns: undefined
+      }
+      update_training_session_with_exercises: {
+        Args: {
+          p_default_rest_seconds: number
+          p_duration_minutes: number
+          p_end_time: string
+          p_exercises: Json
+          p_gym_id: string
+          p_location: string
+          p_member_id: string
+          p_notes: string
+          p_reminder_minutes: number
+          p_session_date: string
+          p_session_id: string
+          p_session_name: string
+          p_session_type: Database["public"]["Enums"]["session_type"]
+          p_show_rest_timer: boolean
+          p_start_time: string
+          p_template_id: string
+          p_workout_type: Database["public"]["Enums"]["workout_type"]
+        }
+        Returns: string
       }
       verify_payment: { Args: { p_payment_id: string }; Returns: undefined }
     }
