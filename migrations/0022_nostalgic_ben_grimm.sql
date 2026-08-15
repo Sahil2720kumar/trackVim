@@ -1,0 +1,3 @@
+ALTER TABLE "session_exercises" ADD COLUMN "completed" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "session_exercises" ADD COLUMN "completed_at" timestamp with time zone;--> statement-breakpoint
+CREATE POLICY "Members can mark their own session exercises complete" ON "session_exercises" AS PERMISSIVE FOR UPDATE TO "authenticated" USING (session_id in (select id from training_sessions where member_id = public.current_member_id())) WITH CHECK (session_id in (select id from training_sessions where member_id = public.current_member_id()));

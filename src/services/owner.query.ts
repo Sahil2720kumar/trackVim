@@ -1,5 +1,6 @@
 import { ActionResult } from "@/actions/member.action";
 import { createServerClient } from "@/lib/supabase/server";
+import { formatDate, getTodayDateStr } from "@/lib/utils";
 import { MembershipApplication } from "@/types";
 import { auth } from "@clerk/nextjs/server";
 
@@ -175,7 +176,8 @@ export async function getApplicationById(id: string) {
     .single();
 
   if (error) return { success: false as const, error: error.message };
-  return { success: true as const, data: data };}
+  return { success: true as const, data: data };
+}
 
 export async function getPendingPayments(gymId: string) {
   const supabase = await createServerClient();
@@ -268,4 +270,186 @@ export async function getGymAttendance(gymId: string, date?: string) {
   const { data, error } = await query;
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
+}
+
+//Get Trainers
+export async function getAllTrainers(gymId: string) {
+  const supabase = await createServerClient();
+
+  const { data, error } = await supabase
+    .from("trainers")
+    .select(
+      "id, full_name, contact_email, contact_phone, photo_url, professional_title, specializations, experience_years, members_trained, completed_sessions, average_rating, status",
+    )
+    .eq("gym_id", gymId)
+    .is("deleted_at", null)
+    .order("full_name", { ascending: true });
+
+  if (error) {
+    return { success: false as const, error: error.message };
+  }
+
+  return { success: true as const, data };
+}
+
+export async function getTrainerStats(gymId: string) {
+  const supabase = await createServerClient();
+  const today = getTodayDateStr();
+
+  const [
+    totalTrainersResult,
+    activeTrainersResult,
+    activeMembersResult,
+    sessionsTodayResult,
+  ] = await Promise.all([
+    supabase
+      .from("trainers")
+      .select("id", { count: "exact", head: true })
+      .eq("gym_id", gymId)
+      .is("deleted_at", null),
+    supabase
+      .from("trainers")
+      .select("id", { count: "exact", head: true })
+      .eq("gym_id", gymId)
+      .eq("status", "Active")
+      .is("deleted_at", null),
+    supabase
+      .from("gym_memberships")
+      .select("id", { count: "exact", head: true })
+      .eq("gym_id", gymId)
+      .eq("status", "Active"),
+    supabase
+      .from("training_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("gym_id", gymId)
+      .eq("session_date", today),
+  ]);
+
+  const errored = [
+    totalTrainersResult,
+    activeTrainersResult,
+    activeMembersResult,
+    sessionsTodayResult,
+  ].find((r) => r.error);
+
+  if (errored) {
+    console.log(errored.error);
+
+    return { success: false as const, error: errored.error!.message };
+  }
+
+  return {
+    success: true as const,
+    data: {
+      totalTrainers: totalTrainersResult.count ?? 0,
+      activeTrainers: activeTrainersResult.count ?? 0,
+      totalMembers: activeMembersResult.count ?? 0,
+      sessionsToday: sessionsTodayResult.count ?? 0,
+    },
+  };
+}
+
+export async function getTrainerById(trainerId: string, gymId: string) {
+  const supabase = await createServerClient();
+
+  const { data, error } = await supabase
+    .from("trainers")
+    .select("*")
+    .eq("id", trainerId)
+    .eq("gym_id", gymId)
+    .is("deleted_at", null)
+    .single();
+
+  if (error) return { success: false as const, error: error.message };
+  return { success: true as const, data };
+}
+
+export type TrainerDetail = NonNullable<
+  Awaited<ReturnType<typeof getTrainerById>>["data"]
+>;
+
+export async function getTrainerSessionStats(trainerId: string) {
+  const supabase = await createServerClient();
+  const now = new Date();
+  const monthStart = formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
+  const monthEnd = formatDate(
+    new Date(now.getFullYear(), now.getMonth() + 1, 0),
+  );
+
+  const { data, error } = await supabase
+    .from("training_sessions")
+    .select("id, status")
+    .eq("trainer_id", trainerId)
+    .gte("session_date", monthStart)
+    .lte("session_date", monthEnd);
+
+  if (error) return { success: false as const, error: error.message };
+
+  const sessionsThisMonth = data.length;
+  const completed = data.filter((s) => s.status === "Completed").length;
+  const attendanceRate =
+    sessionsThisMonth > 0
+      ? Math.round((completed / sessionsThisMonth) * 100)
+      : 0;
+
+  return {
+    success: true as const,
+    data: { sessionsThisMonth, attendanceRate },
+  };
+}
+
+export async function getMonthlySessionsForTrainer(trainerId: string) {
+  const supabase = await createServerClient();
+  const now = new Date();
+
+  const start = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+
+  const startDate = formatDate(start);
+
+  const { data, error } = await supabase
+    .from("training_sessions")
+    .select("session_date")
+    .eq("trainer_id", trainerId)
+    .gte("session_date", start.toISOString().slice(0, 10));
+
+  if (error) return { success: false as const, error: error.message };
+
+  const counts = new Map<string, number>();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(start);
+    d.setMonth(d.getMonth() + i);
+    counts.set(d.toLocaleString("en-US", { month: "short" }), 0);
+  }
+  data.forEach((row) => {
+    const month = new Date(row.session_date).toLocaleString("en-US", {
+      month: "short",
+    });
+    counts.set(month, (counts.get(month) ?? 0) + 1);
+  });
+
+  return {
+    success: true as const,
+    data: Array.from(counts.entries()).map(([month, sessions]) => ({
+      month,
+      sessions,
+    })),
+  };
+}
+
+// APPROXIMATION: there's no persistent trainer↔member assignment table in the schema
+// you've shown me, so "assigned members" here is the distinct set of members this
+// trainer has ever had a training_session with — not a true current-assignment count.
+// If members has (or should have) an assigned_trainer_id, swap this for a direct count.
+export async function getAssignedMembersCount(trainerId: string) {
+  const supabase = await createServerClient();
+  const { data, error } = await supabase
+    .from("training_sessions")
+    .select("member_id")
+    .eq("trainer_id", trainerId);
+
+  if (error) return { success: false as const, error: error.message };
+  return {
+    success: true as const,
+    data: new Set(data.map((r) => r.member_id)).size,
+  };
 }

@@ -259,9 +259,9 @@ export const SesssionTable: React.FC<SesssionTableProps> = ({
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize });
 
   const handleViewSession = (session: Session) =>
-    router.push(`/sessions/${session.id}`);
+    router.push(`/trainer/sessions/${session.id}`);
   const handleEditSession = (session: Session) =>
-    router.push(`/sessions/${session.id}/edit`);
+    router.push(`/trainer/sessions/${session.id}/edit`);
   const handleCancelSession = (session: Session) =>
     console.log("cancel session", session.id);
 
@@ -328,7 +328,7 @@ export const SesssionTable: React.FC<SesssionTableProps> = ({
           return (
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={member.avatarUrl} />
+                <AvatarImage src={member.photo_url} />
                 <AvatarFallback className="text-xs font-medium">
                   {member.initials ?? member.name.charAt(0)}
                 </AvatarFallback>
@@ -338,11 +338,11 @@ export const SesssionTable: React.FC<SesssionTableProps> = ({
           );
         },
       },
-      {
-        accessorKey: "type",
-        header: "Type",
-        cell: ({ row }) => <TypeBadge type={row.original.type} />,
-      },
+      // {
+      //   accessorKey: "type",
+      //   header: "Type",
+      //   cell: ({ row }) => <TypeBadge type={row.original.type} />,
+      // },
       {
         id: "dateTime",
         header: "Date & Time",
@@ -650,7 +650,7 @@ export const SesssionTable: React.FC<SesssionTableProps> = ({
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6">
-                          <AvatarImage src={session.member.avatarUrl} />
+                          <AvatarImage src={session.member.photo_url} />
                           <AvatarFallback className="text-xs">
                             {session.member.initials ??
                               session.member.name.charAt(0)}

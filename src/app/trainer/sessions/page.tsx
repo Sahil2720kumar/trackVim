@@ -5,30 +5,36 @@
 // ============================================================================
 
 import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CalendarCheck,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock3,
-  Dumbbell,
   LucideIcon,
-  TrendingDown,
-  TrendingUp,
   XCircle,
+  AlertCircle,
+  Dumbbell,
+  HeartPulse,
+  Activity,
+  Wind,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SesssionTable } from "@/components/trainer/SesssionTable";
-import { Sesssions, type Session } from "@/mock/trainer/sesssions";
 import { StatCard } from "@/components/StatCard";
-
+import { useTrainerStore } from "@/stores/trainer-store";
+import { useAllSessions } from "@/hooks/queries/trainer.query";
+import { formatTime12h, getFirstDayOfMonth } from "@/lib/utils";
+import { getDaysInMonth } from "date-fns";
 // ============================================================================
 // Types
 // ============================================================================
 
-interface StatisticCard {
+interface StatisticCardConfig {
   id: string;
   label: string;
   value: string | number;
@@ -53,57 +59,39 @@ const DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 // Helpers
 // ============================================================================
 
-const getDaysInMonth = (date: Date): number =>
-  new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+const WORKOUT_TYPE_ICONS: Record<string, LucideIcon> = {
+  Strength: Dumbbell,
+  Hypertrophy: Dumbbell,
+  Functional: Activity,
+  Cardio: HeartPulse,
+  Mobility: Wind,
+  Powerlifting: Dumbbell,
+  HIIT: Activity,
+};
 
-const getFirstDayOfMonth = (date: Date): number =>
-  new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-
+export function mapTrainingSessions(rows: any[]) {
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.session_name,
+    member: {
+      name: row.members?.full_name ?? "Unknown member",
+      photo_url: row.members?.photo_url,
+    },
+    date: row.session_date,
+    time: formatTime12h(row.start_time),
+    duration: `${row.duration_minutes} mins`,
+    status: row.status,
+    icon: WORKOUT_TYPE_ICONS[row.workout_type] ?? Dumbbell,
+  }));
+}
 // ============================================================================
 // Sidebar widgets (unique to this page — not part of the reusable table)
 // ============================================================================
 
-const StatisticCard: React.FC<{ stat: StatCard }> = ({ stat }) => {
-  const isTrendUp = stat.trendDirection === "up";
-  const TrendIcon = isTrendUp ? TrendingUp : TrendingDown;
-  const trendColor = isTrendUp
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-600 dark:text-red-400";
-
-  return (
-    <Card className="border-border hover:shadow-md transition-shadow">
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className={`p-2.5 rounded-lg inline-flex mb-2 ${stat.color}`}>
-              {stat.icon}
-            </div>
-            <p className="text-sm font-medium text-muted-foreground">
-              {stat.label}
-            </p>
-            <h3 className="text-3xl font-bold text-foreground mt-1">
-              {stat.value}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              {stat.description}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1 mt-4 text-xs">
-          <TrendIcon className={`w-4 h-4 ${trendColor}`} />
-          <span className={trendColor}>
-            {isTrendUp ? "↑" : "↓"} {Math.abs(stat.trend)}% vs last month
-          </span>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
 const CalendarCard: React.FC<{ highlightedDates: string[] }> = ({
   highlightedDates,
 }) => {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 22));
+  const [currentDate, setCurrentDate] = useState(new Date());
   const daysInMonth = getDaysInMonth(currentDate);
   const firstDay = getFirstDayOfMonth(currentDate);
   const days: (number | null)[] = [
@@ -115,16 +103,29 @@ const CalendarCard: React.FC<{ highlightedDates: string[] }> = ({
     [highlightedDates],
   );
 
+  const today = new Date();
+  const isToday = (day: number): boolean =>
+    day === today.getDate() &&
+    currentDate.getMonth() === today.getMonth() &&
+    currentDate.getFullYear() === today.getFullYear();
+
   const isDateHighlighted = (day: number): boolean => {
     const date = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     return highlightedDateSet.has(date);
   };
 
+  const monthLabel = currentDate.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+
   return (
     <Card className="border-border">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">July 2026</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {monthLabel}
+          </h3>
           <div className="flex gap-1">
             <Button
               variant="ghost"
@@ -178,7 +179,7 @@ const CalendarCard: React.FC<{ highlightedDates: string[] }> = ({
                 className={`aspect-square flex items-center justify-center text-xs rounded-md transition-colors ${
                   day === null
                     ? ""
-                    : day === 22
+                    : isToday(day)
                       ? "bg-primary text-primary-foreground font-semibold"
                       : isDateHighlighted(day)
                         ? "bg-muted text-foreground"
@@ -195,9 +196,7 @@ const CalendarCard: React.FC<{ highlightedDates: string[] }> = ({
   );
 };
 
-const UpcomingSessionsCard: React.FC<{ sessions: Session[] }> = ({
-  sessions,
-}) => {
+const UpcomingSessionsCard: React.FC<{ sessions: any[] }> = ({ sessions }) => {
   const upcoming = sessions
     .filter((s) => s.status === "Upcoming")
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -220,32 +219,39 @@ const UpcomingSessionsCard: React.FC<{ sessions: Session[] }> = ({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {upcoming.map((session) => {
-            const Icon = session.icon;
-            return (
-              <div
-                key={session.id}
-                className="flex items-start gap-3 pb-3 border-b border-border last:border-0 last:pb-0"
-              >
-                <div className="mt-0.5 text-muted-foreground">
-                  <Icon className="w-5 h-5" />
+        {upcoming.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No upcoming sessions.</p>
+        ) : (
+          <div className="space-y-3">
+            {upcoming.map((session) => {
+              const Icon = session.icon;
+              return (
+                <div
+                  key={session.id}
+                  className="flex items-start gap-3 pb-3 border-b border-border last:border-0 last:pb-0"
+                >
+                  <div className="mt-0.5 text-muted-foreground">
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {session.name}gg
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {session.member.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {session.date} • {session.time}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {session.duration}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {session.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {session.member.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {session.date} • {session.time}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -259,9 +265,12 @@ const SessionOverviewCard: React.FC<{
     total: number;
   };
 }> = ({ stats }) => {
-  const completedPercent = Math.round((stats.completed / stats.total) * 100);
-  const upcomingPercent = Math.round((stats.upcoming / stats.total) * 100);
-  const cancelledPercent = Math.round((stats.cancelled / stats.total) * 100);
+  const completedPercent =
+    stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+  const upcomingPercent =
+    stats.total > 0 ? Math.round((stats.upcoming / stats.total) * 100) : 0;
+  const cancelledPercent =
+    stats.total > 0 ? Math.round((stats.cancelled / stats.total) * 100) : 0;
 
   return (
     <Card className="border-border">
@@ -407,25 +416,35 @@ const SessionsSkeletonLoader: React.FC = () => (
 // ============================================================================
 
 export default function SessionsPage() {
-  const [isLoading] = useState(false);
+  const router = useRouter();
+  const { activeGymId, activeTrainerId } = useTrainerStore();
+
+  const {
+    data: sessionsResult,
+    isLoading,
+    error: queryError,
+  } = useAllSessions(activeGymId, activeTrainerId);
+
+  const sessions = useMemo(
+    () =>
+      sessionsResult?.success ? mapTrainingSessions(sessionsResult.data) : [],
+    [sessionsResult],
+  );
 
   const stats = useMemo(() => {
-    const completed = Sesssions.filter((s) => s.status === "Completed").length;
-    const upcoming = Sesssions.filter((s) => s.status === "Upcoming").length;
-    const cancelled = Sesssions.filter((s) => s.status === "Cancelled").length;
-    return { completed, upcoming, cancelled, total: Sesssions.length };
-  }, []);
+    const completed = sessions.filter((s) => s.status === "Completed").length;
+    const upcoming = sessions.filter((s) => s.status === "Upcoming").length;
+    const cancelled = sessions.filter((s) => s.status === "Cancelled").length;
+    return { completed, upcoming, cancelled, total: sessions.length };
+  }, [sessions]);
 
-  const statisticCards: StatisticCard[] = [
+  const statisticCards: StatisticCardConfig[] = [
     {
       id: "total-sessions",
       label: "Total Sessions",
       value: stats.total,
       icon: CalendarCheck,
-      trend: {
-        value: "15%",
-        positive: true,
-      },
+      trend: { value: "15%", positive: true },
       subtitle: "This Month",
       iconBg: "bg-blue-100",
       iconColor: "text-blue-600",
@@ -435,10 +454,7 @@ export default function SessionsPage() {
       label: "Completed",
       value: stats.completed,
       icon: CheckCircle2,
-      trend: {
-        value: "12%",
-        positive: true,
-      },
+      trend: { value: "12%", positive: true },
       subtitle: "This Month",
       iconBg: "bg-emerald-100",
       iconColor: "text-emerald-600",
@@ -448,10 +464,7 @@ export default function SessionsPage() {
       label: "Upcoming",
       value: stats.upcoming,
       icon: Clock3,
-      trend: {
-        value: "5%",
-        positive: true,
-      },
+      trend: { value: "5%", positive: true },
       subtitle: "This Month",
       iconBg: "bg-amber-100",
       iconColor: "text-amber-600",
@@ -461,20 +474,17 @@ export default function SessionsPage() {
       label: "Cancelled",
       value: stats.cancelled,
       icon: XCircle,
-      trend: {
-        value: "8%",
-        positive: false,
-      },
+      trend: { value: "8%", positive: false },
       subtitle: "This Month",
       iconBg: "bg-red-100",
       iconColor: "text-red-600",
     },
   ];
 
-  const highlightedDates = Sesssions.map((s) => s.date);
+  const highlightedDates = sessions.map((s) => s.date);
 
   const handleCreateSession = () => {
-    console.log("Create new session clicked");
+    router.push("/trainer/training-sessions/new");
   };
 
   if (isLoading) {
@@ -485,11 +495,24 @@ export default function SessionsPage() {
     );
   }
 
+  if (queryError || (sessionsResult && !sessionsResult.success)) {
+    return (
+      <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="text-sm">
+            Couldn&apos;t load sessions. Please refresh and try again.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {statisticCards.map((stat, index) => (
+        {statisticCards.map((stat) => (
           <StatCard
             key={stat.id}
             title={stat.label}
@@ -506,12 +529,11 @@ export default function SessionsPage() {
 
       {/* Reusable session table: header + search + filters + status pills + create button */}
       <SesssionTable
-        sessions={Sesssions}
+        sessions={sessions}
         title="Sessions"
         subtitle="Manage and track all your training sessions."
         showCreateButton
         onCreateClick={handleCreateSession}
-        // onViewDetails={handleViewDetails}
         pageSize={5}
       />
 
@@ -521,7 +543,7 @@ export default function SessionsPage() {
         style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
       >
         <CalendarCard highlightedDates={highlightedDates} />
-        <UpcomingSessionsCard sessions={Sesssions} />
+        <UpcomingSessionsCard sessions={sessions} />
         <SessionOverviewCard stats={stats} />
       </div>
     </div>

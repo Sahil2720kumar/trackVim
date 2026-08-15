@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
-  allowedDevOrigins: ["5ce3-117-231-226-4.ngrok-free.app"],
+  allowedDevOrigins: ["b552-117-231-226-17.ngrok-free.app"],
   reactStrictMode: false,
   experimental: {
     serverActions: {

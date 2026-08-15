@@ -1279,6 +1279,8 @@ export type Database = {
       }
       session_exercises: {
         Row: {
+          completed: boolean
+          completed_at: string | null
           exercise_id: string
           id: string
           position: number
@@ -1289,6 +1291,8 @@ export type Database = {
           weight: string | null
         }
         Insert: {
+          completed?: boolean
+          completed_at?: string | null
           exercise_id: string
           id?: string
           position?: number
@@ -1299,6 +1303,8 @@ export type Database = {
           weight?: string | null
         }
         Update: {
+          completed?: boolean
+          completed_at?: string | null
           exercise_id?: string
           id?: string
           position?: number
@@ -1917,11 +1923,13 @@ export type Database = {
           additional_notes: string | null
           category: string
           created_at: string
+          default_rest_seconds: number | null
           description: string
           difficulty_level:
             | Database["public"]["Enums"]["difficulty_level"]
             | null
           duration_minutes: number | null
+          equipment: Json | null
           gym_id: string
           id: string
           name: string
@@ -1936,11 +1944,13 @@ export type Database = {
           additional_notes?: string | null
           category: string
           created_at?: string
+          default_rest_seconds?: number | null
           description: string
           difficulty_level?:
             | Database["public"]["Enums"]["difficulty_level"]
             | null
           duration_minutes?: number | null
+          equipment?: Json | null
           gym_id: string
           id?: string
           name: string
@@ -1955,11 +1965,13 @@ export type Database = {
           additional_notes?: string | null
           category?: string
           created_at?: string
+          default_rest_seconds?: number | null
           description?: string
           difficulty_level?:
             | Database["public"]["Enums"]["difficulty_level"]
             | null
           duration_minutes?: number | null
+          equipment?: Json | null
           gym_id?: string
           id?: string
           name?: string
@@ -2000,9 +2012,7 @@ export type Database = {
         Args: { p_gym_id: string; p_new_plan_id: string }
         Returns: undefined
       }
-      check_in_or_out:
-        | { Args: { p_token: string }; Returns: Json }
-        | { Args: { qr_identifier: string }; Returns: Json }
+      check_in_or_out: { Args: { p_token: string }; Returns: Json }
       create_gym_invoice: {
         Args: {
           p_gym_id: string
@@ -2017,6 +2027,29 @@ export type Database = {
       }
       create_subscription_payment_order: {
         Args: { p_gateway_order_id: string; p_gym_subscription_id: string }
+        Returns: string
+      }
+      create_training_session_with_exercises: {
+        Args: {
+          p_default_rest_seconds: number
+          p_duration_minutes: number
+          p_end_time: string
+          p_exercises: Json
+          p_gym_id: string
+          p_location: string
+          p_member_id: string
+          p_notes: string
+          p_reminder_minutes: number
+          p_seed_from_template?: boolean
+          p_session_date: string
+          p_session_name: string
+          p_session_type: Database["public"]["Enums"]["session_type"]
+          p_show_rest_timer: boolean
+          p_start_time: string
+          p_template_id: string
+          p_trainer_id: string
+          p_workout_type: Database["public"]["Enums"]["workout_type"]
+        }
         Returns: string
       }
       create_walkin_member: {
@@ -2084,6 +2117,12 @@ export type Database = {
       current_member_id: { Args: never; Returns: string }
       current_user_id: { Args: never; Returns: string }
       debug_jwt: { Args: never; Returns: Json }
+      debug_my_gym_ids: {
+        Args: never
+        Returns: {
+          gym_id: string
+        }[]
+      }
       expire_overdue_memberships: { Args: never; Returns: number }
       extend_gym_trial: {
         Args: { p_gym_id: string; p_new_billing_start_date: string }

@@ -5,8 +5,13 @@ import { revalidatePath } from "next/cache";
 
 import { auth, clerkClient } from "@clerk/nextjs/server";
 
-import { createTrainerSchema, type CreateTrainerInput } from "@/db/validators";
+import {
+  createTrainerSchema,
+  UpdateWorkoutTemplateInput,
+  type CreateTrainerInput,
+} from "@/db/validators";
 import { uploadFile } from "@/lib/cloudinary/upload";
+import { restLabelToSeconds } from "@/lib/utils";
 
 export type ActionResult<T = void> =
   | { success: true; data: T }
@@ -444,64 +449,187 @@ export async function updateWorkoutTemplate(
 // Template Exercises
 // ============================================================================
 
-export async function addExerciseToTemplate(payload: {
-  templateId: string;
+export type TemplateExerciseInput = {
   exerciseId: string;
-  position?: number;
-  sets?: number;
-  reps?: string;
+  sets: number;
+  reps: string;
   weight?: string;
   restSeconds?: number;
-}): Promise<ActionResult<{ id: string }>> {
+};
+
+export type WorkoutTemplateInput = {
+  name: string;
+  type?:
+    | "Strength"
+    | "Hypertrophy"
+    | "Functional"
+    | "Cardio"
+    | "Mobility"
+    | "Powerlifting"
+    | "HIIT";
+  goal?:
+    | "Muscle Gain"
+    | "Fat Loss"
+    | "Strength"
+    | "Endurance"
+    | "Athletic Performance";
+  difficulty?: "Beginner" | "Intermediate" | "Advanced";
+  duration?: number;
+  muscleGroups?: string[];
+  description?: string;
+  restBetweenSets?: string;
+  equipment?: string[];
+  notes?: string;
+  exercises: TemplateExerciseInput[];
+};
+
+function toTemplateExerciseRows(
+  templateId: string,
+  exercises: TemplateExerciseInput[],
+) {
+  return exercises.map((ex, index) => ({
+    template_id: templateId,
+    exercise_id: ex.exerciseId,
+    position: index,
+    sets: ex.sets,
+    reps: ex.reps,
+    weight: ex.weight ?? "",
+    rest_seconds: ex.restSeconds ?? 60,
+  }));
+}
+
+export async function createWorkoutTemplateWithExercises(
+  payload: WorkoutTemplateInput,
+): Promise<ActionResult<{ id: string }>> {
+  const { sessionClaims } = await auth();
+  const { trainerId, gymId } = (sessionClaims?.publicMetadata ?? {}) as {
+    trainerId?: string;
+    gymId?: string;
+  };
+
+  if (!trainerId || !gymId) {
+    return { success: false, error: "Trainer or Gym not found." };
+  }
+
+  if (payload.exercises.length === 0) {
+    return {
+      success: false,
+      error: "Add at least one exercise to the template.",
+    };
+  }
+
   const supabase = await createServerClient();
 
-  const { data, error } = await supabase
-    .from("template_exercises")
+  const { data: template, error } = await supabase
+    .from("workout_templates")
     .insert({
-      template_id: payload.templateId,
-      exercise_id: payload.exerciseId,
-      position: payload.position ?? 0,
-      sets: payload.sets ?? 3,
-      reps: payload.reps ?? "10",
-      weight: payload.weight ?? "",
-      rest_seconds: payload.restSeconds ?? 60,
+      gym_id: gymId,
+      trainer_id: trainerId,
+      name: payload.name,
+      // No dedicated "category" field on the form — mirrors template type
+      // until the UI grows a separate category selector.
+      category: payload.type ?? "General",
+      description: payload.description ?? "",
+      workout_type: payload.type,
+      primary_goal: payload.goal,
+      difficulty_level: payload.difficulty,
+      duration_minutes: payload.duration,
+      target_muscles: payload.muscleGroups ?? [],
+      additional_notes: payload.notes,
+      status: "Active",
+      equipment: payload.equipment ?? [],
+      default_rest_seconds: payload.restBetweenSets
+        ? restLabelToSeconds(payload.restBetweenSets)
+        : 60,
     })
     .select("id")
     .single();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/trainer/templates");
-  return { success: true, data: { id: data.id } };
+
+  const { error: exercisesError } = await supabase
+    .from("template_exercises")
+    .insert(toTemplateExerciseRows(template.id, payload.exercises));
+
+  if (exercisesError) {
+    // Don't leave an empty draft template behind if the exercise insert fails.
+    await supabase.from("workout_templates").delete().eq("id", template.id);
+    return { success: false, error: exercisesError.message };
+  }
+
+  revalidatePath("/trainer/templates");
+  return { success: true, data: { id: template.id } };
 }
 
-export async function updateTemplateExercise(
-  templateExerciseId: string,
-  payload: Partial<{
-    position: number;
-    sets: number;
-    reps: string;
-    weight: string;
-    restSeconds: number;
-  }>,
-): Promise<ActionResult> {
+export async function updateWorkoutTemplateWithExercises(
+  templateId: string,
+  payload: WorkoutTemplateInput,
+): Promise<ActionResult<{ id: string }>> {
+  const { sessionClaims } = await auth();
+  const { trainerId, gymId } = (sessionClaims?.publicMetadata ?? {}) as {
+    trainerId?: string;
+    gymId?: string;
+  };
+
+  if (!trainerId || !gymId) {
+    return { success: false, error: "Trainer or Gym not found." };
+  }
+
+  if (payload.exercises.length === 0) {
+    return {
+      success: false,
+      error: "Add at least one exercise to the template.",
+    };
+  }
+
   const supabase = await createServerClient();
 
-  const update: Record<string, unknown> = {};
-  if (payload.position !== undefined) update.position = payload.position;
-  if (payload.sets !== undefined) update.sets = payload.sets;
-  if (payload.reps !== undefined) update.reps = payload.reps;
-  if (payload.weight !== undefined) update.weight = payload.weight;
-  if (payload.restSeconds !== undefined)
-    update.rest_seconds = payload.restSeconds;
-
-  const { error } = await supabase
-    .from("template_exercises")
-    .update(update as any)
-    .eq("id", templateExerciseId);
+  const { data: template, error } = await supabase
+    .from("workout_templates")
+    .update({
+      name: payload.name,
+      category: payload.type ?? "General", // mirrors create — confirmed pattern
+      description: payload.description ?? "",
+      workout_type: payload.type,
+      primary_goal: payload.goal,
+      difficulty_level: payload.difficulty,
+      duration_minutes: payload.duration,
+      target_muscles: payload.muscleGroups ?? [],
+      additional_notes: payload.notes,
+      equipment: payload.equipment ?? [],
+      default_rest_seconds: payload.restBetweenSets
+        ? restLabelToSeconds(payload.restBetweenSets)
+        : 60,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", templateId)
+    .eq("gym_id", gymId) // defense in depth alongside RLS, matches insert's scoping
+    .select("id")
+    .single();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/trainer/templates");
-  return { success: true, data: undefined };
+
+  // Replace-all strategy: simpler than diffing rowIds client-side, but
+  // needs a DELETE policy on template_exercises — flagged last turn,
+  // not present in the schema you've shown me. This will fail at
+  // runtime (RLS silently returns 0 rows deleted, not an error, so
+  // watch for that specifically) until the policy is added.
+  const { error: deleteError } = await supabase
+    .from("template_exercises")
+    .delete()
+    .eq("template_id", templateId);
+
+  if (deleteError) return { success: false, error: deleteError.message };
+
+  const { error: exercisesError } = await supabase
+    .from("template_exercises")
+    .insert(toTemplateExerciseRows(templateId, payload.exercises));
+
+  if (exercisesError) return { success: false, error: exercisesError.message };
+
+  revalidatePath("/trainer/templates");
+  revalidatePath(`/trainer/templates/${templateId}`);
+  return { success: true, data: { id: template.id } };
 }
 
 export async function removeExerciseFromTemplate(
@@ -515,7 +643,7 @@ export async function removeExerciseFromTemplate(
     .eq("id", templateExerciseId);
 
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/trainer/templates");
+  revalidatePath(`/trainer/templates/${templateExerciseId}`);
   return { success: true, data: undefined };
 }
 
@@ -529,7 +657,17 @@ export async function removeExerciseFromTemplate(
  * notification for the member. Session exercises should be seeded separately
  * by copying from templateExercises (see seedSessionFromTemplate).
  */
-export async function createTrainingSession(payload: {
+
+export type SessionExerciseInput = {
+  exerciseId: string;
+  position: number;
+  sets: number;
+  reps: string;
+  weight?: string;
+  restSeconds?: number;
+};
+
+export async function createTrainingSessionWithExercises(payload: {
   gymId: string;
   trainerId: string;
   memberId: string;
@@ -557,131 +695,118 @@ export async function createTrainingSession(payload: {
   showRestTimer?: boolean;
   defaultRestSeconds?: number;
   reminderMinutes?: number;
+  /** Set true to copy exercises from templateId instead of sending `exercises`. */
+  seedFromTemplate?: boolean;
+  exercises?: SessionExerciseInput[];
 }): Promise<ActionResult<{ id: string }>> {
   const supabase = await createServerClient();
 
-  const { data, error } = await supabase
-    .from("training_sessions")
-    .insert({
-      gym_id: payload.gymId,
-      trainer_id: payload.trainerId,
-      member_id: payload.memberId,
-      template_id: payload.templateId,
-      session_name: payload.sessionName,
-      session_date: payload.sessionDate,
-      start_time: payload.startTime,
-      end_time: payload.endTime,
-      duration_minutes: payload.durationMinutes,
-      workout_type: payload.workoutType ?? "Strength",
-      session_type: payload.sessionType ?? "Personal Training",
-      location: payload.location,
-      notes: payload.notes,
-      show_rest_timer: payload.showRestTimer ?? true,
-      default_rest_seconds: payload.defaultRestSeconds ?? 60,
-      reminder_minutes: payload.reminderMinutes ?? 15,
-      status: "Upcoming",
-    })
-    .select("id")
-    .single();
+  const { data, error } = await supabase.rpc(
+    "create_training_session_with_exercises",
+    {
+      p_gym_id: payload.gymId,
+      p_trainer_id: payload.trainerId,
+      p_member_id: payload.memberId,
+      p_template_id: payload.templateId ?? null,
+      p_session_name: payload.sessionName,
+      p_session_date: payload.sessionDate,
+      p_start_time: payload.startTime,
+      p_end_time: payload.endTime,
+      p_duration_minutes: payload.durationMinutes ?? null,
+      p_workout_type: payload.workoutType ?? "Strength",
+      p_session_type: payload.sessionType ?? "Personal Training",
+      p_location: payload.location ?? null,
+      p_notes: payload.notes ?? null,
+      p_show_rest_timer: payload.showRestTimer ?? true,
+      p_default_rest_seconds: payload.defaultRestSeconds ?? 60,
+      p_reminder_minutes: payload.reminderMinutes ?? 15,
+      p_exercises: payload.seedFromTemplate
+        ? null
+        : (payload.exercises ?? []).map((ex) => ({
+            exercise_id: ex.exerciseId,
+            position: ex.position,
+            sets: ex.sets,
+            reps: ex.reps,
+            weight: ex.weight ?? "",
+            rest_seconds: ex.restSeconds ?? 60,
+          })),
+      p_seed_from_template: payload.seedFromTemplate ?? false,
+    },
+  );
 
   if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/trainer/sessions");
-  return { success: true, data: { id: data.id } };
+  revalidatePath("/trainer/sessions");
+  return { success: true, data: { id: data as string } };
 }
 
-/**
- * Seed session exercises by copying from a template.
- * Call this right after createTrainingSession when templateId is provided.
- */
-export async function seedSessionFromTemplate(
+export async function updateTrainingSessionWithExercises(
   sessionId: string,
-  templateId: string,
-): Promise<ActionResult<{ count: number }>> {
-  const supabase = await createServerClient();
-
-  // Fetch template exercises
-  const { data: templateExercises, error: fetchError } = await supabase
-    .from("template_exercises")
-    .select("*")
-    .eq("template_id", templateId)
-    .order("position", { ascending: true });
-
-  if (fetchError) return { success: false, error: fetchError.message };
-  if (!templateExercises || templateExercises.length === 0) {
-    return { success: true, data: { count: 0 } };
-  }
-
-  const sessionExercises = templateExercises.map((te) => ({
-    session_id: sessionId,
-    exercise_id: te.exercise_id,
-    position: te.position,
-    sets: te.sets,
-    reps: te.reps,
-    weight: te.weight,
-    rest_seconds: te.rest_seconds,
-  }));
-
-  const { error: insertError } = await supabase
-    .from("session_exercises")
-    .insert(sessionExercises);
-
-  if (insertError) {
-    await supabase.from("training_sessions").delete().eq("id", sessionId);
-    return { success: false, error: insertError.message };
-  }
-
-  return { success: true, data: { count: sessionExercises.length } };
-}
-
-export async function updateTrainingSession(
-  sessionId: string,
-  payload: Partial<{
+  payload: {
+    gymId: string;
+    memberId: string;
+    templateId?: string;
     sessionName: string;
     sessionDate: string;
     startTime: string;
     endTime: string;
-    durationMinutes: number;
-    workoutType: string;
-    sessionType: string;
-    location: string;
-    status: "Upcoming" | "InProgress" | "Completed" | "Cancelled";
-    notes: string;
-  }>,
-): Promise<ActionResult> {
+    durationMinutes?: number;
+    workoutType?:
+      | "Strength"
+      | "Hypertrophy"
+      | "Functional"
+      | "Cardio"
+      | "Mobility"
+      | "Powerlifting"
+      | "HIIT";
+    sessionType?:
+      | "Personal Training"
+      | "Group Session"
+      | "Assessment"
+      | "Consultation";
+    location?: string;
+    notes?: string;
+    showRestTimer?: boolean;
+    defaultRestSeconds?: number;
+    reminderMinutes?: number;
+    exercises: SessionExerciseInput[];
+  },
+): Promise<ActionResult<{ id: string }>> {
   const supabase = await createServerClient();
 
-  const update: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
-  };
-  if (payload.sessionName !== undefined)
-    update.session_name = payload.sessionName;
-  if (payload.sessionDate !== undefined)
-    update.session_date = payload.sessionDate;
-  if (payload.startTime !== undefined) update.start_time = payload.startTime;
-  if (payload.endTime !== undefined) update.end_time = payload.endTime;
-  if (payload.durationMinutes !== undefined)
-    update.duration_minutes = payload.durationMinutes;
-  if (payload.workoutType !== undefined)
-    update.workout_type = payload.workoutType;
-  if (payload.sessionType !== undefined)
-    update.session_type = payload.sessionType;
-  if (payload.location !== undefined) update.location = payload.location;
-  if (payload.notes !== undefined) update.notes = payload.notes;
-  if (payload.status !== undefined) {
-    update.status = payload.status;
-    if (payload.status === "Completed")
-      update.completed_at = new Date().toISOString();
-  }
-
-  const { error } = await supabase
-    .from("training_sessions")
-    .update(update as any)
-    .eq("id", sessionId);
+  const { data, error } = await supabase.rpc(
+    "update_training_session_with_exercises",
+    {
+      p_session_id: sessionId,
+      p_gym_id: payload.gymId,
+      p_member_id: payload.memberId,
+      p_template_id: payload.templateId ?? null,
+      p_session_name: payload.sessionName,
+      p_session_date: payload.sessionDate,
+      p_start_time: payload.startTime,
+      p_end_time: payload.endTime,
+      p_duration_minutes: payload.durationMinutes ?? null,
+      p_workout_type: payload.workoutType ?? "Strength",
+      p_session_type: payload.sessionType ?? "Personal Training",
+      p_location: payload.location ?? null,
+      p_notes: payload.notes ?? null,
+      p_show_rest_timer: payload.showRestTimer ?? true,
+      p_default_rest_seconds: payload.defaultRestSeconds ?? 60,
+      p_reminder_minutes: payload.reminderMinutes ?? 15,
+      p_exercises: payload.exercises.map((ex) => ({
+        exercise_id: ex.exerciseId,
+        position: ex.position,
+        sets: ex.sets,
+        reps: ex.reps,
+        weight: ex.weight ?? "",
+        rest_seconds: ex.restSeconds ?? 60,
+      })),
+    },
+  );
 
   if (error) return { success: false, error: error.message };
-
   revalidatePath("/dashboard/trainer/sessions");
-  return { success: true, data: undefined };
+  revalidatePath(`/trainer/training-sessions/${sessionId}`);
+  return { success: true, data: { id: data as string } };
 }
 
 /**
@@ -706,37 +831,23 @@ export async function completeTrainingSession(
   return { success: true, data: undefined };
 }
 
-// ============================================================================
-// Session Exercises (edit THIS session, not the template)
-// ============================================================================
-
-export async function addExerciseToSession(payload: {
-  sessionId: string;
-  exerciseId: string;
-  position?: number;
-  sets?: number;
-  reps?: string;
-  weight?: string;
-  restSeconds?: number;
-}): Promise<ActionResult<{ id: string }>> {
+export async function toggleSessionExerciseCompletion(
+  sessionExerciseId: string,
+  completed: boolean,
+): Promise<ActionResult> {
   const supabase = await createServerClient();
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("session_exercises")
-    .insert({
-      session_id: payload.sessionId,
-      exercise_id: payload.exerciseId,
-      position: payload.position ?? 0,
-      sets: payload.sets ?? 3,
-      reps: payload.reps ?? "10",
-      weight: payload.weight ?? "",
-      rest_seconds: payload.restSeconds ?? 60,
+    .update({
+      completed,
+      completed_at: completed ? new Date().toISOString() : null,
     })
-    .select("id")
-    .single();
+    .eq("id", sessionExerciseId);
 
   if (error) return { success: false, error: error.message };
-  return { success: true, data: { id: data.id } };
+  revalidatePath(`/trainer/sessions/${sessionExerciseId}`);
+  return { success: true, data: undefined };
 }
 
 export async function updateSessionExercise(

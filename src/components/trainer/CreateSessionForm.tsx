@@ -7,13 +7,24 @@
 // `mode="edit"` plus `defaultValues` / `defaultExercises` to preload it,
 // and `sidebarExtra` / `tipsTitle` / `tips` to customize the sidebar for
 // editing (e.g. a Quick Actions card, a different tips list).
+//
+// Data (members, templates, exercise library) is fetched internally via
+// react-query, scoped to the active gym/trainer from useTrainerStore —
+// mirrors the pattern used in CreateTemplateForm.
 // ============================================================================
 
-import { useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { toast } from "sonner";
 import {
   Calendar,
   Clock3,
@@ -63,6 +74,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { bigSquareButton } from "@/lib/styles";
+import { useTrainerStore } from "@/stores/trainer-store";
+import {
+  useMyAssignedMembers,
+  useWorkoutTemplates,
+  useAllExercises,
+} from "@/hooks/queries/trainer.query";
+import {
+  createTrainingSessionWithExercises,
+  updateTrainingSessionWithExercises,
+} from "@/actions/trainer.action";
 
 import {
   FormInput,
@@ -91,6 +112,8 @@ import {
   type WorkoutTemplate,
   type SessionType,
 } from "@/components/trainer/TrainingSessionFields";
+import { formatTime12h, getTomorrowDate } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 
 // ============================================================================
 // Constants
@@ -113,19 +136,15 @@ const REMINDER_OPTIONS = [
 ];
 const TIME_PATTERN = /^(0?[1-9]|1[0-2]):[0-5]\d\s?(AM|PM)$/i;
 
-// One distinct lucide icon per template so the picker is scannable at a glance.
-const TEMPLATE_ICONS: Record<
-  string,
-  React.ComponentType<{ className?: string }>
-> = {
-  "tpl-pull": ArrowDownToLine,
-  "tpl-push": ArrowUpFromLine,
-  "tpl-legs": Footprints,
-  "tpl-mobility": Wind,
-};
-
-export function getTemplateIcon(templateId: string) {
-  return TEMPLATE_ICONS[templateId] ?? Dumbbell;
+// Icon is chosen by matching keywords in the template name, since real
+// templates come from the DB with UUIDs rather than the old fixed mock ids.
+export function getTemplateIcon(name: string) {
+  const key = name.toLowerCase();
+  if (key.includes("pull")) return ArrowDownToLine;
+  if (key.includes("push")) return ArrowUpFromLine;
+  if (key.includes("leg")) return Footprints;
+  if (key.includes("mobility") || key.includes("recovery")) return Wind;
+  return Dumbbell;
 }
 
 // Default stable id so the header's "Create Session" button (rendered
@@ -133,304 +152,6 @@ export function getTemplateIcon(templateId: string) {
 // attribute. Pass `formId` to override for a second instance on the page
 // (e.g. the edit page uses its own id).
 export const SESSION_FORM_ID = "training-session-form";
-
-// ============================================================================
-// Mock Data (exported so other pages, e.g. Edit, can reuse the same members
-// / templates instead of re-declaring their own).
-// ============================================================================
-
-export const MOCK_MEMBERS: Member[] = [
-  { id: "mem-1", name: "Aman Verma", plan: "Premium Plan", initials: "AV" },
-  { id: "mem-2", name: "Priya Sharma", plan: "Elite Plan", initials: "PS" },
-  { id: "mem-3", name: "Rahul Bora", plan: "Standard Plan", initials: "RB" },
-  { id: "mem-4", name: "Neha Kalita", plan: "Premium Plan", initials: "NK" },
-  { id: "mem-5", name: "Vikram Das", plan: "Elite Plan", initials: "VD" },
-];
-
-const PULL_DAY_EXERCISES: SessionExercise[] = [
-  {
-    rowId: "ex-1",
-    id: "lib-deadlift",
-    name: "Deadlift",
-    equipment: "Barbell",
-    muscleGroup: "Back",
-    sets: 4,
-    reps: "6-8",
-    weight: "100 kg",
-    rest: "120 sec",
-  },
-  {
-    rowId: "ex-2",
-    id: "lib-pullup",
-    name: "Pull Up",
-    equipment: "Bodyweight",
-    muscleGroup: "Back",
-    sets: 4,
-    reps: "8-10",
-    weight: "Bodyweight",
-    rest: "90 sec",
-  },
-  {
-    rowId: "ex-3",
-    id: "lib-bent-row",
-    name: "Bent Over Row",
-    equipment: "Barbell",
-    muscleGroup: "Back",
-    sets: 4,
-    reps: "8-10",
-    weight: "70 kg",
-    rest: "90 sec",
-  },
-  {
-    rowId: "ex-4",
-    id: "lib-lat-pulldown",
-    name: "Lat Pulldown",
-    equipment: "Cable",
-    muscleGroup: "Back",
-    sets: 3,
-    reps: "10-12",
-    weight: "60 kg",
-    rest: "75 sec",
-  },
-  {
-    rowId: "ex-5",
-    id: "lib-seated-row",
-    name: "Seated Cable Row",
-    equipment: "Cable",
-    muscleGroup: "Back",
-    sets: 3,
-    reps: "10-12",
-    weight: "55 kg",
-    rest: "75 sec",
-  },
-  {
-    rowId: "ex-6",
-    id: "lib-face-pull",
-    name: "Face Pull",
-    equipment: "Rope",
-    muscleGroup: "Rear Delts",
-    sets: 3,
-    reps: "12-15",
-    weight: "20 kg",
-    rest: "60 sec",
-  },
-  {
-    rowId: "ex-7",
-    id: "lib-barbell-curl",
-    name: "Barbell Curl",
-    equipment: "Barbell",
-    muscleGroup: "Biceps",
-    sets: 3,
-    reps: "8-12",
-    weight: "30 kg",
-    rest: "60 sec",
-  },
-  {
-    rowId: "ex-8",
-    id: "lib-hammer-curl",
-    name: "Hammer Curl",
-    equipment: "Dumbbell",
-    muscleGroup: "Biceps",
-    sets: 3,
-    reps: "10-12",
-    weight: "12.5 kg",
-    rest: "60 sec",
-  },
-];
-
-const PUSH_DAY_EXERCISES: SessionExercise[] = [
-  {
-    rowId: "ex-9",
-    id: "lib-bench",
-    name: "Barbell Bench Press",
-    equipment: "Barbell",
-    muscleGroup: "Chest",
-    sets: 4,
-    reps: "6-8",
-    weight: "80 kg",
-    rest: "120 sec",
-  },
-  {
-    rowId: "ex-10",
-    id: "lib-ohp",
-    name: "Overhead Press",
-    equipment: "Barbell",
-    muscleGroup: "Shoulders",
-    sets: 4,
-    reps: "8-10",
-    weight: "45 kg",
-    rest: "90 sec",
-  },
-  {
-    rowId: "ex-11",
-    id: "lib-incline-db",
-    name: "Incline Dumbbell Press",
-    equipment: "Dumbbell",
-    muscleGroup: "Chest",
-    sets: 3,
-    reps: "10-12",
-    weight: "26 kg",
-    rest: "75 sec",
-  },
-  {
-    rowId: "ex-12",
-    id: "lib-lateral-raise",
-    name: "Lateral Raise",
-    equipment: "Dumbbell",
-    muscleGroup: "Shoulders",
-    sets: 3,
-    reps: "12-15",
-    weight: "10 kg",
-    rest: "60 sec",
-  },
-  {
-    rowId: "ex-13",
-    id: "lib-tricep-pushdown",
-    name: "Tricep Pushdown",
-    equipment: "Cable",
-    muscleGroup: "Triceps",
-    sets: 3,
-    reps: "10-12",
-    weight: "25 kg",
-    rest: "60 sec",
-  },
-  {
-    rowId: "ex-14",
-    id: "lib-dips",
-    name: "Dips",
-    equipment: "Bodyweight",
-    muscleGroup: "Triceps",
-    sets: 3,
-    reps: "8-10",
-    weight: "Bodyweight",
-    rest: "75 sec",
-  },
-];
-
-const LEG_DAY_EXERCISES: SessionExercise[] = [
-  {
-    rowId: "ex-15",
-    id: "lib-squat",
-    name: "Back Squat",
-    equipment: "Barbell",
-    muscleGroup: "Legs",
-    sets: 4,
-    reps: "6-8",
-    weight: "110 kg",
-    rest: "150 sec",
-  },
-  {
-    rowId: "ex-16",
-    id: "lib-rdl",
-    name: "Romanian Deadlift",
-    equipment: "Barbell",
-    muscleGroup: "Legs",
-    sets: 4,
-    reps: "8-10",
-    weight: "85 kg",
-    rest: "120 sec",
-  },
-  {
-    rowId: "ex-17",
-    id: "lib-leg-press",
-    name: "Leg Press",
-    equipment: "Machine",
-    muscleGroup: "Legs",
-    sets: 3,
-    reps: "10-12",
-    weight: "180 kg",
-    rest: "90 sec",
-  },
-  {
-    rowId: "ex-18",
-    id: "lib-leg-curl",
-    name: "Seated Leg Curl",
-    equipment: "Machine",
-    muscleGroup: "Legs",
-    sets: 3,
-    reps: "10-12",
-    weight: "40 kg",
-    rest: "75 sec",
-  },
-  {
-    rowId: "ex-19",
-    id: "lib-calf-raise",
-    name: "Standing Calf Raise",
-    equipment: "Machine",
-    muscleGroup: "Legs",
-    sets: 4,
-    reps: "12-15",
-    weight: "70 kg",
-    rest: "60 sec",
-  },
-];
-
-export const MOCK_TEMPLATES: WorkoutTemplate[] = [
-  {
-    id: "tpl-pull",
-    name: "Pull Day",
-    category: "Strength Training",
-    status: "Active",
-    description:
-      "Target the back, biceps, and rear delts with compound and isolation pulling movements.",
-    durationMinutes: 60,
-    targetMuscles: ["Back", "Biceps", "Rear Delts"],
-    exercises: PULL_DAY_EXERCISES,
-  },
-  {
-    id: "tpl-push",
-    name: "Push Day",
-    category: "Strength Training",
-    status: "Active",
-    description:
-      "Build pressing strength across the chest, shoulders, and triceps.",
-    durationMinutes: 55,
-    targetMuscles: ["Chest", "Shoulders", "Triceps"],
-    exercises: PUSH_DAY_EXERCISES,
-  },
-  {
-    id: "tpl-legs",
-    name: "Leg Day – Power Focus",
-    category: "Strength Training",
-    status: "Active",
-    description:
-      "Heavy compound lower-body work for maximum strength development.",
-    durationMinutes: 65,
-    targetMuscles: ["Legs"],
-    exercises: LEG_DAY_EXERCISES,
-  },
-  {
-    id: "tpl-mobility",
-    name: "Recovery & Mobility Flow",
-    category: "Mobility",
-    status: "Draft",
-    description: "Light mobility circuit for active recovery days.",
-    durationMinutes: 30,
-    targetMuscles: ["Full Body", "Core"],
-    exercises: [],
-  },
-];
-
-const EXERCISE_LIBRARY: LibraryExercise[] = [
-  ...PULL_DAY_EXERCISES,
-  ...PUSH_DAY_EXERCISES,
-  ...LEG_DAY_EXERCISES,
-  {
-    id: "lib-plank",
-    name: "Plank",
-    equipment: "Bodyweight",
-    muscleGroup: "Core",
-  },
-  {
-    id: "lib-farmer-carry",
-    name: "Farmer's Carry",
-    equipment: "Dumbbell",
-    muscleGroup: "Full Body",
-  },
-].filter(
-  (exercise, index, all) =>
-    all.findIndex((candidate) => candidate.id === exercise.id) === index,
-);
 
 // ============================================================================
 // Validation Schema
@@ -487,8 +208,8 @@ export type SessionFormValues = z.infer<typeof sessionFormSchema>;
 export const DEFAULT_FORM_VALUES: SessionFormValues = {
   sessionName: "",
   templateId: "",
-  memberId: MOCK_MEMBERS[0].id,
-  sessionDate: "2026-07-22",
+  memberId: "",
+  sessionDate: getTomorrowDate(),
   startTime: "07:00 AM",
   endTime: "08:00 AM",
   sessionType: "Strength",
@@ -500,23 +221,163 @@ export const DEFAULT_FORM_VALUES: SessionFormValues = {
 };
 
 // ============================================================================
+// Time / duration helpers
+// ============================================================================
+
+function to24HourTime(time12h: string): string {
+  const match = time12h.trim().match(/^(\d{1,2}):(\d{2})\s?(AM|PM)$/i);
+  if (!match) return time12h;
+  let hours = parseInt(match[1], 10) % 12;
+  if (match[3].toUpperCase() === "PM") hours += 12;
+  return `${String(hours).padStart(2, "0")}:${match[2]}:00`;
+}
+
+function parseRestSeconds(label: string): number {
+  const match = label.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 60;
+}
+
+function parseReminderMinutes(label: string): number | null {
+  if (label === "No reminder") return null;
+  if (label === "1 hour before") return 60;
+  const match = label.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+function diffMinutes(start12h: string, end12h: string): number | null {
+  const toMinutes = (time: string) => {
+    const m = time.match(/^(\d{1,2}):(\d{2})\s?(AM|PM)$/i);
+    if (!m) return null;
+    let h = parseInt(m[1], 10) % 12;
+    if (m[3].toUpperCase() === "PM") h += 12;
+    return h * 60 + parseInt(m[2], 10);
+  };
+  const start = toMinutes(start12h);
+  const end = toMinutes(end12h);
+  return start !== null && end !== null ? end - start : null;
+}
+
+function getInitials(fullName: string) {
+  return fullName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
+export function mapAssignedMembers(rows: any[]): Member[] {
+  return rows.map((row) => {
+    const memberships = row.members?.gym_memberships;
+    const membership = Array.isArray(memberships)
+      ? memberships[0]
+      : memberships;
+
+    return {
+      id: row.members.id,
+      name: row.members.full_name,
+      plan: membership?.membership_plans?.plan_name ?? "No active plan",
+      initials: getInitials(row.members.full_name),
+      photoUrl: row.members.photo_url ?? null,
+    };
+  });
+}
+
+export function mapExerciseLibrary(rows: any[]): LibraryExercise[] {
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    equipment: row.equipment,
+    muscleGroup: row.muscle_group,
+  }));
+}
+
+export function mapWorkoutTemplates(rows: any[]): WorkoutTemplate[] {
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    status: row.status,
+    description: row.description ?? "",
+    durationMinutes: row.duration_minutes ?? 0,
+    targetMuscles: row.target_muscles ?? [],
+    exercises: (row.template_exercises ?? []).map(
+      (te: any): SessionExercise => ({
+        rowId: createRowId(),
+        id: te.exercise.id,
+        name: te.exercise.name,
+        equipment: te.exercise.equipment,
+        muscleGroup: te.exercise.muscle_group,
+        sets: te.sets,
+        reps: te.reps,
+        weight: te.weight || "—",
+        rest: te.rest_seconds ? `${te.rest_seconds} sec` : "60 sec",
+      }),
+    ),
+  }));
+}
+
+// ============================================================================
+// Edit-mode prefill mapper — converts a fetched session row into the shape
+// the form's useForm(defaultValues) and exercises state expect.
+// ============================================================================
+
+export function mapSessionForEditForm(row: any): {
+  defaultValues: Partial<SessionFormValues>;
+  defaultExercises: SessionExercise[];
+} {
+  const reminderLabel = (minutes: number | null): string => {
+    if (minutes == null) return "No reminder";
+    if (minutes === 60) return "1 hour before";
+    return `${minutes} minutes before`;
+  };
+
+  const defaultValues: Partial<SessionFormValues> = {
+    sessionName: row.session_name,
+    templateId: row.template_id ?? "",
+    memberId: row.member_id,
+    sessionDate: row.session_date,
+    startTime: formatTime12h(row.start_time),
+    endTime: formatTime12h(row.end_time),
+    sessionType: row.workout_type,
+    location: row.location ?? "",
+    notes: row.notes ?? "",
+    restTimer: row.show_rest_timer ? "Show Timer" : "Hide Timer",
+    defaultRestTime: `${row.default_rest_seconds ?? 60} sec`,
+    reminder: reminderLabel(row.reminder_minutes),
+  };
+
+  const defaultExercises: SessionExercise[] = (row.session_exercises ?? [])
+    .slice()
+    .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
+    .map((se: any) => ({
+      rowId: createRowId(),
+      id: se.exercise_id,
+      name: se.exercises?.name ?? "Unknown exercise",
+      equipment: se.exercises?.equipment ?? "—",
+      muscleGroup: se.exercises?.muscle_group ?? "—",
+      sets: se.sets,
+      reps: se.reps,
+      weight: se.weight || "—",
+      rest: se.rest_seconds ? `${se.rest_seconds} sec` : "60 sec",
+    }));
+
+  return { defaultValues, defaultExercises };
+}
+
+// ============================================================================
 // Component
 // ============================================================================
 
 export interface CreateSessionFormProps {
-  /** "create" shows a fresh, empty form. "edit" is purely cosmetic here —
-   * pass defaultValues/defaultExercises to actually preload data. */
   mode?: "create" | "edit";
-  /** Override the <form id> — needed if both a create and an edit form
-   * could ever be mounted on the page at once. */
   formId?: string;
-  /** Preloaded field values (merged over DEFAULT_FORM_VALUES). */
+  /** Required in edit mode — the session being updated. */
+  sessionId?: string;
   defaultValues?: Partial<SessionFormValues>;
-  /** Preloaded exercise rows (e.g. from an existing session). */
   defaultExercises?: SessionExercise[];
   submitLabel?: string;
   submittingLabel?: string;
-  /** Extra sidebar content rendered below the tips card (e.g. Quick Actions). */
   sidebarExtra?: ReactNode;
   tipsTitle?: string;
   tips?: string[];
@@ -525,6 +386,7 @@ export interface CreateSessionFormProps {
 export default function CreateSessionForm({
   mode = "create",
   formId = SESSION_FORM_ID,
+  sessionId,
   defaultValues,
   defaultExercises,
   submitLabel,
@@ -534,6 +396,47 @@ export default function CreateSessionForm({
   tips,
 }: CreateSessionFormProps) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const queryClient = useQueryClient();
+  const { activeTrainerId, activeGymId } = useTrainerStore();
+
+  const {
+    data: membersResult,
+    isLoading: membersLoading,
+    error: membersQueryError,
+  } = useMyAssignedMembers(activeGymId, activeTrainerId);
+
+  const {
+    data: templatesResult,
+    isLoading: templatesLoading,
+    error: templatesQueryError,
+  } = useWorkoutTemplates(activeGymId);
+
+  const {
+    data: exercisesResult,
+    isLoading: exercisesLoading,
+    error: exercisesQueryError,
+  } = useAllExercises(activeGymId);
+
+  const isLoading = membersLoading || templatesLoading || exercisesLoading;
+  const queryError =
+    membersQueryError || templatesQueryError || exercisesQueryError;
+
+  const members: Member[] = useMemo(
+    () =>
+      membersResult?.success ? mapAssignedMembers(membersResult.data) : [],
+    [membersResult],
+  );
+  const templates: WorkoutTemplate[] = useMemo(
+    () =>
+      templatesResult?.success ? mapWorkoutTemplates(templatesResult.data) : [],
+    [templatesResult],
+  );
+  const exerciseLibrary: LibraryExercise[] = useMemo(
+    () =>
+      exercisesResult?.success ? mapExerciseLibrary(exercisesResult.data) : [],
+    [exercisesResult],
+  );
 
   const resolvedSubmitLabel =
     submitLabel ?? (mode === "edit" ? "Save Changes" : "Create Session");
@@ -541,8 +444,12 @@ export default function CreateSessionForm({
     submittingLabel ?? (mode === "edit" ? "Saving…" : "Creating…");
 
   const mergedDefaults = useMemo(
-    () => ({ ...DEFAULT_FORM_VALUES, ...defaultValues }),
-    [defaultValues],
+    () => ({
+      ...DEFAULT_FORM_VALUES,
+      memberId: members[0]?.id ?? "",
+      ...defaultValues,
+    }),
+    [defaultValues, members],
   );
 
   const [exercises, setExercises] = useState<SessionExercise[]>(
@@ -567,6 +474,17 @@ export default function CreateSessionForm({
     mode: "onBlur",
   });
 
+  // `defaultValues` passed to useForm is only read once, on mount — but
+  // `members` (and therefore mergedDefaults.memberId) arrives async from
+  // the query. Re-sync the memberId field once real data lands, without
+  // clobbering anything the user has already typed.
+  useEffect(() => {
+    if (members.length > 0 && !watch("memberId")) {
+      setValue("memberId", mergedDefaults.memberId, { shouldValidate: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members.length]);
+
   const templateId = watch("templateId");
   const memberId = watch("memberId");
   const sessionDate = watch("sessionDate");
@@ -576,20 +494,20 @@ export default function CreateSessionForm({
   const notesValue = watch("notes") ?? "";
 
   const selectedTemplate = useMemo(
-    () => MOCK_TEMPLATES.find((t) => t.id === templateId) ?? null,
-    [templateId],
+    () => templates.find((t) => t.id === templateId) ?? null,
+    [templateId, templates],
   );
   const selectedMember = useMemo(
-    () => MOCK_MEMBERS.find((m) => m.id === memberId) ?? null,
-    [memberId],
+    () => members.find((m) => m.id === memberId) ?? null,
+    [memberId, members],
   );
 
   const availableLibraryExercises = useMemo(
     () =>
-      EXERCISE_LIBRARY.filter(
+      exerciseLibrary.filter(
         (libEx) => !exercises.some((sessionEx) => sessionEx.id === libEx.id),
       ),
-    [exercises],
+    [exercises, exerciseLibrary],
   );
 
   function handleSelectTemplate(template: WorkoutTemplate) {
@@ -662,7 +580,15 @@ export default function CreateSessionForm({
     router.back();
   }
 
-  function onSubmit(values: SessionFormValues) {
+  const onSubmit = (values: SessionFormValues) => {
+    if (!activeGymId || !activeTrainerId) {
+      toast.error("Missing trainer or gym context. Please re-select your gym.");
+      return;
+    }
+    if (mode === "edit" && !sessionId) {
+      toast.error("Missing session to update.");
+      return;
+    }
     if (exercises.length === 0) {
       setExercisesError(
         "Add at least one exercise to this session before creating it.",
@@ -671,11 +597,103 @@ export default function CreateSessionForm({
     }
     setExercisesError(null);
 
-    // In a real integration this would POST/PATCH to the sessions API.
-    console.log("Saving training session", { ...values, exercises });
+    if (isPending) return;
+    startTransition(async () => {
+      try {
+        const matchesTemplateDefaults =
+          !!selectedTemplate &&
+          exercises.length === selectedTemplate.exercises.length &&
+          exercises.every(
+            (ex, i) => ex.id === selectedTemplate.exercises[i].id,
+          );
 
-    setSubmitSuccess(true);
-    window.setTimeout(() => setSubmitSuccess(false), 4000);
+        const sharedPayload = {
+          gymId: activeGymId,
+          memberId: values.memberId,
+          templateId: values.templateId || undefined,
+          sessionName: values.sessionName,
+          sessionDate: values.sessionDate,
+          startTime: to24HourTime(values.startTime),
+          endTime: to24HourTime(values.endTime),
+          durationMinutes:
+            diffMinutes(values.startTime, values.endTime) ?? undefined,
+          workoutType: values.sessionType,
+          location: values.location || undefined,
+          notes: values.notes || undefined,
+          showRestTimer: values.restTimer === "Show Timer",
+          defaultRestSeconds: parseRestSeconds(values.defaultRestTime),
+          reminderMinutes: parseReminderMinutes(values.reminder) ?? undefined,
+        };
+
+        const exercisePayload = exercises.map((exercise, index) => ({
+          exerciseId: exercise.id,
+          position: index,
+          sets: exercise.sets,
+          reps: exercise.reps,
+          weight: exercise.weight,
+          restSeconds: parseRestSeconds(exercise.rest),
+        }));
+
+        const result =
+          mode === "edit" && sessionId
+            ? await updateTrainingSessionWithExercises(sessionId, {
+                ...sharedPayload,
+                exercises: exercisePayload,
+              })
+            : await createTrainingSessionWithExercises({
+                ...sharedPayload,
+                trainerId: activeTrainerId,
+                seedFromTemplate: matchesTemplateDefaults,
+                exercises: matchesTemplateDefaults
+                  ? undefined
+                  : exercisePayload,
+              });
+
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
+
+        toast.success(
+          mode === "edit"
+            ? "Session updated successfully"
+            : "Session created successfully",
+        );
+        router.push(
+          mode === "edit" && sessionId
+            ? `/trainer/sessions/${sessionId}`
+            : "/trainer/sessions",
+        );
+        queryClient.invalidateQueries({
+          queryKey: ["sessionWithExercises", sessionId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["allSessions", activeGymId, activeTrainerId],
+        });
+      } catch (error) {
+        console.error("Error saving session:", error);
+        toast.error("Error saving session. Please try again.");
+      }
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="py-16 text-center text-sm text-muted-foreground">
+        Loading session builder…
+      </div>
+    );
+  }
+
+  if (queryError) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription className="text-sm">
+          Couldn&apos;t load session data. Please refresh and try again.
+        </AlertDescription>
+      </Alert>
+    );
   }
 
   return (
@@ -710,7 +728,7 @@ export default function CreateSessionForm({
                   </FieldLabel>
                   <SearchableCombobox
                     id="template-select"
-                    items={MOCK_TEMPLATES}
+                    items={templates}
                     value={selectedTemplate}
                     onChange={handleSelectTemplate}
                     getSearchText={(t) => `${t.name} ${t.category}`}
@@ -721,13 +739,13 @@ export default function CreateSessionForm({
                     renderTrigger={(t) => (
                       <TemplateOptionContent
                         template={t}
-                        icon={getTemplateIcon(t.id)}
+                        icon={getTemplateIcon(t.name)}
                       />
                     )}
                     renderItem={(t) => (
                       <TemplateOptionContent
                         template={t}
-                        icon={getTemplateIcon(t.id)}
+                        icon={getTemplateIcon(t.name)}
                       />
                     )}
                   />
@@ -745,7 +763,7 @@ export default function CreateSessionForm({
                   </FieldLabel>
                   <SearchableCombobox
                     id="member-select"
-                    items={MOCK_MEMBERS}
+                    items={members}
                     value={selectedMember}
                     onChange={(m) =>
                       setValue("memberId", m.id, {
@@ -1017,7 +1035,7 @@ export default function CreateSessionForm({
               template={selectedTemplate}
               icon={
                 selectedTemplate
-                  ? getTemplateIcon(selectedTemplate.id)
+                  ? getTemplateIcon(selectedTemplate.name)
                   : undefined
               }
               onViewTemplate={() => setViewTemplateOpen(true)}
@@ -1039,10 +1057,12 @@ export default function CreateSessionForm({
           </Button>
           <Button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isPending}
             className={bigSquareButton}
           >
-            {isSubmitting ? resolvedSubmittingLabel : resolvedSubmitLabel}
+            {isSubmitting || isPending
+              ? resolvedSubmittingLabel
+              : resolvedSubmitLabel}
           </Button>
         </div>
       </form>

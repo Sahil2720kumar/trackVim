@@ -787,6 +787,32 @@ export async function inviteTrainerAction(
   };
 }
 
+//trainers operations
+
+export async function deactivateTrainerAction(trainerId: string) {
+  const supabase = await createServerClient();
+  const { error } = await supabase
+    .from("trainers")
+    .update({ status: "Inactive" })
+    .eq("id", trainerId);
+
+  if (error) return { success: false as const, error: error.message };
+  revalidatePath(`/trainers/${trainerId}`);
+  return { success: true as const };
+}
+
+export async function deleteTrainerAction(trainerId: string) {
+  const supabase = await createServerClient();
+  const { error } = await supabase
+    .from("trainers")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", trainerId);
+
+  if (error) return { success: false as const, error: error.message };
+  revalidatePath("/trainers");
+  return { success: true as const };
+}
+
 // Renamed from inviteMemberAction — this composes the real walk-in flow:
 //   create_walkin_member -> [profile update] -> create_walkin_membership
 //   -> [optional] record_walkin_payment -> [owner-only] verify_payment
@@ -1199,7 +1225,7 @@ export async function verifyPaymentAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/owner/applications/[applicationId]`,"page");
+  revalidatePath(`/owner/applications/[applicationId]`, "page");
   return { success: true, data: undefined };
 }
 
@@ -1222,7 +1248,7 @@ export async function rejectPaymentAction(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/owner/applications/[applicationId]`,"page");
+  revalidatePath(`/owner/applications/[applicationId]`, "page");
   return { success: true, data: undefined };
 }
 
