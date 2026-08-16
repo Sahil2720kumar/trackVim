@@ -402,7 +402,7 @@ export async function getTrainerById(trainerId: string, gymId: string) {
       assigned_at,
       notes,
       is_active,
-      member:members (
+      member:members!inner (
         id,
         full_name,
         photo_url,
@@ -436,7 +436,8 @@ export async function getTrainerById(trainerId: string, gymId: string) {
   const { trainer_assignments, ...trainer } = data;
   const assignments = trainer_assignments ?? [];
 
-  const memberIds = assignments.map((a) => (a.member as { id: string }).id);
+  const linkedAssignments = assignments.filter((a) => a.member != null);
+  const memberIds = linkedAssignments.map((a) => a.member!.id);
 
   let attendanceByMember = new Map<string, number>();
   const asOfDate = getTodayDateStr("Asia/Kolkata");

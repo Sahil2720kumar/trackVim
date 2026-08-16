@@ -395,7 +395,7 @@ type SessionStatus = "Upcoming" | "InProgress" | "Completed" | "Cancelled";
 // its session_exercises, and writes it if it changed. Never touches a
 // Cancelled session — cancellation is a gym-staff decision, not something
 // a member's checkbox should be able to undo.
-export async function syncSessionStatusFromExercises(
+async function syncSessionStatusFromExercises(
   supabase: Awaited<ReturnType<typeof createServerClient>>,
   sessionId: string,
 ): Promise<ActionResult> {

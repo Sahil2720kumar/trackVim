@@ -806,6 +806,7 @@ export async function deactivateTrainerAction(trainerId: string) {
     .eq("gym_id", meta.gymId);
 
   if (error) return { success: false as const, error: error.message };
+  revalidatePath("/owner/trainers");
   revalidatePath(`/owner/trainers/[id]`, "page");
   return { success: true as const };
 }

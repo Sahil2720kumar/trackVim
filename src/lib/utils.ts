@@ -180,16 +180,29 @@ export function generateTrainerCode(): string {
 }
 
 //trainer session
+export const getInitials = (name: string) => {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
+};
+
 export function diffMinutesFromTimes(
   start: string,
   end: string,
 ): number | null {
-  const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
-  if (!timePattern.test(start) || !timePattern.test(end)) return null;
+  const timePattern = /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
+
+  if (!timePattern.test(start) || !timePattern.test(end)) {
+    return null;
+  }
 
   const [sh, sm] = start.split(":").map(Number);
   const [eh, em] = end.split(":").map(Number);
+
   const startMinutes = sh * 60 + sm;
   const endMinutes = eh * 60 + em;
+
   return endMinutes > startMinutes ? endMinutes - startMinutes : null;
 }

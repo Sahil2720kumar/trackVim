@@ -193,11 +193,6 @@ export async function getWorkoutTemplates(
   supabase: TypedSupabaseClient,
   gymId: string,
 ) {
-  const { data: templates, error: templatesError } = await supabase
-    .from("workout_templates")
-    .select("*")
-    .eq("gym_id", gymId);
-
   const { data, error } = await supabase
     .from("workout_templates")
     .select(

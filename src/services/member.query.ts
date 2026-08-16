@@ -752,10 +752,6 @@ export async function getMyTrainingSessions() {
       )
     `,
     )
-    // Chronological, soonest-first — matches how the page uses this
-    // (upcoming sessions first, not most-recently-created first).
-    // RLS's "Members can view their own sessions" policy already scopes
-    // this to member_id = current_member_id(), so no explicit filter needed.
     .order("session_date", { ascending: true })
     .order("start_time", { ascending: true });
 
