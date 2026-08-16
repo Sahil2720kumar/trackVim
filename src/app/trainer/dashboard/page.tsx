@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
+import { useUser } from "@clerk/nextjs";
+import { useTrainerStore } from "@/stores/trainer-store";
 import {
   Calendar,
   Clock,
@@ -87,6 +90,20 @@ const MOCK_STATS: DashboardStat[] = [
 // ============================================================================
 
 export default function TrainerDashboard() {
+  const { user, isLoaded } = useUser();
+
+  const setTrainerContext = useTrainerStore((state) => state.setTrainerContext);
+
+  useEffect(() => {
+    if (!isLoaded || !user) return;
+
+    const { trainerId, gymId } = user.publicMetadata;
+
+    if (typeof trainerId === "string" && typeof gymId === "string") {
+      setTrainerContext(trainerId, gymId);
+    }
+  }, [isLoaded, user, setTrainerContext]);
+
   return (
     <div className="min-h-screen bg-background">
       <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">

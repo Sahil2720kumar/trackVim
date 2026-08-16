@@ -29,7 +29,7 @@ export async function findGymByCode(code: string) {
       membership_plans(id, plan_name, short_description, plan_price, duration_months,
         joining_fee, plan_category, plan_color, selected_features, custom_features,
         enrollment_mode, status, is_featured)
-    `
+    `,
     )
     .eq("code", code.toUpperCase())
     .eq("status", "Active")
@@ -151,7 +151,7 @@ export async function getDiscoverGyms(city?: string) {
         final_amount,
         duration_months
       )
-    `
+    `,
     )
     .eq("member_id", meta.memberId!)
     .order("created_at", { ascending: false });
@@ -178,8 +178,8 @@ export async function getDiscoverGyms(city?: string) {
         a.status === "Approved"
           ? "approved"
           : a.status === "Rejected"
-          ? "rejected"
-          : "pending",
+            ? "rejected"
+            : "pending",
       selectedPlan: plan
         ? {
             id: plan.id,
@@ -193,7 +193,7 @@ export async function getDiscoverGyms(city?: string) {
             finalAmount: Number(
               membership?.final_amount ??
                 membership?.plan_price ??
-                plan.plan_price
+                plan.plan_price,
             ),
             durationMonths: membership?.duration_months ?? plan.duration_months,
           }
@@ -264,7 +264,7 @@ export async function getGymDetail(gymId: string) {
         sort_order,
         status
       )
-      `
+      `,
     )
     .eq("id", gymId)
     .eq("status", "Active")
@@ -337,7 +337,7 @@ export type MembershipApplicationByPlanIdPageData = {
 
 export async function MembershipApplicationPageDataByPlanId(
   gymId: string,
-  planId: string
+  planId: string,
 ): Promise<MembershipApplicationByPlanIdPageData | null> {
   const supabase = await createServerClient();
   const { data, error } = await supabase.rpc(
@@ -345,7 +345,7 @@ export async function MembershipApplicationPageDataByPlanId(
     {
       p_gym_id: gymId,
       p_plan_id: planId,
-    }
+    },
   );
 
   if (error || !data) return null;
@@ -404,7 +404,7 @@ export async function getMyMembershipStatusWithPlanDetails(gymId: string) {
         selected_features,
         custom_features
       )
-    `
+    `,
     )
     .eq("gym_id", gymId)
     .eq("member_id", meta.memberId)
@@ -442,7 +442,7 @@ export async function getMyProfile() {
         membership_plans(plan_name, plan_color),
         gyms(id, name, logo_url)
       )
-    `
+    `,
     )
     .maybeSingle();
 
@@ -462,7 +462,7 @@ export async function getMyMemberships() {
       membership_plans(id, plan_name, plan_color, plan_price, duration_months,
         selected_features, custom_features),
       payments(id, status, amount, method, payment_date, due_date)
-    `
+    `,
     )
     .order("created_at", { ascending: false });
 
@@ -559,7 +559,7 @@ export async function getMyApplications() {
           )
         )
       )
-    `
+    `,
     )
     .eq("member_id", meta.memberId)
     .order("created_at", { ascending: false });
@@ -651,7 +651,7 @@ export async function getMyApplicationById(applicationId: string) {
           )
         )
       )
-    `
+    `,
     )
     .eq("id", applicationId)
     .eq("member_id", meta.memberId)
@@ -687,7 +687,7 @@ export async function getPaymentForMembership(gymMembershipId: string) {
       `
       *,
       payment_receipts(id, file_url, file_type, is_current, uploaded_at)
-    `
+    `,
     )
     .eq("gym_membership_id", gymMembershipId)
     .order("created_at", { ascending: false })
@@ -709,7 +709,7 @@ export async function getMyPayments() {
       gyms(id, name, logo_url),
       gym_memberships(id, status, start_date, end_date),
       payment_receipts(id, file_url, file_type, is_current, uploaded_at)
-    `
+    `,
     )
     .order("created_at", { ascending: false });
 
@@ -726,7 +726,7 @@ export async function getMyAttendance(gymId?: string) {
       `
       *,
       gyms(id, name, logo_url)
-    `
+    `,
     )
     .order("attendance_date", { ascending: false })
     .limit(30);
@@ -739,22 +739,43 @@ export async function getMyAttendance(gymId?: string) {
 }
 
 export async function getMyTrainingSessions() {
-  const supabase = await createClient();
+  const supabase = await createServerClient();
+  const { data, error } = await supabase
+    .from("training_sessions")
+    .select(
+      `
+      *,
+      trainers(id, professional_title,photo_url,full_name),
+      session_exercises(
+        *,
+        exercises(id, name, muscle_group, equipment)
+      )
+    `,
+    )
+    .order("session_date", { ascending: true })
+    .order("start_time", { ascending: true });
+
+  if (error) return { success: false as const, error: error.message };
+  return { success: true as const, data };
+}
+
+export async function getTrainingSessionById(sessionId: string) {
+  const supabase = await createServerClient();
 
   const { data, error } = await supabase
     .from("training_sessions")
     .select(
       `
       *,
-      trainers(id, professional_title,
-        users:profile_id(full_name, avatar_url)),
+      trainers(id, professional_title, photo_url, full_name),
       session_exercises(
         *,
         exercises(id, name, muscle_group, equipment)
       )
-    `
+    `,
     )
-    .order("session_date", { ascending: false });
+    .eq("id", sessionId)
+    .single();
 
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
@@ -770,7 +791,7 @@ export async function getMyUpcomingSessions() {
       gym_memberships:active_gym_membership_id(
         gyms(timezone)
       )
-    `
+    `,
     )
     .maybeSingle();
 
@@ -785,7 +806,7 @@ export async function getMyUpcomingSessions() {
       *,
       trainers(id, professional_title,
         users:profile_id(full_name, avatar_url))
-    `
+    `,
     )
     .eq("status", "Upcoming")
     .gte("session_date", today)
@@ -810,7 +831,7 @@ export async function getMyAssignedTrainers() {
         users:profile_id(full_name, avatar_url, phone)
       ),
       gyms(id, name, logo_url)
-    `
+    `,
     )
     .eq("is_active", true);
 
@@ -841,7 +862,7 @@ export async function getMyMessages() {
       *,
       sender:sender_id(id, full_name, avatar_url),
       receiver:receiver_id(id, full_name, avatar_url)
-    `
+    `,
     )
     .order("created_at", { ascending: false });
 

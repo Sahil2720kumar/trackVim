@@ -1484,6 +1484,8 @@ export const workoutTemplates = pgTable(
     durationMinutes: smallint("duration_minutes"),
     targetMuscles: jsonb("target_muscles").$type<string[]>().default([]),
     status: templateStatusEnum("status").notNull().default("Draft"),
+    equipment: jsonb("equipment").$type<string[]>().default([]),
+    defaultRestSeconds: smallint("default_rest_seconds").default(60),
 
     additionalNotes: text("additional_notes"),
 
@@ -1553,6 +1555,11 @@ export const templateExercises = pgTable(
       to: authenticatedRole,
       using: sql`template_id in (select id from workout_templates where gym_id in ${STAFF_GYM_IDS})`,
       withCheck: sql`template_id in (select id from workout_templates where gym_id in ${STAFF_GYM_IDS})`,
+    }),
+    pgPolicy("Gym staff can delete template exercises", {
+      for: "delete",
+      to: authenticatedRole,
+      using: sql`template_id in (select id from workout_templates where gym_id in ${STAFF_GYM_IDS})`,
     }),
   ],
 ).enableRLS();
@@ -1636,6 +1643,12 @@ export const trainingSessions = pgTable(
       using: sql`gym_id in ${STAFF_GYM_IDS}`,
       withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
     }),
+    pgPolicy("Members can update session status via exercise completion", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`member_id = ${CURRENT_MEMBER_ID}`,
+      withCheck: sql`member_id = ${CURRENT_MEMBER_ID}`,
+    }),
   ],
 ).enableRLS();
 
@@ -1655,10 +1668,12 @@ export const sessionExercises = pgTable(
     reps: varchar("reps", { length: 20 }).notNull().default("10"),
     weight: varchar("weight", { length: 30 }).default(""),
     restSeconds: smallint("rest_seconds").default(60),
+
+    completed: boolean("completed").notNull().default(false),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (t) => [
     index("session_exercises_session_idx").on(t.sessionId),
-    // NEW — same reasoning as template_exercises_exercise_idx above.
     index("session_exercises_exercise_idx").on(t.exerciseId),
     pgPolicy("Members or gym staff can view session exercises", {
       for: "select",
@@ -1680,6 +1695,14 @@ export const sessionExercises = pgTable(
       to: authenticatedRole,
       using: sql`session_id in (select id from training_sessions where gym_id in ${STAFF_GYM_IDS})`,
       withCheck: sql`session_id in (select id from training_sessions where gym_id in ${STAFF_GYM_IDS})`,
+    }),
+    // NEW — without this, a member can view but never toggle their own
+    // session's exercise checkboxes; only gym staff could mark things done.
+    pgPolicy("Members can mark their own session exercises complete", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`session_id in (select id from training_sessions where member_id = ${CURRENT_MEMBER_ID})`,
+      withCheck: sql`session_id in (select id from training_sessions where member_id = ${CURRENT_MEMBER_ID})`,
     }),
   ],
 ).enableRLS();

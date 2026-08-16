@@ -387,6 +387,109 @@ export async function submitMembershipApplicationAction(
   return { success: true, applicationId: data as string };
 }
 
+//session management
+
+type SessionStatus = "Upcoming" | "InProgress" | "Completed" | "Cancelled";
+
+// Recomputes training_sessions.status from the current completion state of
+// its session_exercises, and writes it if it changed. Never touches a
+// Cancelled session — cancellation is a gym-staff decision, not something
+// a member's checkbox should be able to undo.
+async function syncSessionStatusFromExercises(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  sessionId: string,
+): Promise<ActionResult> {
+  const { data: session, error: sessionError } = await supabase
+    .from("training_sessions")
+    .select("status")
+    .eq("id", sessionId)
+    .single();
+
+  if (sessionError) return { success: false, error: sessionError.message };
+  if (session.status === "Cancelled") return { success: true, data: undefined };
+
+  const { data: exercises, error: exercisesError } = await supabase
+    .from("session_exercises")
+    .select("completed")
+    .eq("session_id", sessionId);
+
+  if (exercisesError) return { success: false, error: exercisesError.message };
+
+  const total = exercises.length;
+  const doneCount = exercises.filter((e) => e.completed).length;
+
+  const nextStatus: SessionStatus =
+    total > 0 && doneCount === total
+      ? "Completed"
+      : doneCount > 0
+        ? "InProgress"
+        : "Upcoming";
+
+  if (nextStatus === session.status) return { success: true, data: undefined };
+
+  const { error: updateError } = await supabase
+    .from("training_sessions")
+    .update({
+      status: nextStatus,
+      completed_at:
+        nextStatus === "Completed" ? new Date().toISOString() : null,
+    })
+    .eq("id", sessionId);
+
+  if (updateError) return { success: false, error: updateError.message };
+  return { success: true, data: undefined };
+}
+
+export async function toggleSessionExerciseCompletionAction(
+  sessionExerciseId: string,
+  sessionId: string,
+  completed: boolean,
+): Promise<ActionResult> {
+  const supabase = await createServerClient();
+
+  const { error } = await supabase
+    .from("session_exercises")
+    .update({
+      completed,
+      completed_at: completed ? new Date().toISOString() : null,
+    })
+    .eq("id", sessionExerciseId);
+
+  if (error) return { success: false, error: error.message };
+
+  const syncResult = await syncSessionStatusFromExercises(supabase, sessionId);
+  if (!syncResult.success) return syncResult;
+
+  revalidatePath(`/member/sessions/${sessionId}`);
+  revalidatePath("/member/sessions");
+  return { success: true, data: undefined };
+}
+
+export async function markAllSessionExercisesCompletedAction(
+  sessionId: string,
+  sessionExerciseIds: string[],
+): Promise<ActionResult> {
+  if (sessionExerciseIds.length === 0) {
+    return { success: false, error: "No exercises to mark complete." };
+  }
+
+  const supabase = await createServerClient();
+
+  const { error } = await supabase
+    .from("session_exercises")
+    .update({ completed: true, completed_at: new Date().toISOString() })
+    .in("id", sessionExerciseIds);
+
+  if (error) return { success: false, error: error.message };
+
+  const syncResult = await syncSessionStatusFromExercises(supabase, sessionId);
+  if (!syncResult.success) return syncResult;
+
+  revalidatePath(`/member/sessions/${sessionId}`);
+  revalidatePath("/member/sessions");
+  return { success: true, data: undefined };
+}
+
 // ============================================================================
 // Payment Submission (RPC)
 // ============================================================================

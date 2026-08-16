@@ -1,0 +1,3 @@
+ALTER TABLE "workout_templates" ADD COLUMN "equipment" jsonb DEFAULT '[]'::jsonb;--> statement-breakpoint
+ALTER TABLE "workout_templates" ADD COLUMN "default_rest_seconds" smallint DEFAULT 60;--> statement-breakpoint
+CREATE POLICY "Gym staff can delete template exercises" ON "template_exercises" AS PERMISSIVE FOR DELETE TO "authenticated" USING (template_id in (select id from workout_templates where gym_id in (select public.staff_gym_ids())));

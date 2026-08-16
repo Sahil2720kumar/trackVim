@@ -3,17 +3,22 @@
 // ============================================================================
 // Imports
 // ============================================================================
-import { useMemo, useState, type ReactNode } from "react";
-import Link from "next/link";
+import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
+import { useTrainerStore } from "@/stores/trainer-store";
+import {
+  useAllExercises,
+  useWorkoutTemplates,
+} from "@/hooks/queries/trainer.query";
+import { Loader2 } from "lucide-react";
 import {
   Plus,
   Trash2,
   Copy,
   GripVertical,
-  Clock3,
   Target,
   Dumbbell,
   Layers3,
@@ -56,14 +61,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { cn, restLabelToSeconds } from "@/lib/utils";
 import { bigSquareButton } from "@/lib/styles";
 
 // Shared form building blocks — same primitives MemberForm.tsx uses, so
@@ -85,11 +89,8 @@ import {
   REST_OPTIONS,
   MUSCLE_GROUP_STYLES,
   DIFFICULTY_STYLES,
-  MOCK_SCREEN_STATE,
-  EXERCISE_LIBRARY,
   EMPTY_FORM_VALUES,
   EMPTY_EXERCISES,
-  STATUS_STYLES,
   templateFormSchema,
   createRowId,
   calculateTotalSets,
@@ -98,8 +99,14 @@ import {
   type LibraryExercise,
   type TemplateExercise,
   type TemplateFormValues,
-  type TemplateMeta,
 } from "@/mock/trainer/createTemplateData";
+
+import {
+  createWorkoutTemplateWithExercises,
+  updateWorkoutTemplateWithExercises,
+  WorkoutTemplateInput,
+} from "@/actions/trainer.action";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Give the <form> a stable id so a header button rendered outside this
 // component (e.g. in the server page.tsx, following the MemberForm
@@ -135,9 +142,6 @@ function DifficultyBadge({ difficulty }: { difficulty: DifficultyLevel }) {
   );
 }
 
-// Multi-select chip field used for muscle groups / equipment. Styled to
-// match the FormInput/FormSelect label treatment from GymFormFields since
-// there's no multi-select primitive there yet.
 function MultiSelectField({
   id,
   label,
@@ -146,6 +150,8 @@ function MultiSelectField({
   onChange,
   placeholder,
   error,
+  disabled = false,
+  helperText,
 }: {
   id?: string;
   label: string;
@@ -154,52 +160,77 @@ function MultiSelectField({
   onChange: (value: string[]) => void;
   placeholder: string;
   error?: string;
+  disabled?: boolean;
+  helperText?: string;
 }) {
   return (
     <div className="flex flex-col gap-1.5 min-w-0">
       <label className="text-sm font-medium text-foreground">{label}</label>
-      <select
-        id={id}
-        value=""
-        onChange={(e) => {
-          const value = e.target.value;
-          if (value && !selected.includes(value))
-            onChange([...selected, value]);
-        }}
-        className={`w-full px-3 py-2 rounded-lg border transition-colors ${
-          error
-            ? "border-destructive bg-destructive/5"
-            : "border-border bg-background hover:border-border/80 focus:border-primary"
-        } focus:outline-none focus:ring-2 focus:ring-primary/20`}
-      >
-        <option value="">{placeholder}</option>
-        {options
-          .filter((opt) => !selected.includes(opt))
-          .map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-      </select>
-      {selected.length > 0 && (
+
+      {/* The picker itself is hidden (not just greyed) when disabled —
+          there's nothing to manually add if the field is fully derived. */}
+      {!disabled && (
+        <select
+          id={id}
+          value=""
+          onChange={(e) => {
+            const value = e.target.value;
+            if (value && !selected.includes(value))
+              onChange([...selected, value]);
+          }}
+          className={`w-full px-3 py-2 rounded-lg border transition-colors ${
+            error
+              ? "border-destructive bg-destructive/5"
+              : "border-border bg-background hover:border-border/80 focus:border-primary"
+          } focus:outline-none focus:ring-2 focus:ring-primary/20`}
+        >
+          <option value="">{placeholder}</option>
+          {options
+            .filter((opt) => !selected.includes(opt))
+            .map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+        </select>
+      )}
+
+      {selected.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {selected.map((item) => (
             <span
               key={item}
-              className="inline-flex items-center gap-1 rounded-full bg-primary pl-2.5 pr-1.5 py-1 text-xs font-medium text-primary-foreground"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full py-1 text-xs font-medium",
+                disabled
+                  ? "bg-muted text-muted-foreground pl-2.5 pr-2.5"
+                  : "bg-primary text-primary-foreground pl-2.5 pr-1.5",
+              )}
             >
               {item}
-              <button
-                type="button"
-                onClick={() => onChange(selected.filter((s) => s !== item))}
-                className="rounded-full p-0.5 hover:bg-primary-foreground/20"
-                aria-label={`Remove ${item}`}
-              >
-                <X className="h-3 w-3" />
-              </button>
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={() => onChange(selected.filter((s) => s !== item))}
+                  className="rounded-full p-0.5 hover:bg-primary-foreground/20"
+                  aria-label={`Remove ${item}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
             </span>
           ))}
         </div>
+      ) : (
+        disabled && (
+          <p className="text-xs text-muted-foreground">
+            Add exercises below — equipment fills in automatically.
+          </p>
+        )
+      )}
+
+      {helperText && !error && (
+        <p className="text-xs text-muted-foreground">{helperText}</p>
       )}
       {error && (
         <span className="text-xs text-destructive flex items-center gap-1">
@@ -316,7 +347,7 @@ function ExerciseTableRow({
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-3">
-          <ExerciseThumbnail muscleGroup={exercise.muscleGroup} />
+          <ExerciseThumbnail muscleGroup={exercise.muscle_group} />
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-foreground">
               {exercise.name}
@@ -328,7 +359,7 @@ function ExerciseTableRow({
         </div>
       </TableCell>
       <TableCell>
-        <MuscleBadge muscle={exercise.muscleGroup} />
+        <MuscleBadge muscle={exercise.muscle_group} />
       </TableCell>
       <TableCell>
         <NumberStepper
@@ -419,7 +450,7 @@ function ExerciseMobileCard({
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <ExerciseThumbnail muscleGroup={exercise.muscleGroup} />
+          <ExerciseThumbnail muscleGroup={exercise.muscle_group} />
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground">#{index + 1}</p>
             <p className="truncate text-sm font-medium text-foreground">
@@ -455,7 +486,7 @@ function ExerciseMobileCard({
       </div>
 
       <div className="mt-3">
-        <MuscleBadge muscle={exercise.muscleGroup} />
+        <MuscleBadge muscle={exercise.muscle_group} />
       </div>
 
       <Separator className="my-3" />
@@ -520,37 +551,25 @@ function EmptyExerciseState() {
   );
 }
 
-function PageSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
-        <div className="space-y-6">
-          <Skeleton className="h-96" />
-          <Skeleton className="h-96" />
-          <Skeleton className="h-32" />
-        </div>
-        <div className="space-y-4">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-40" />
-        </div>
-      </div>
-    </div>
-  );
-}
+// Rest options are label strings ("60 sec", "2 min", ...) but the DB column
+// is rest_seconds — convert here rather than smuggling raw seconds through
+// the UI layer. Adjust if REST_OPTIONS is already numeric under the hood.
 
 // ============================================================================
 // Main Form Component
 // ============================================================================
 
 interface CreateTemplateFormProps {
-  /** "create" starts every field blank; "edit" expects initialValues/initialExercises. */
   mode?: "create" | "edit";
-  /** Pre-fill values, e.g. MOCK_EDIT_TEMPLATE_VALUES from create-template-data.ts. Omit for a blank form. */
-  initialValues?: Partial<TemplateFormValues>;
-  /** Pre-fill exercises, e.g. MOCK_EDIT_TEMPLATE_EXERCISES. Omit for an empty exercise list. */
+  initialValues?: TemplateFormValues;
   initialExercises?: TemplateExercise[];
-  /** Created-by / last-updated / status, shown in edit mode only. */
-  meta?: TemplateMeta;
+  meta?: {
+    id: string;
+    status: string;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+  };
 }
 
 export default function CreateTemplateForm({
@@ -560,20 +579,68 @@ export default function CreateTemplateForm({
   meta,
 }: CreateTemplateFormProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [isPending, startTransition] = useTransition();
+
+  const { activeTrainerId, activeGymId } = useTrainerStore();
+  console.log("activeGymId", activeGymId);
+  const {
+    data: exercisesResult,
+    isLoading: exercisesLoading,
+    error: exercisesQueryError,
+  } = useAllExercises(activeGymId);
+
+  const exerciseLibrary = useMemo(
+    () => (exercisesResult?.success ? exercisesResult.data : []),
+    [exercisesResult],
+  );
+
+  const loadError = !activeGymId
+    ? "Gym not found"
+    : exercisesQueryError
+      ? "Failed to load exercise library. Please try again."
+      : exercisesResult && !exercisesResult.success
+        ? exercisesResult.error
+        : undefined;
 
   const [exercises, setExercises] = useState<TemplateExercise[]>(
     initialExercises ?? EMPTY_EXERCISES,
   );
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
   const [exercisesError, setExercisesError] = useState<string | null>(null);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  const stats = useMemo(
+    () => ({
+      totalExercises: exercises.length,
+      totalSets: calculateTotalSets(exercises),
+    }),
+    [exercises],
+  );
+
+  // Equipment is derived from whatever's actually in the exercise list —
+  // no manual picker needed, and it can never drift out of sync since it
+  // recomputes on every add/duplicate/delete.
+  useEffect(() => {
+    const derivedEquipment = Array.from(
+      new Set(
+        exercises
+          .map((ex) => ex.equipment)
+          .filter((eq): eq is string => Boolean(eq) && eq !== "—"),
+      ),
+    );
+    setValue("equipment", derivedEquipment, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }, [exercises]);
 
   const {
     control,
     register,
     handleSubmit,
     watch,
-    formState: { errors, isSubmitting },
+    setValue,
+    formState: { errors },
   } = useForm<TemplateFormValues>({
     resolver: zodResolver(templateFormSchema) as Resolver<TemplateFormValues>,
     defaultValues: initialValues ?? EMPTY_FORM_VALUES,
@@ -591,18 +658,10 @@ export default function CreateTemplateForm({
 
   const availableLibraryExercises = useMemo(
     () =>
-      EXERCISE_LIBRARY.filter(
+      exerciseLibrary.filter(
         (libEx) => !exercises.some((sessionEx) => sessionEx.id === libEx.id),
       ),
-    [exercises],
-  );
-
-  const stats = useMemo(
-    () => ({
-      totalExercises: exercises.length,
-      totalSets: calculateTotalSets(exercises),
-    }),
-    [exercises],
+    [exerciseLibrary, exercises],
   );
 
   function handleUpdateExercise(
@@ -648,7 +707,11 @@ export default function CreateTemplateForm({
     setAddExerciseOpen(false);
   }
 
-  function onSubmit(values: TemplateFormValues) {
+  const onSubmit = (values: TemplateFormValues) => {
+    if (!activeGymId || !activeTrainerId) {
+      toast.error("Missing trainer or gym context. Please re-select your gym.");
+      return;
+    }
     if (exercises.length === 0) {
       setExercisesError(
         "Add at least one exercise to this template before saving.",
@@ -656,34 +719,82 @@ export default function CreateTemplateForm({
       return;
     }
     setExercisesError(null);
+    if (isPending) return;
 
-    // In a real integration this would POST/PATCH to the templates API.
-    console.log(mode === "edit" ? "Template updated:" : "Template saved:", {
-      ...values,
-      exercises,
+    startTransition(async () => {
+      try {
+        const payload: WorkoutTemplateInput = {
+          name: values.name,
+          type: values.type,
+          goal: values.goal,
+          difficulty: values.difficulty,
+          duration: values.duration,
+          muscleGroups: values.muscleGroups,
+          description: values.description,
+          restBetweenSets: values.restBetweenSets, // collected, not yet persisted server-side
+          equipment: values.equipment, // collected, not yet persisted server-side
+          notes: values.notes,
+          exercises: exercises.map((ex) => ({
+            exerciseId: ex.id,
+            sets: ex.sets,
+            reps: ex.reps,
+            weight: ex.weight,
+            restSeconds: restLabelToSeconds(ex.rest),
+          })),
+        };
+
+        if (mode === "edit" && !meta) {
+          toast.error("Missing template to update.");
+          return;
+        }
+        const result =
+          mode === "edit" && meta
+            ? await updateWorkoutTemplateWithExercises(meta.id, payload)
+            : await createWorkoutTemplateWithExercises(payload);
+
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
+
+        toast.success(
+          mode === "edit"
+            ? "Template updated successfully"
+            : "Template saved successfully",
+        );
+        router.push("/trainer/templates");
+        queryClient.invalidateQueries({
+          queryKey: ["workoutTemplates", activeGymId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["workoutTemplateById", meta?.id ?? ""],
+        });
+      } catch (error) {
+        console.error("Error saving template:", error);
+        toast.error("Error saving template. Please try again.");
+      }
     });
+  };
 
-    setSubmitSuccess(true);
-    window.setTimeout(() => setSubmitSuccess(false), 4000);
+  if (exercisesLoading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
-  if (MOCK_SCREEN_STATE === "loading") {
-    return <PageSkeleton />;
+  if (loadError) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription className="text-sm">{loadError}</AlertDescription>
+      </Alert>
+    );
   }
 
   return (
     <form id={TEMPLATE_FORM_ID} onSubmit={handleSubmit(onSubmit)} noValidate>
-      {submitSuccess && (
-        <Alert className="mb-6 border-emerald-200 bg-emerald-50 text-foreground dark:border-emerald-500/20 dark:bg-emerald-500/10">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <AlertDescription className="text-sm text-emerald-700 dark:text-emerald-400">
-            {mode === "edit"
-              ? "Template updated successfully."
-              : "Template saved successfully."}
-          </AlertDescription>
-        </Alert>
-      )}
-
       <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
         {/* Left Column - Form */}
         <div className="flex-1 min-w-0 space-y-6 order-2 lg:order-1">
@@ -779,6 +890,8 @@ export default function CreateTemplateForm({
                     onChange={field.onChange}
                     placeholder="Select equipment..."
                     error={errors.equipment?.message}
+                    disabled
+                    helperText="Automatically derived from the exercises added to this template."
                   />
                 )}
               />
@@ -881,7 +994,7 @@ export default function CreateTemplateForm({
                       {availableLibraryExercises.map((libEx) => (
                         <CommandItem
                           key={libEx.id}
-                          value={`${libEx.name} ${libEx.muscleGroup}`}
+                          value={`${libEx.name} ${libEx.muscle_group}`}
                           onSelect={() => handleAddExercise(libEx)}
                         >
                           <div className="flex w-full items-center justify-between gap-2">
@@ -893,7 +1006,7 @@ export default function CreateTemplateForm({
                                 {libEx.equipment}
                               </p>
                             </div>
-                            <MuscleBadge muscle={libEx.muscleGroup} />
+                            <MuscleBadge muscle={libEx.muscle_group} />
                           </div>
                         </CommandItem>
                       ))}
@@ -914,9 +1027,6 @@ export default function CreateTemplateForm({
               error={errors.notes}
             />
             <div className="-mt-3 flex items-center justify-between text-xs text-muted-foreground">
-              <span>
-                {meta && `Added by ${meta.createdBy} • ${meta.lastUpdated}`}
-              </span>
               <span>{notesValue.length} / 500</span>
             </div>
           </SectionCard>
@@ -933,10 +1043,10 @@ export default function CreateTemplateForm({
             </Button>
             <Button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isPending}
               className={bigSquareButton}
             >
-              {isSubmitting ? (
+              {isPending ? (
                 <>
                   <div className="animate-spin mr-2 size-4 border-2 border-background border-t-foreground rounded-full" />
                   Saving...
@@ -944,7 +1054,7 @@ export default function CreateTemplateForm({
               ) : (
                 <>
                   <Save className="size-4 mr-2" />
-                  {mode === "edit" ? "Save Changes" : "Save Template"}
+                  Save Template
                 </>
               )}
             </Button>
@@ -1004,14 +1114,7 @@ export default function CreateTemplateForm({
                 <SummaryRow label="Total Sets" value={stats.totalSets} />
                 <SummaryRow
                   label="Status"
-                  value={
-                    <Badge
-                      variant="outline"
-                      className={STATUS_STYLES[meta?.status ?? "draft"]}
-                    >
-                      {meta?.status === "active" ? "Active" : "Draft"}
-                    </Badge>
-                  }
+                  value={<Badge variant="outline">Draft</Badge>}
                   border={false}
                 />
               </div>

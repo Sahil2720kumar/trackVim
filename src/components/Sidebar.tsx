@@ -37,6 +37,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
+import { useTrainerStore } from "@/stores/trainer-store";
 
 // Types
 interface NavItem {
@@ -425,12 +426,16 @@ export function Sidebar({
     new Set(["Members"]), // default open
   );
 
+  const clearTrainerContext = useTrainerStore(
+    (state) => state.clearTrainerContext,
+  );
   const [isPending, setIsPending] = useState(false);
 
   const { signOut } = useClerk();
   const handleSignOut = async () => {
     try {
       setIsPending(true);
+      clearTrainerContext();
       await signOut();
 
       window.location.replace("/sign-in");

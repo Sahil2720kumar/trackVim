@@ -27,7 +27,7 @@ export type SessionStatus =
 
 export interface SessionMember {
   name: string;
-  avatarUrl?: string;
+  photo_url?: string;
   initials?: string;
 }
 

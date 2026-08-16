@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -26,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dumbbell,
   Target,
@@ -41,7 +45,17 @@ import {
   BarChart3,
   ChevronRight,
   MoreVertical,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
+import { useWorkoutTemplateById } from "@/hooks/queries/trainer.query";
+
+import { removeExerciseFromTemplate } from "@/actions/trainer.action";
+import {
+  formatDateTime,
+  formatRelativeDays,
+  formatShortDate,
+} from "@/lib/utils";
 
 // ============================================================================
 // Types & Interfaces
@@ -49,6 +63,7 @@ import {
 
 interface Exercise {
   id: string;
+  exerciseId: string;
   name: string;
   equipment: string;
   muscleGroup: string;
@@ -56,7 +71,6 @@ interface Exercise {
   reps: string;
   weight: string;
   rest: string;
-  icon: string;
 }
 
 interface TemplateData {
@@ -71,10 +85,15 @@ interface TemplateData {
   equipment: string[];
   duration: number;
   exercises: Exercise[];
-  createdDate: string;
-  lastUpdated: string;
+  createdDateShort: string;
+  lastUpdatedShort: string;
+  lastUpdatedFull: string;
   createdBy: string;
   notes: string;
+}
+
+interface PageProps {
+  params: Promise<{ id: string }>;
 }
 
 // ============================================================================
@@ -112,119 +131,6 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 // ============================================================================
-// Mock Data
-// ============================================================================
-
-const MOCK_TEMPLATE: TemplateData = {
-  id: "template-1",
-  name: "Pull Day",
-  status: "active",
-  description:
-    "Target your back, biceps, and rear delts with pulling movements.",
-  type: "Strength Training",
-  primaryGoal: "Muscle Gain",
-  difficulty: "intermediate",
-  targetMuscles: ["Back", "Biceps", "Rear Delts"],
-  equipment: ["Barbell", "Cable", "Bodyweight"],
-  duration: 60,
-  createdDate: "10 Jul 2026",
-  lastUpdated: "20 Jul 2026 (2 days ago)",
-  createdBy: "Rahul Sharma",
-  notes:
-    "Use this workout for intermediate members focusing on hypertrophy.\n\nMaintain strict rest periods.\n\nPrioritize compound movements first.",
-  exercises: [
-    {
-      id: "1",
-      name: "Deadlift",
-      equipment: "Barbell",
-      muscleGroup: "Back",
-      sets: 4,
-      reps: "6 - 8",
-      weight: "100 kg",
-      rest: "120 sec",
-      icon: "⬆️",
-    },
-    {
-      id: "2",
-      name: "Pull Up",
-      equipment: "Bodyweight",
-      muscleGroup: "Back",
-      sets: 4,
-      reps: "8 - 10",
-      weight: "Bodyweight",
-      rest: "90 sec",
-      icon: "🤸",
-    },
-    {
-      id: "3",
-      name: "Bent Over Row",
-      equipment: "Barbell",
-      muscleGroup: "Back",
-      sets: 4,
-      reps: "8 - 10",
-      weight: "70 kg",
-      rest: "90 sec",
-      icon: "📊",
-    },
-    {
-      id: "4",
-      name: "Lat Pulldown",
-      equipment: "Cable",
-      muscleGroup: "Back",
-      sets: 3,
-      reps: "10 - 12",
-      weight: "60 kg",
-      rest: "75 sec",
-      icon: "⬇️",
-    },
-    {
-      id: "5",
-      name: "Seated Cable Row",
-      equipment: "Cable",
-      muscleGroup: "Back",
-      sets: 3,
-      reps: "10 - 12",
-      weight: "55 kg",
-      rest: "75 sec",
-      icon: "➡️",
-    },
-    {
-      id: "6",
-      name: "Face Pull",
-      equipment: "Rope",
-      muscleGroup: "Rear Delts",
-      sets: 3,
-      reps: "12 - 15",
-      weight: "20 kg",
-      rest: "60 sec",
-      icon: "👤",
-    },
-    {
-      id: "7",
-      name: "Barbell Curl",
-      equipment: "Barbell",
-      muscleGroup: "Biceps",
-      sets: 3,
-      reps: "8 - 12",
-      weight: "30 kg",
-      rest: "60 sec",
-      icon: "💪",
-    },
-    {
-      id: "8",
-      name: "Hammer Curl",
-      equipment: "Dumbbell",
-      muscleGroup: "Biceps",
-      sets: 3,
-      reps: "10 - 12",
-      weight: "12.5 kg",
-      rest: "60 sec",
-      icon: "🔨",
-    },
-  ],
-};
-
-// ============================================================================
 // Helper Functions
 // ============================================================================
 
@@ -255,31 +161,53 @@ const calculateTotalSets = (exercises: Exercise[]): number => {
 const capitalize = (value: string): string =>
   value.charAt(0).toUpperCase() + value.slice(1);
 
+export function mapTemplateDetails(row: any) {
+  const exercises = (row.template_exercises ?? []).map((te: any) => ({
+    id: te.id,
+    exerciseId: te.exercise_id,
+    name: te.exercise?.name ?? "Unknown exercise",
+    equipment: te.exercise?.equipment ?? "—",
+    muscleGroup: te.exercise?.muscle_group ?? "—",
+    sets: te.sets,
+    reps: te.reps,
+    weight: te.weight || "—",
+    rest: te.rest_seconds ? `${te.rest_seconds} sec` : "60 sec",
+  }));
+
+  // The schema has no template-level "equipment" field — equipment is
+  // per-exercise, so this list is derived from what's actually assigned.
+  const equipment = Array.from(
+    new Set(exercises.map((ex) => ex.equipment).filter((e) => e && e !== "—")),
+  );
+
+  return {
+    id: row.id,
+    name: row.name,
+    status: (row.status ?? "Draft").toLowerCase() as
+      | "active"
+      | "draft"
+      | "archived",
+    description: row.description ?? "",
+    type: row.workout_type ?? row.category ?? "General",
+    primaryGoal: row.primary_goal ?? "—",
+    difficulty: (row.difficulty_level ?? "Intermediate").toLowerCase() as
+      | "beginner"
+      | "intermediate"
+      | "advanced",
+    targetMuscles: row.target_muscles ?? [],
+    equipment,
+    duration: row.duration_minutes ?? 0,
+    exercises,
+    createdDateShort: formatShortDate(row.created_at),
+    lastUpdatedShort: formatShortDate(row.updated_at),
+    lastUpdatedFull: `${formatDateTime(row.updated_at)} (${formatRelativeDays(row.updated_at)})`,
+    createdBy: row.trainers?.full_name ?? "Unknown trainer",
+    notes: row.additional_notes ?? "",
+  };
+}
 // ============================================================================
 // Reusable Components
 // ============================================================================
-
-interface BreadcrumbProps {
-  items: Array<{ label: string; href?: string }>;
-}
-
-function Breadcrumb({ items }: BreadcrumbProps) {
-  return (
-    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
-      {items.map((item, index) => (
-        <div key={index} className="flex items-center gap-2">
-          {index > 0 && <ChevronRight className="size-4" />}
-          <a
-            href={item.href || "#"}
-            className={`${item.href ? "hover:text-foreground cursor-pointer" : ""}`}
-          >
-            {item.label}
-          </a>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 interface StatCardProps {
   label: string;
@@ -314,13 +242,17 @@ function OverviewItem({ icon, label, value }: OverviewItemProps) {
           {label}
         </p>
         {Array.isArray(value) ? (
-          <div className="flex flex-wrap gap-2">
-            {value.map((v, i) => (
-              <Badge key={i} variant="secondary" className="capitalize">
-                {v}
-              </Badge>
-            ))}
-          </div>
+          value.length === 0 ? (
+            <p className="text-sm text-muted-foreground">—</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {value.map((v, i) => (
+                <Badge key={i} variant="secondary" className="capitalize">
+                  {v}
+                </Badge>
+              ))}
+            </div>
+          )
         ) : (
           <p className="text-sm font-semibold text-foreground">{value}</p>
         )}
@@ -356,6 +288,7 @@ function SummaryRow({ label, value, border = true }: SummaryRowProps) {
 interface ExerciseCardProps {
   exercise: Exercise;
   index: number;
+  isDeleting: boolean;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 }
@@ -363,6 +296,7 @@ interface ExerciseCardProps {
 function ExerciseCard({
   exercise,
   index,
+  isDeleting,
   onEdit,
   onDelete,
 }: ExerciseCardProps) {
@@ -371,8 +305,8 @@ function ExerciseCard({
       <CardContent className="p-4">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-lg flex-shrink-0">
-              {exercise.icon}
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 flex-shrink-0">
+              <Dumbbell className="size-5 text-primary" />
             </div>
             <div>
               <p className="font-semibold text-foreground">{exercise.name}</p>
@@ -433,10 +367,15 @@ function ExerciseCard({
           <Button
             variant="ghost"
             size="sm"
+            disabled={isDeleting}
             onClick={() => onDelete(exercise.id)}
             className="text-destructive hover:text-destructive"
           >
-            <Trash2 className="size-4" />
+            {isDeleting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Trash2 className="size-4" />
+            )}
           </Button>
         </div>
       </CardContent>
@@ -444,11 +383,7 @@ function ExerciseCard({
   );
 }
 
-interface LoadingSkeletonsProps {
-  showExercises?: boolean;
-}
-
-function LoadingSkeletons({ showExercises = true }: LoadingSkeletonsProps) {
+function LoadingSkeletons() {
   return (
     <div className="space-y-6">
       {/* Header Skeleton */}
@@ -477,16 +412,14 @@ function LoadingSkeletons({ showExercises = true }: LoadingSkeletonsProps) {
       </div>
 
       {/* Exercises Skeleton */}
-      {showExercises && (
-        <div className="rounded-lg border border-border bg-card p-6">
-          <Skeleton className="h-6 w-40 mb-4" />
-          <div className="space-y-3">
-            {[...Array(3)].map((_, i) => (
-              <Skeleton key={i} className="h-16" />
-            ))}
-          </div>
+      <div className="rounded-lg border border-border bg-card p-6">
+        <Skeleton className="h-6 w-40 mb-4" />
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-16" />
+          ))}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -520,28 +453,87 @@ function EmptyExercises({ onAddExercise }: EmptyExercisesProps) {
 // Main Page Component
 // ============================================================================
 
-export default function TemplateDetailPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const template = MOCK_TEMPLATE;
-  const totalSets = calculateTotalSets(template.exercises);
-  const difficultyColor = DIFFICULTY_COLORS[template.difficulty];
+export default function TemplateDetailPage({ params }: PageProps) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const templateId = React.use(params).id;
 
+  const {
+    data: templateResult,
+    isLoading,
+    error: queryError,
+  } = useWorkoutTemplateById(templateId);
+
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+
+  const template: TemplateData | null = templateResult?.success
+    ? (mapTemplateDetails(templateResult.data) as TemplateData)
+    : null;
+
+  const totalSets = template ? calculateTotalSets(template.exercises) : 0;
+  const difficultyColor = template
+    ? DIFFICULTY_COLORS[template.difficulty]
+    : DIFFICULTY_COLORS.intermediate;
+
+  // Editing an individual exercise's sets/reps/weight isn't backed by a
+  // dedicated action yet — only whole-template create/update and per-row
+  // delete exist — so "Add" and "Edit" both route into the full template
+  // editor rather than doing something silently incomplete inline.
   const handleAddExercise = () => {
-    console.log("Add exercise clicked");
+    router.push(`/trainer/templates/${templateId}/edit`);
   };
 
-  const handleEditExercise = (id: string) => {
-    console.log("Edit exercise:", id);
+  const handleEditExercise = () => {
+    router.push(`/trainer/templates/${templateId}/edit`);
   };
 
-  const handleDeleteExercise = (id: string) => {
-    console.log("Delete exercise:", id);
+  const handleDeleteExercise = async (templateExerciseId: string) => {
+    if (deletingIds.has(templateExerciseId)) return;
+
+    setDeletingIds((prev) => new Set(prev).add(templateExerciseId));
+    const result = await removeExerciseFromTemplate(templateExerciseId);
+    setDeletingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(templateExerciseId);
+      return next;
+    });
+
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success("Exercise removed from template");
+    queryClient.invalidateQueries({
+      queryKey: ["workoutTemplateById", templateId],
+    });
+  };
+
+  // No server actions exist yet for these — placeholder toast so it's
+  // obvious in testing which buttons still need real implementations,
+  // rather than silently doing nothing.
+  const handleNotImplemented = (feature: string) => {
+    toast.info(`${feature} isn't wired up yet.`);
   };
 
   if (isLoading) {
     return (
       <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
         <LoadingSkeletons />
+      </div>
+    );
+  }
+
+  if (queryError || !template) {
+    return (
+      <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="text-sm">
+            Couldn&apos;t load this template. It may have been deleted, or you
+            may not have access to it.
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -558,8 +550,8 @@ export default function TemplateDetailPage() {
                 {/* Left: Template Info */}
                 <div className="flex-1">
                   <div className="flex items-start gap-4 mb-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-primary/10 text-2xl flex-shrink-0">
-                      🤸
+                    <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-primary/10 flex-shrink-0">
+                      <Dumbbell className="size-7 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -570,9 +562,11 @@ export default function TemplateDetailPage() {
                           {capitalize(template.status)}
                         </Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {template.description}
-                      </p>
+                      {template.description && (
+                        <p className="text-sm text-muted-foreground">
+                          {template.description}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -619,25 +613,43 @@ export default function TemplateDetailPage() {
                     />
                     <StatCard
                       label="Last Updated"
-                      value={template.lastUpdated.split(" ")[0]}
+                      value={template.lastUpdatedShort}
                     />
                   </div>
 
                   {/* Action Buttons */}
                   <div className="mt-4 flex flex-col gap-2">
-                    <Button className="w-full">
+                    <Button
+                      className="w-full"
+                      onClick={() =>
+                        router.push(`/trainer/templates/${templateId}/edit`)
+                      }
+                    >
                       <Pencil className="size-4 mr-2" />
                       Edit Template
                     </Button>
                     <div className="flex gap-2">
-                      <Button variant="outline" className="flex-1">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() =>
+                          handleNotImplemented("Duplicate Template")
+                        }
+                      >
                         <Copy className="size-4 mr-2" />
                         Duplicate
                       </Button>
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" size="sm" className="px-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="px-2"
+                              onClick={() =>
+                                handleNotImplemented("More actions")
+                              }
+                            >
                               <MoreVertical className="size-4" />
                             </Button>
                           </TooltipTrigger>
@@ -679,15 +691,19 @@ export default function TemplateDetailPage() {
                   value={capitalize(template.difficulty)}
                 />
               </div>
-              <Separator className="my-6" />
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">
-                  Description
-                </p>
-                <p className="text-sm text-foreground leading-relaxed">
-                  {template.description}
-                </p>
-              </div>
+              {template.description && (
+                <>
+                  <Separator className="my-6" />
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-2">
+                      Description
+                    </p>
+                    <p className="text-sm text-foreground leading-relaxed">
+                      {template.description}
+                    </p>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -733,8 +749,8 @@ export default function TemplateDetailPage() {
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                <div className="flex h-8 w-8 items-center justify-center rounded bg-primary/10 text-sm">
-                                  {exercise.icon}
+                                <div className="flex h-8 w-8 items-center justify-center rounded bg-primary/10">
+                                  <Dumbbell className="size-4 text-primary" />
                                 </div>
                                 <div className="min-w-0">
                                   <p className="font-medium text-foreground text-sm">
@@ -776,9 +792,7 @@ export default function TemplateDetailPage() {
                                         variant="ghost"
                                         size="sm"
                                         className="h-8 w-8 p-0"
-                                        onClick={() =>
-                                          handleEditExercise(exercise.id)
-                                        }
+                                        onClick={handleEditExercise}
                                       >
                                         <Pencil className="size-4" />
                                       </Button>
@@ -792,12 +806,17 @@ export default function TemplateDetailPage() {
                                       <Button
                                         variant="ghost"
                                         size="sm"
+                                        disabled={deletingIds.has(exercise.id)}
                                         className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                                         onClick={() =>
                                           handleDeleteExercise(exercise.id)
                                         }
                                       >
-                                        <Trash2 className="size-4" />
+                                        {deletingIds.has(exercise.id) ? (
+                                          <Loader2 className="size-4 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="size-4" />
+                                        )}
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>Delete</TooltipContent>
@@ -827,6 +846,7 @@ export default function TemplateDetailPage() {
                         key={exercise.id}
                         exercise={exercise}
                         index={index + 1}
+                        isDeleting={deletingIds.has(exercise.id)}
                         onEdit={handleEditExercise}
                         onDelete={handleDeleteExercise}
                       />
@@ -863,29 +883,37 @@ export default function TemplateDetailPage() {
               <SummaryRow
                 label="Target Muscles"
                 value={
-                  <div className="flex flex-wrap justify-end gap-1">
-                    {template.targetMuscles.map((muscle) => (
-                      <Badge
-                        key={muscle}
-                        className={getMuscleGroupColor(muscle)}
-                        variant="secondary"
-                      >
-                        {muscle}
-                      </Badge>
-                    ))}
-                  </div>
+                  template.targetMuscles.length === 0 ? (
+                    "—"
+                  ) : (
+                    <div className="flex flex-wrap justify-end gap-1">
+                      {template.targetMuscles.map((muscle) => (
+                        <Badge
+                          key={muscle}
+                          className={getMuscleGroupColor(muscle)}
+                          variant="secondary"
+                        >
+                          {muscle}
+                        </Badge>
+                      ))}
+                    </div>
+                  )
                 }
               />
               <SummaryRow
                 label="Equipment"
                 value={
-                  <div className="flex flex-wrap justify-end gap-1">
-                    {template.equipment.map((eq) => (
-                      <Badge key={eq} variant="outline" className="text-xs">
-                        {eq}
-                      </Badge>
-                    ))}
-                  </div>
+                  template.equipment.length === 0 ? (
+                    "—"
+                  ) : (
+                    <div className="flex flex-wrap justify-end gap-1">
+                      {template.equipment.map((eq) => (
+                        <Badge key={eq} variant="outline" className="text-xs">
+                          {eq}
+                        </Badge>
+                      ))}
+                    </div>
+                  )
                 }
               />
               <SummaryRow
@@ -897,8 +925,11 @@ export default function TemplateDetailPage() {
                 value={template.exercises.length}
               />
               <SummaryRow label="Total Sets" value={totalSets} />
-              <SummaryRow label="Created" value={template.createdDate} />
-              <SummaryRow label="Last Updated" value={template.lastUpdated} />
+              <SummaryRow label="Created" value={template.createdDateShort} />
+              <SummaryRow
+                label="Last Updated"
+                value={template.lastUpdatedFull}
+              />
               <SummaryRow
                 label="Status"
                 value={
@@ -920,7 +951,9 @@ export default function TemplateDetailPage() {
               <Button
                 variant="outline"
                 className="w-full justify-start"
-                onClick={() => console.log("Edit")}
+                onClick={() =>
+                  router.push(`/trainer/templates/${templateId}/edit`)
+                }
               >
                 <Pencil className="size-4 mr-2" />
                 Edit Template
@@ -929,7 +962,7 @@ export default function TemplateDetailPage() {
               <Button
                 variant="outline"
                 className="w-full justify-start"
-                onClick={() => console.log("Duplicate")}
+                onClick={() => handleNotImplemented("Duplicate Template")}
               >
                 <Copy className="size-4 mr-2" />
                 Duplicate Template
@@ -938,7 +971,7 @@ export default function TemplateDetailPage() {
               <Button
                 variant="outline"
                 className="w-full justify-start"
-                onClick={() => console.log("Export")}
+                onClick={() => handleNotImplemented("Export Template")}
               >
                 <Download className="size-4 mr-2" />
                 Export Template
@@ -947,7 +980,7 @@ export default function TemplateDetailPage() {
               <Button
                 variant="outline"
                 className="w-full justify-start"
-                onClick={() => console.log("Assign")}
+                onClick={() => router.push(`/trainer/sessions/new`)}
               >
                 <Layers className="size-4 mr-2" />
                 Assign to Session
@@ -957,7 +990,7 @@ export default function TemplateDetailPage() {
               <Button
                 variant="ghost"
                 className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={() => console.log("Delete")}
+                onClick={() => handleNotImplemented("Delete Template")}
               >
                 <Trash2 className="size-4 mr-2" />
                 Delete Template
@@ -972,18 +1005,31 @@ export default function TemplateDetailPage() {
                 <NotebookPen className="size-5" />
                 Trainer Notes
               </CardTitle>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() =>
+                  router.push(`/trainer/templates/${templateId}/edit`)
+                }
+              >
                 <Pencil className="size-4" />
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                {template.notes}
-              </p>
+              {template.notes ? (
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                  {template.notes}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No notes added yet.
+                </p>
+              )}
               <Separator />
               <div className="text-xs text-muted-foreground">
                 <p>Added by {template.createdBy}</p>
-                <p>{template.lastUpdated}</p>
+                <p>{template.lastUpdatedFull}</p>
               </div>
             </CardContent>
           </Card>

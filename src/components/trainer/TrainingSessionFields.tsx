@@ -106,6 +106,7 @@ export interface Member {
   name: string;
   plan: string;
   initials: string;
+  photoUrl?: string | null;
 }
 
 export interface LibraryExercise {
@@ -556,7 +557,14 @@ export function SearchableCombobox<T extends ComboboxOption>({
           <CommandInput placeholder="Search..." />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup className="space-y-1 p-1.5">
+            <CommandGroup
+              className="
+                p-1.5
+                [&_[cmdk-group-items]]:flex
+                [&_[cmdk-group-items]]:flex-col
+                [&_[cmdk-group-items]]:gap-1
+              "
+            >
               {items.map((item) => (
                 <CommandItem
                   key={item.id}
@@ -573,6 +581,7 @@ export function SearchableCombobox<T extends ComboboxOption>({
                       value?.id === item.id ? "opacity-100" : "opacity-0",
                     )}
                   />
+
                   {renderItem(item, value?.id === item.id)}
                 </CommandItem>
               ))}
@@ -584,11 +593,26 @@ export function SearchableCombobox<T extends ComboboxOption>({
   );
 }
 
-export const MemberOptionContent = ({ member }: { member: Member }) => (
-  <div className="flex min-w-0 items-center gap-2.5">
-    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+function MemberAvatar({ member }: { member: Member }) {
+  if (member.photoUrl) {
+    return (
+      <img
+        src={member.photoUrl}
+        alt={member.name}
+        className="h-8 w-8 rounded-full object-cover"
+      />
+    );
+  }
+  return (
+    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
       {member.initials}
     </div>
+  );
+}
+
+export const MemberOptionContent = ({ member }: { member: Member }) => (
+  <div className="flex min-w-0 items-center gap-2.5">
+    <MemberAvatar member={member} />
     <div className="min-w-0 text-left">
       <p className="truncate text-sm font-medium text-foreground">
         {member.name}

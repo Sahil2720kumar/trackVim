@@ -1,7 +1,9 @@
 import { ActionResult } from "@/actions/member.action";
 import { createServerClient } from "@/lib/supabase/server";
+import { formatDate, getTodayDateStr } from "@/lib/utils";
 import { MembershipApplication } from "@/types";
 import { auth } from "@clerk/nextjs/server";
+import { meta } from "zod";
 
 // ============================================================================
 // Read-only data-fetching functions
@@ -175,7 +177,8 @@ export async function getApplicationById(id: string) {
     .single();
 
   if (error) return { success: false as const, error: error.message };
-  return { success: true as const, data: data };}
+  return { success: true as const, data: data };
+}
 
 export async function getPendingPayments(gymId: string) {
   const supabase = await createServerClient();
@@ -268,4 +271,301 @@ export async function getGymAttendance(gymId: string, date?: string) {
   const { data, error } = await query;
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
+}
+
+//Get Trainers
+export async function getAllTrainers(gymId: string) {
+  const supabase = await createServerClient();
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== gymId) {
+    return { success: false as const, error: "Not authorized." };
+  }
+
+  const { data, error } = await supabase
+    .from("trainers")
+    .select(
+      "id, full_name, contact_email, contact_phone, photo_url, professional_title, specializations, experience_years, members_trained, completed_sessions, average_rating, status",
+    )
+    .eq("gym_id", gymId)
+    .is("deleted_at", null)
+    .order("full_name", { ascending: true });
+
+  if (error) {
+    return { success: false as const, error: error.message };
+  }
+
+  return { success: true as const, data };
+}
+export type TrainerList = Extract<
+  Awaited<ReturnType<typeof getAllTrainers>>,
+  { success: true }
+>["data"];
+
+export type TrainerRow = TrainerList[number];
+
+export async function getTrainerStats(gymId: string) {
+  const supabase = await createServerClient();
+  const today = getTodayDateStr();
+
+  const [
+    totalTrainersResult,
+    activeTrainersResult,
+    activeMembersResult,
+    sessionsTodayResult,
+  ] = await Promise.all([
+    supabase
+      .from("trainers")
+      .select("id", { count: "exact", head: true })
+      .eq("gym_id", gymId)
+      .is("deleted_at", null),
+    supabase
+      .from("trainers")
+      .select("id", { count: "exact", head: true })
+      .eq("gym_id", gymId)
+      .eq("status", "Active")
+      .is("deleted_at", null),
+    supabase
+      .from("gym_memberships")
+      .select("id", { count: "exact", head: true })
+      .eq("gym_id", gymId)
+      .eq("status", "Active"),
+    supabase
+      .from("training_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("gym_id", gymId)
+      .eq("session_date", today),
+  ]);
+
+  const errored = [
+    totalTrainersResult,
+    activeTrainersResult,
+    activeMembersResult,
+    sessionsTodayResult,
+  ].find((r) => r.error);
+
+  if (errored) {
+    console.log(errored.error);
+
+    return { success: false as const, error: errored.error!.message };
+  }
+
+  return {
+    success: true as const,
+    data: {
+      totalTrainers: totalTrainersResult.count ?? 0,
+      activeTrainers: activeTrainersResult.count ?? 0,
+      totalMembers: activeMembersResult.count ?? 0,
+      sessionsToday: sessionsTodayResult.count ?? 0,
+    },
+  };
+}
+
+// ============================================================================
+// Trainer + Assigned Members — single query via FK embed
+// ============================================================================
+
+export type AssignedMember = {
+  assignmentId: string;
+  assignedAt: string;
+  notes: string | null;
+  id: string;
+  full_name: string | null;
+  photo_url: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  plan: string | null;
+  membershipStatus: string | null;
+  attendanceRate: number;
+  progressLabel: "Excellent" | "Good" | "Needs Attention";
+};
+
+function progressLabelFor(rate: number): AssignedMember["progressLabel"] {
+  if (rate >= 85) return "Excellent";
+  if (rate >= 60) return "Good";
+  return "Needs Attention";
+}
+
+export async function getTrainerById(trainerId: string, gymId: string) {
+  const supabase = await createServerClient();
+
+  const { data, error } = await supabase
+    .from("trainers")
+    .select(
+      `
+    *,
+    trainer_assignments!trainer_id (
+      id,
+      assigned_at,
+      notes,
+      is_active,
+      member:members!inner (
+        id,
+        full_name,
+        photo_url,
+        contact_email,
+        contact_phone,
+        gym_memberships:gym_memberships!gym_memberships_member_id_members_id_fk (
+          status,
+          plan:membership_plans (
+            plan_name
+          )
+        )
+      )
+    )
+  `,
+    )
+    .eq("id", trainerId)
+    .eq("gym_id", gymId)
+    .is("deleted_at", null)
+    .eq("trainer_assignments.is_active", true)
+    // scope the embedded memberships to the one that's actually current —
+    // a member can have years of Expired/Cancelled rows, we only want Active
+    .eq("trainer_assignments.member.gym_memberships.status", "Active")
+    .order("assigned_at", {
+      referencedTable: "trainer_assignments",
+      ascending: false,
+    })
+    .single();
+
+  if (error) return { success: false as const, error: error.message };
+
+  const { trainer_assignments, ...trainer } = data;
+  const assignments = trainer_assignments ?? [];
+
+  const linkedAssignments = assignments.filter((a) => a.member != null);
+  const memberIds = linkedAssignments.map((a) => a.member!.id);
+
+  let attendanceByMember = new Map<string, number>();
+  const asOfDate = getTodayDateStr("Asia/Kolkata");
+  if (memberIds.length > 0) {
+    const { data: stats, error: statsError } = await supabase.rpc(
+      "get_member_attendance_stats",
+      { p_member_ids: memberIds, p_gym_id: gymId, p_as_of: asOfDate },
+    );
+    if (!statsError && stats) {
+      attendanceByMember = new Map(
+        stats.map((s) => [s.member_id, Number(s.attendance_rate)]),
+      );
+    }
+  }
+
+  const assignedMembers: AssignedMember[] = assignments.map((a) => {
+    const member = a.member as {
+      id: string;
+      full_name: string | null;
+      photo_url: string | null;
+      contact_email: string | null;
+      contact_phone: string | null;
+      gym_memberships: {
+        status: string;
+        plan: { plan_name: string } | null;
+      }[];
+    };
+    // Even scoped to status='Active' above, the FK filter only trims the
+    // array — a member with zero Active memberships still comes back as [].
+    // one_active_membership_per_member_gym guarantees at most one row here.
+    const activeMembership = member.gym_memberships?.[0] ?? null;
+    const rate = attendanceByMember.get(member.id) ?? 0;
+
+    return {
+      assignmentId: a.id,
+      assignedAt: a.assigned_at,
+      notes: a.notes,
+      id: member.id,
+      full_name: member.full_name,
+      photo_url: member.photo_url,
+      contact_email: member.contact_email,
+      contact_phone: member.contact_phone,
+      plan: activeMembership?.plan?.plan_name ?? null,
+      membershipStatus: activeMembership?.status ?? null,
+      attendanceRate: rate,
+      progressLabel: progressLabelFor(rate),
+    };
+  });
+
+  return { success: true as const, data: { trainer, assignedMembers } };
+}
+
+export type TrainerDetail = Extract<
+  Awaited<ReturnType<typeof getTrainerById>>,
+  { success: true }
+>["data"]["trainer"];
+
+export type TrainerAssignedMember = Extract<
+  Awaited<ReturnType<typeof getTrainerById>>,
+  { success: true }
+>["data"]["assignedMembers"][number];
+// ============================================================================
+// Session stats — kept as-is, separate queries
+// ============================================================================
+
+export async function getTrainerSessionStats(trainerId: string) {
+  const supabase = await createServerClient();
+  const now = new Date();
+  const monthStart = formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
+  const monthEnd = formatDate(
+    new Date(now.getFullYear(), now.getMonth() + 1, 0),
+  );
+
+  const { data, error } = await supabase
+    .from("training_sessions")
+    .select("id, status")
+    .eq("trainer_id", trainerId)
+    .gte("session_date", monthStart)
+    .lte("session_date", monthEnd);
+
+  if (error) return { success: false as const, error: error.message };
+
+  const sessionsThisMonth = data.length;
+  const completed = data.filter((s) => s.status === "Completed").length;
+  const attendanceRate =
+    sessionsThisMonth > 0
+      ? Math.round((completed / sessionsThisMonth) * 100)
+      : 0;
+
+  return {
+    success: true as const,
+    data: { sessionsThisMonth, attendanceRate },
+  };
+}
+
+export async function getMonthlySessionsForTrainer(trainerId: string) {
+  const supabase = await createServerClient();
+  const now = new Date();
+  const start = formatDate(new Date(now.getFullYear(), now.getMonth() - 11, 1));
+  const end = formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+
+  const { data, error } = await supabase
+    .from("training_sessions")
+    .select("session_date")
+    .eq("trainer_id", trainerId)
+    .gte("session_date", start)
+    .lte("session_date", end);
+
+  if (error) return { success: false as const, error: error.message };
+
+  const counts = new Map<string, number>();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(start);
+    d.setMonth(d.getMonth() + i);
+    counts.set(d.toLocaleString("en-US", { month: "short" }), 0);
+  }
+  data.forEach((row) => {
+    const month = new Date(row.session_date).toLocaleString("en-US", {
+      month: "short",
+    });
+    counts.set(month, (counts.get(month) ?? 0) + 1);
+  });
+
+  return {
+    success: true as const,
+    data: Array.from(counts.entries()).map(([month, sessions]) => ({
+      month,
+      sessions,
+    })),
+  };
 }

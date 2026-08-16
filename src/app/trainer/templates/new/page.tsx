@@ -1,7 +1,9 @@
+// app/trainer/templates/create/page.tsx
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { bigSquareButton } from "@/lib/styles";
+
 import CreateTemplateForm, {
   TEMPLATE_FORM_ID,
 } from "@/components/trainer/CreateTemplateForm";
@@ -9,7 +11,6 @@ import CreateTemplateForm, {
 export default function CreateTemplatePage() {
   return (
     <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
-      {/* Page Header */}
       <div className="border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="py-4 sm:py-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="min-w-0">
@@ -32,9 +33,6 @@ export default function CreateTemplatePage() {
                 Back to Templates
               </Button>
             </Link>
-            {/* type="submit" + form="..." lets this button, which lives
-                outside the <form> element, submit the client-side form
-                without this component needing to be a client component. */}
             <Button
               type="submit"
               form={TEMPLATE_FORM_ID}
@@ -46,7 +44,6 @@ export default function CreateTemplatePage() {
         </div>
       </div>
 
-      {/* Main Content */}
       <main className="py-4">
         <CreateTemplateForm />
       </main>

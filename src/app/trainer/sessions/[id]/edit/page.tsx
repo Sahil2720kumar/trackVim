@@ -1,16 +1,22 @@
 "use client";
 
-import { Bell, ClipboardCopy, FileDown, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import CreateSessionForm, {
-  MOCK_MEMBERS,
-  MOCK_TEMPLATES,
-} from "@/components/trainer/CreateSessionForm";
+import { useRouter } from "next/navigation";
 import {
-  QuickActionsCard,
-  createRowId,
-} from "@/components/trainer/TrainingSessionFields";
+  Bell,
+  ClipboardCopy,
+  FileDown,
+  Trash2,
+  AlertCircle,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { QuickActionsCard } from "@/components/trainer/TrainingSessionFields";
 import { bigSquareButton } from "@/lib/styles";
+import CreateSessionForm, {
+  mapSessionForEditForm,
+} from "@/components/trainer/CreateSessionForm";
+import { useSessionWithExercises } from "@/hooks/queries/trainer.query";
+import React from "react";
 
 const EDIT_SESSION_FORM_ID = "edit-session-form";
 
@@ -22,18 +28,22 @@ const EDITING_TIPS: string[] = [
   "Keep realistic rest intervals.",
 ];
 
-// In a real app this would come from the session being edited (e.g. loaded
-// by id from the API). Reuses the same mock members/templates as the
-// Create Session form so both pages stay in sync.
-const initialTemplate = MOCK_TEMPLATES.find((t) => t.id === "tpl-pull")!;
-const initialMember = MOCK_MEMBERS[0];
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
 
-const initialExercises = initialTemplate.exercises.map((exercise) => ({
-  ...exercise,
-  rowId: createRowId(),
-}));
+export default function EditTrainingSessionPage({ params }: PageProps) {
+  const router = useRouter();
+  const sessionId = React.use(params).id;
 
-export default function EditTrainingSessionPage() {
+  const {
+    data: sessionResult,
+    isLoading,
+    error: queryError,
+  } = useSessionWithExercises(sessionId);
+
+  const isReady = !isLoading && sessionResult?.success;
+
   return (
     <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
       {/* Page Header */}
@@ -49,13 +59,18 @@ export default function EditTrainingSessionPage() {
             </p>
           </div>
           <div className="flex flex-row gap-3">
-            <Button variant="outline" className={bigSquareButton}>
+            <Button
+              variant="outline"
+              className={bigSquareButton}
+              onClick={() => router.back()}
+            >
               Cancel
             </Button>
             <Button
               type="submit"
               form={EDIT_SESSION_FORM_ID}
               className={bigSquareButton}
+              disabled={!isReady}
             >
               Save Changes
             </Button>
@@ -65,33 +80,50 @@ export default function EditTrainingSessionPage() {
 
       {/* Main Content */}
       <main className="py-4">
-        <CreateSessionForm
-          mode="edit"
-          formId={EDIT_SESSION_FORM_ID}
-          tipsTitle="Editing Tips"
-          tips={EDITING_TIPS}
-          defaultValues={{
-            sessionName: "Pull Day – Strength Focus",
-            templateId: initialTemplate.id,
-            memberId: initialMember.id,
-            sessionDate: "2026-07-22",
-            startTime: "07:00 AM",
-            endTime: "08:00 AM",
-            sessionType: "Strength",
-            location: "Main Floor",
-          }}
-          defaultExercises={initialExercises}
-          sidebarExtra={
-            <QuickActionsCard
-              actions={[
-                { icon: ClipboardCopy, label: "Duplicate Session" },
-                { icon: Bell, label: "Assign Homework" },
-                { icon: FileDown, label: "Export PDF" },
-              ]}
-              destructiveAction={{ icon: Trash2, label: "Delete Session" }}
-            />
-          }
-        />
+        {isLoading ? (
+          <div className="py-16 text-center text-sm text-muted-foreground">
+            Loading session…
+          </div>
+        ) : queryError || !sessionResult?.success ? (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-sm">
+              Couldn&apos;t load this session. It may have been deleted, or you
+              may not have access to it.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          (() => {
+            const { defaultValues, defaultExercises } = mapSessionForEditForm(
+              sessionResult.data,
+            );
+
+            return (
+              <CreateSessionForm
+                mode="edit"
+                formId={EDIT_SESSION_FORM_ID}
+                sessionId={sessionId}
+                tipsTitle="Editing Tips"
+                tips={EDITING_TIPS}
+                defaultValues={defaultValues}
+                defaultExercises={defaultExercises}
+                sidebarExtra={
+                  <QuickActionsCard
+                    actions={[
+                      { icon: ClipboardCopy, label: "Duplicate Session" },
+                      { icon: Bell, label: "Assign Homework" },
+                      { icon: FileDown, label: "Export PDF" },
+                    ]}
+                    destructiveAction={{
+                      icon: Trash2,
+                      label: "Delete Session",
+                    }}
+                  />
+                }
+              />
+            );
+          })()
+        )}
       </main>
     </div>
   );

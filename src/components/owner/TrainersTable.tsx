@@ -25,64 +25,84 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  type Trainer,
-  specializationOptions,
-  statusOptions,
-} from "@/mock/trainers";
+import type { TrainerRow } from "@/services/owner.query";
+
+import { useRouter } from "next/navigation";
 
 type TrainersTableProps = {
-  initialTrainers: Trainer[];
+  initialTrainers: TrainerRow[];
 };
 
+const STATUS_COLORS: Record<string, string> = {
+  Active: "bg-green-100 text-green-700",
+  Invited: "bg-blue-100 text-blue-700",
+  Inactive: "bg-gray-100 text-gray-700",
+  "On Leave": "bg-purple-100 text-purple-700",
+};
+
+function getStatusColor(status: string) {
+  return STATUS_COLORS[status] ?? "bg-gray-100 text-gray-700";
+}
+
+function getInitials(name: string | null) {
+  if (!name) return "NA";
+  return name
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 export function TrainersTable({ initialTrainers }: TrainersTableProps) {
-  const [trainers, setTrainers] = useState<Trainer[]>(initialTrainers);
+  const [trainers, setTrainers] = useState<TrainerRow[]>(initialTrainers);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedTrainers, setSelectedTrainers] = useState<Set<number>>(
+  const [selectedTrainers, setSelectedTrainers] = useState<Set<string>>(
     new Set(),
   );
 
-  // Advanced filter popover state
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [specializationFilter, setSpecializationFilter] = useState(
     "All Specializations",
   );
-
-  // Row action menu state (open id, used to control which DropdownMenu is open)
-  const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
-
-  // Add trainer modal state
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newTrainer, setNewTrainer] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    specialization: "Strength Training",
-  });
-
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  const router = useRouter();
   const itemsPerPage = 5;
 
-  // Filter and search logic
+  const specializationOptions = useMemo(() => {
+    const all = new Set<string>();
+    trainers.forEach((t) =>
+      (t.specializations ?? []).forEach((s) => all.add(s)),
+    );
+    return ["All Specializations", ...Array.from(all)];
+  }, [trainers]);
+
+  const statusOptions = useMemo(() => {
+    const all = new Set<string>();
+    trainers.forEach((t) => all.add(t.status));
+    return ["All", ...Array.from(all)];
+  }, [trainers]);
+
   const filteredTrainers = useMemo(() => {
     return trainers.filter((trainer) => {
+      const q = searchQuery.toLowerCase();
       const matchesSearch =
-        trainer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        trainer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        trainer.phone.includes(searchQuery);
+        (trainer.full_name ?? "").toLowerCase().includes(q) ||
+        (trainer.contact_email ?? "").toLowerCase().includes(q) ||
+        (trainer.contact_phone ?? "").includes(searchQuery);
 
       const matchesStatus =
         !selectedStatus || trainer.status === selectedStatus;
       const matchesSpecialization =
         specializationFilter === "All Specializations" ||
-        trainer.specialization === specializationFilter;
+        (trainer.specializations ?? []).includes(specializationFilter);
 
       return matchesSearch && matchesStatus && matchesSpecialization;
     });
   }, [trainers, searchQuery, selectedStatus, specializationFilter]);
 
-  // Pagination logic
   const totalPages = Math.max(
     1,
     Math.ceil(filteredTrainers.length / itemsPerPage),
@@ -97,49 +117,25 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
   const activeFilterCount =
     specializationFilter !== "All Specializations" ? 1 : 0;
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Active":
-        return "bg-green-100 text-green-700";
-      case "Busy":
-        return "bg-yellow-100 text-yellow-700";
-      case "On Leave":
-        return "bg-purple-100 text-purple-700";
-      case "Offline":
-        return "bg-gray-100 text-gray-700";
-      default:
-        return "bg-gray-100 text-gray-700";
-    }
-  };
-
-  const toggleTrainerSelection = (id: number) => {
-    const newSelected = new Set(selectedTrainers);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedTrainers(newSelected);
+  const toggleTrainerSelection = (id: string) => {
+    const next = new Set(selectedTrainers);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSelectedTrainers(next);
   };
 
   const toggleAllSelection = () => {
-    if (
+    const allSelected =
       paginatedTrainers.length > 0 &&
-      paginatedTrainers.every((t) => selectedTrainers.has(t.id))
-    ) {
-      const newSelected = new Set(selectedTrainers);
-      paginatedTrainers.forEach((t) => newSelected.delete(t.id));
-      setSelectedTrainers(newSelected);
-    } else {
-      const newSelected = new Set(selectedTrainers);
-      paginatedTrainers.forEach((t) => newSelected.add(t.id));
-      setSelectedTrainers(newSelected);
-    }
+      paginatedTrainers.every((t) => selectedTrainers.has(t.id));
+    const next = new Set(selectedTrainers);
+    paginatedTrainers.forEach((t) =>
+      allSelected ? next.delete(t.id) : next.add(t.id),
+    );
+    setSelectedTrainers(next);
   };
 
-  const goToPage = (page: number) => {
+  const goToPage = (page: number) =>
     setCurrentPage(Math.min(Math.max(1, page), totalPages));
-  };
 
   const resetAdvancedFilters = () => {
     setSpecializationFilter("All Specializations");
@@ -151,22 +147,20 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
       "Name",
       "Email",
       "Phone",
-      "Specialization",
+      "Specializations",
       "Experience",
-      "Members",
-      "Today Sessions",
+      "Members Trained",
       "Rating",
       "Status",
     ];
     const rows = filteredTrainers.map((t) => [
-      t.name,
-      t.email,
-      t.phone,
-      t.specialization,
-      `${t.experience} years`,
-      t.assignedMembers,
-      t.todaySessions,
-      t.rating.toFixed(1),
+      t.full_name ?? "",
+      t.contact_email ?? "",
+      t.contact_phone ?? "",
+      (t.specializations ?? []).join("; "),
+      `${t.experience_years ?? 0} years`,
+      t.members_trained ?? 0,
+      t.average_rating ?? "0.0",
       t.status,
     ]);
     const csvContent = [headers, ...rows]
@@ -184,42 +178,8 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
     URL.revokeObjectURL(url);
   };
 
-  const handleAddTrainer = () => {
-    if (!newTrainer.name.trim() || !newTrainer.email.trim()) return;
-
-    const initials = newTrainer.name
-      .split(" ")
-      .map((p) => p[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
-
-    const trainer: Trainer = {
-      id: Math.max(0, ...trainers.map((t) => t.id)) + 1,
-      name: newTrainer.name,
-      email: newTrainer.email,
-      phone: newTrainer.phone || "—",
-      avatar: initials || "NA",
-      specialization: newTrainer.specialization,
-      experience: 0,
-      assignedMembers: 0,
-      todaySessions: 0,
-      rating: 0,
-      status: "Active",
-    };
-
-    setTrainers((prev) => [trainer, ...prev]);
-    setShowAddModal(false);
-    setNewTrainer({
-      name: "",
-      email: "",
-      phone: "",
-      specialization: "Strength Training",
-    });
-    setCurrentPage(1);
-  };
-
-  const handleDeleteTrainer = (id: number) => {
+  // TODO: wire to a server action (deleteTrainer) — currently local-only
+  const handleDeleteTrainer = (id: string) => {
     setTrainers((prev) => prev.filter((t) => t.id !== id));
     setSelectedTrainers((prev) => {
       const next = new Set(prev);
@@ -231,10 +191,8 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
 
   return (
     <>
-      {/* Search and Filters */}
       <div className="flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-card border border-border rounded-lg p-3 sm:p-4">
-          {/* Search Input */}
           <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
             <input
@@ -258,7 +216,6 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Filter Button + Popover */}
             <Popover open={showFilterPanel} onOpenChange={setShowFilterPanel}>
               <PopoverTrigger asChild>
                 <Button
@@ -280,7 +237,6 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
                     Advanced filters
                   </h4>
                 </div>
-
                 <div className="flex flex-col gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">
@@ -301,7 +257,6 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
                       ))}
                     </select>
                   </div>
-
                   <button
                     onClick={resetAdvancedFilters}
                     className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
@@ -312,7 +267,6 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
               </PopoverContent>
             </Popover>
 
-            {/* Export Button */}
             <button
               onClick={handleExport}
               className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors"
@@ -321,19 +275,19 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
               <span className="hidden sm:inline">Export</span>
             </button>
 
-            {/* Add Trainer Button */}
-            <button
-              onClick={() => setShowAddModal(true)}
+            {/* "Add Trainer" now likely goes through an invite flow (clerkInvitationId, invitedEmail
+                on the schema) rather than a raw insert — wire this to that action separately. */}
+            <Button
+              onClick={() => router.push("/owner/trainers/new")}
               className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium"
             >
               <Plus className="w-4 h-4" />
               <span className="sm:hidden">Add</span>
-              <span className="hidden sm:inline">Add Trainer</span>
-            </button>
+              <span className="hidden sm:inline">Invite Trainer</span>
+            </Button>
           </div>
         </div>
 
-        {/* Quick Filter Tabs */}
         <div className="flex gap-2 overflow-x-auto pb-2 -mx-3 px-3 sm:mx-0 sm:px-0">
           {statusOptions.map((status) => (
             <button
@@ -354,9 +308,8 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
         </div>
       </div>
 
-      {/* Data Table */}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
-        <div className=" overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/50">
@@ -371,41 +324,29 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
                     className="w-4 h-4 rounded border-border cursor-pointer"
                   />
                 </th>
-
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Trainer
                 </th>
-
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Specialization
+                  Specializations
                 </th>
-
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Experience
                 </th>
-
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Members
+                  Members Trained
                 </th>
-
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Today
-                </th>
-
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Rating
                 </th>
-
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Status
                 </th>
-
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Actions
                 </th>
               </tr>
             </thead>
-
             <tbody>
               {paginatedTrainers.length > 0 ? (
                 paginatedTrainers.map((trainer) => (
@@ -421,73 +362,72 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
                         className="w-4 h-4 rounded border-border cursor-pointer"
                       />
                     </td>
-
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                          {trainer.avatar}
-                        </div>
-
+                        {trainer.photo_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={trainer.photo_url}
+                            alt={trainer.full_name ?? ""}
+                            className="w-10 h-10 rounded-full object-cover shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+                            {getInitials(trainer.full_name)}
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <p className="font-medium text-foreground truncate">
-                            {trainer.name}
+                            {trainer.full_name}
                           </p>
-
+                          {trainer.professional_title && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {trainer.professional_title}
+                            </p>
+                          )}
                           <p className="text-xs text-muted-foreground truncate">
-                            {trainer.email}
-                          </p>
-
-                          <p className="text-xs text-muted-foreground truncate">
-                            {trainer.phone}
+                            {trainer.contact_email}
                           </p>
                         </div>
                       </div>
                     </td>
-
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-medium">
-                        {trainer.specialization}
-                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {(trainer.specializations ?? []).map((s) => (
+                          <span
+                            key={s}
+                            className="inline-flex items-center rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-medium"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
                     </td>
-
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-foreground">
-                        {trainer.experience} years
-                      </p>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-foreground">
-                        {trainer.assignedMembers}
-                      </p>
-                    </td>
-
                     <td className="px-6 py-4">
                       <p className="text-sm text-foreground">
-                        {trainer.todaySessions}
+                        {trainer.experience_years ?? 0} years
                       </p>
                     </td>
-
+                    <td className="px-6 py-4">
+                      <p className="text-sm text-foreground">
+                        {trainer.members_trained ?? 0}
+                      </p>
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1.5">
                         <span className="text-yellow-500">★</span>
-
                         <span className="text-sm font-medium text-foreground">
-                          {trainer.rating.toFixed(1)}
+                          {Number(trainer.average_rating ?? 0).toFixed(1)}
                         </span>
                       </div>
                     </td>
-
                     <td className="px-6 py-4">
                       <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                          trainer.status,
-                        )}`}
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(trainer.status)}`}
                       >
                         {trainer.status}
                       </span>
                     </td>
-
                     <td className="px-6 py-4 relative">
                       <DropdownMenu
                         open={openActionMenuId === trainer.id}
@@ -501,24 +441,25 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem className="gap-2">
-                            <Eye className="w-4 h-4" />
-                            View Profile
+                          <DropdownMenuItem
+                            onClick={() =>
+                              router.push(`/owner/trainers/${trainer.id}`)
+                            }
+                            className="gap-2"
+                          >
+                            <Eye className="w-4 h-4" /> View Profile
                           </DropdownMenuItem>
                           <DropdownMenuItem className="gap-2">
-                            <Pencil className="w-4 h-4" />
-                            Edit
+                            <Pencil className="w-4 h-4" /> Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem className="gap-2">
-                            <Calendar className="w-4 h-4" />
-                            Schedule
+                            <Calendar className="w-4 h-4" /> Schedule
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleDeleteTrainer(trainer.id)}
                             className="gap-2 text-red-600 focus:text-red-600"
                           >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
+                            <Trash2 className="w-4 h-4" /> Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -527,14 +468,12 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12">
+                  <td colSpan={8} className="px-6 py-12">
                     <div className="text-center">
                       <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-
                       <h3 className="font-semibold text-foreground mb-2">
                         No Trainers Found
                       </h3>
-
                       <p className="text-sm text-muted-foreground">
                         Try adjusting your search or filters
                       </p>
@@ -547,7 +486,6 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
         </div>
       </div>
 
-      {/* Pagination */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">
           Showing {paginatedTrainers.length > 0 ? startIdx + 1 : 0} to{" "}
@@ -588,101 +526,6 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
           </button>
         </div>
       </div>
-
-      {/* Add Trainer Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-lg max-w-md w-full p-6">
-            <h2 className="text-xl font-bold text-foreground mb-4">
-              Add New Trainer
-            </h2>
-
-            <div className="flex flex-col gap-4">
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  value={newTrainer.name}
-                  onChange={(e) =>
-                    setNewTrainer({ ...newTrainer, name: e.target.value })
-                  }
-                  placeholder="Enter trainer name"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={newTrainer.email}
-                  onChange={(e) =>
-                    setNewTrainer({ ...newTrainer, email: e.target.value })
-                  }
-                  placeholder="Enter email"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  value={newTrainer.phone}
-                  onChange={(e) =>
-                    setNewTrainer({ ...newTrainer, phone: e.target.value })
-                  }
-                  placeholder="Enter phone number"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  Specialization
-                </label>
-                <select
-                  value={newTrainer.specialization}
-                  onChange={(e) =>
-                    setNewTrainer({
-                      ...newTrainer,
-                      specialization: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                >
-                  {specializationOptions.slice(1).map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddTrainer}
-                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
-                >
-                  Add Trainer
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
