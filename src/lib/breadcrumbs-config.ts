@@ -21,7 +21,7 @@ export interface BreadcrumbRoute {
 export const ownerBreadcrumbRoutes: BreadcrumbRoute[] = [
   {
     pattern: "/owner/dashboard",
-    items: [{ label: "Home", href: "/owner/dashboard" }],
+    items: [{ label: "Home", href: "/owner/dashboard", isActive: true }],
   },
   {
     pattern: "/owner/members",
@@ -75,6 +75,19 @@ export const ownerBreadcrumbRoutes: BreadcrumbRoute[] = [
       { label: "Members", href: "/owner/members" },
       { label: "All Members", href: "/owner/members" },
       { label: "Member Details", href: "/owner/members/:id", isActive: true },
+    ],
+  },
+  {
+    pattern: "/owner/members/renew",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Members", href: "/owner/members" },
+      { label: "All Members", href: "/owner/members" },
+      {
+        label: "Renew Membership",
+        href: "/owner/members/renew",
+        isActive: true,
+      },
     ],
   },
   {

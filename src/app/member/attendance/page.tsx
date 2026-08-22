@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import {
   type ColumnDef,
   flexRender,
@@ -15,7 +15,8 @@ import {
   Flame,
   TrendingUp,
   Search,
-  Filter,
+  SlidersHorizontal,
+  X,
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
@@ -24,25 +25,20 @@ import {
   UserRound,
   BarChart3,
   Activity,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -51,282 +47,51 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { useMemberAttendanceOverview } from "@/hooks/queries/member.query";
+import type { AttendanceHistoryRow } from "@/services/member.query";
+import { StatCard } from "@/components/StatCard";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type AttendanceStatus = "present" | "late" | "missed" | "no_session";
+type AttendanceStatus = AttendanceHistoryRow["status"]; // "present" | "missed" | "no_session"
+type FilterTab = "all" | AttendanceStatus | "this_month" | "last_month";
+type SortOption = "newest" | "oldest";
 
-interface AttendanceRecord {
-  id: string;
-  date: string;
-  dateObj: { day: number; month: number; year: number };
-  checkIn: string | null;
-  checkOut: string | null;
-  duration: string | null;
-  session: string | null;
-  trainer: string | null;
-  status: AttendanceStatus;
-}
+// ─── Filter config ──────────────────────────────────────────────────────────
 
-// ─── Mock Data ─────────────────────────────────────────────────────────────────
-
-const ATTENDANCE_RECORDS: AttendanceRecord[] = [
-  {
-    id: "1",
-    date: "22 Jul 2026",
-    dateObj: { day: 22, month: 7, year: 2026 },
-    checkIn: "07:02 AM",
-    checkOut: "08:15 AM",
-    duration: "1h 13m",
-    session: "Upper Body Strength",
-    trainer: "Rahul Sharma",
-    status: "present",
-  },
-  {
-    id: "2",
-    date: "21 Jul 2026",
-    dateObj: { day: 21, month: 7, year: 2026 },
-    checkIn: "07:05 AM",
-    checkOut: "08:10 AM",
-    duration: "1h 05m",
-    session: "Push Day",
-    trainer: "Rahul Sharma",
-    status: "present",
-  },
-  {
-    id: "3",
-    date: "20 Jul 2026",
-    dateObj: { day: 20, month: 7, year: 2026 },
-    checkIn: null,
-    checkOut: null,
-    duration: null,
-    session: null,
-    trainer: null,
-    status: "missed",
-  },
-  {
-    id: "4",
-    date: "18 Jul 2026",
-    dateObj: { day: 18, month: 7, year: 2026 },
-    checkIn: "07:15 AM",
-    checkOut: "08:20 AM",
-    duration: "1h 05m",
-    session: "Leg Workout",
-    trainer: "Rahul Sharma",
-    status: "late",
-  },
-  {
-    id: "5",
-    date: "17 Jul 2026",
-    dateObj: { day: 17, month: 7, year: 2026 },
-    checkIn: "07:00 AM",
-    checkOut: "08:05 AM",
-    duration: "1h 05m",
-    session: "Pull Workout",
-    trainer: "Rahul Sharma",
-    status: "present",
-  },
-  {
-    id: "6",
-    date: "16 Jul 2026",
-    dateObj: { day: 16, month: 7, year: 2026 },
-    checkIn: null,
-    checkOut: null,
-    duration: null,
-    session: null,
-    trainer: null,
-    status: "missed",
-  },
-  {
-    id: "7",
-    date: "15 Jul 2026",
-    dateObj: { day: 15, month: 7, year: 2026 },
-    checkIn: "07:10 AM",
-    checkOut: "08:25 AM",
-    duration: "1h 15m",
-    session: "Core Training",
-    trainer: "Rahul Sharma",
-    status: "present",
-  },
-  {
-    id: "8",
-    date: "14 Jul 2026",
-    dateObj: { day: 14, month: 7, year: 2026 },
-    checkIn: "07:20 AM",
-    checkOut: "08:30 AM",
-    duration: "1h 10m",
-    session: "Cardio Blast",
-    trainer: "Rahul Sharma",
-    status: "late",
-  },
-  {
-    id: "9",
-    date: "11 Jul 2026",
-    dateObj: { day: 11, month: 7, year: 2026 },
-    checkIn: "07:00 AM",
-    checkOut: "08:10 AM",
-    duration: "1h 10m",
-    session: "Full Body Strength",
-    trainer: "Rahul Sharma",
-    status: "present",
-  },
-  {
-    id: "10",
-    date: "10 Jul 2026",
-    dateObj: { day: 10, month: 7, year: 2026 },
-    checkIn: "07:05 AM",
-    checkOut: "08:00 AM",
-    duration: "55m",
-    session: "Upper Body Strength",
-    trainer: "Rahul Sharma",
-    status: "present",
-  },
+const FILTER_TABS: { key: FilterTab; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "present", label: "Present" },
+  { key: "missed", label: "Missed" },
+  { key: "this_month", label: "This Month" },
+  { key: "last_month", label: "Last Month" },
 ];
 
-// July 2026 calendar data — day: status map (the only month with mock data)
-const JULY_STATUS: Record<number, AttendanceStatus> = {
-  1: "present",
-  2: "present",
-  3: "present",
-  4: "no_session",
-  5: "no_session",
-  7: "present",
-  8: "present",
-  9: "present",
-  10: "present",
-  11: "present",
-  12: "no_session",
-  14: "late",
-  15: "present",
-  16: "missed",
-  17: "present",
-  18: "late",
-  19: "no_session",
-  20: "missed",
-  21: "present",
-  22: "present",
-  23: "present",
-  24: "present",
-  25: "no_session",
-  26: "missed",
-  28: "present",
-  29: "late",
-  30: "present",
-  31: "present",
-};
-
-const INSIGHTS = [
-  {
-    icon: CheckCircle2,
-    color: "text-green-600",
-    bg: "bg-green-50 dark:bg-green-950/30",
-    text: "You've attended 5 consecutive workouts.",
-  },
-  {
-    icon: TrendingUp,
-    color: "text-primary",
-    bg: "bg-primary/5",
-    text: "Attendance rate increased by 12% compared to last month.",
-  },
-  {
-    icon: Clock3,
-    color: "text-amber-500",
-    bg: "bg-amber-50 dark:bg-amber-950/30",
-    text: "Average workout duration is 1 hour 8 minutes.",
-  },
-  {
-    icon: Dumbbell,
-    color: "text-primary",
-    bg: "bg-primary/5",
-    text: "Most attended workout: Upper Body Strength.",
-  },
-  {
-    icon: UserRound,
-    color: "text-orange-500",
-    bg: "bg-orange-50 dark:bg-orange-950/30",
-    text: "Most frequent trainer: Rahul Sharma.",
-  },
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
 ];
 
-const RECORDS_BY_DATE = new Map<string, AttendanceRecord>(
-  ATTENDANCE_RECORDS.map((r) => [
-    format(
-      new Date(r.dateObj.year, r.dateObj.month - 1, r.dateObj.day),
-      "yyyy-MM-dd",
-    ),
-    r,
-  ]),
-);
-
-// Only July 2026 has mock status data — this keeps the calendar generic for
-// any month without inventing data for months we don't have records for.
-function getStatusDatesForMonth(month: Date) {
-  const buckets: Record<AttendanceStatus, Date[]> = {
-    present: [],
-    late: [],
-    missed: [],
-    no_session: [],
-  };
-
-  if (month.getFullYear() === 2026 && month.getMonth() === 6) {
-    Object.entries(JULY_STATUS).forEach(([day, status]) => {
-      buckets[status].push(new Date(2026, 6, Number(day)));
-    });
-  }
-
-  return buckets;
+function matchesTab(
+  record: AttendanceHistoryRow,
+  tab: FilterTab,
+  thisMonthKey: string,
+  lastMonthKey: string,
+) {
+  if (tab === "all") return true;
+  if (tab === "this_month") return record.date.startsWith(thisMonthKey);
+  if (tab === "last_month") return record.date.startsWith(lastMonthKey);
+  return record.status === tab;
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
-
-function StatCard({
-  icon: Icon,
-  iconBg,
-  iconColor,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ElementType;
-  iconBg: string;
-  iconColor: string;
-  label: string;
-  value: string;
-  sub: string;
-}) {
-  return (
-    <Card className="border border-border/60 shadow-sm">
-      <CardContent className="flex items-start gap-4 p-5">
-        <div className={cn("rounded-xl p-3 shrink-0", iconBg)}>
-          <Icon className={cn("h-5 w-5", iconColor)} />
-        </div>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground font-medium mb-0.5">
-            {label}
-          </p>
-          <p className="text-2xl font-bold text-foreground leading-tight tracking-tight">
-            {value}
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 function AttendanceBadge({ status }: { status: AttendanceStatus }) {
   if (status === "present")
     return (
       <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 hover:bg-green-100 font-medium">
         Present
-      </Badge>
-    );
-  if (status === "late")
-    return (
-      <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 hover:bg-amber-100 font-medium">
-        Late
       </Badge>
     );
   if (status === "missed")
@@ -342,11 +107,9 @@ function AttendanceBadge({ status }: { status: AttendanceStatus }) {
   );
 }
 
-// Row tint applied per attendance status, used on the history table.
 const ROW_STATUS_BG: Record<AttendanceStatus, string> = {
   present:
     "bg-green-50/60 dark:bg-green-950/10 hover:bg-green-50 dark:hover:bg-green-950/20",
-  late: "bg-amber-50/60 dark:bg-amber-950/10 hover:bg-amber-50 dark:hover:bg-amber-950/20",
   missed:
     "bg-red-50/60 dark:bg-red-950/10 hover:bg-red-50 dark:hover:bg-red-950/20",
   no_session: "hover:bg-muted/30",
@@ -354,13 +117,13 @@ const ROW_STATUS_BG: Record<AttendanceStatus, string> = {
 
 // ─── Table columns ─────────────────────────────────────────────────────────────
 
-const columns: ColumnDef<AttendanceRecord>[] = [
+const columns: ColumnDef<AttendanceHistoryRow>[] = [
   {
     accessorKey: "date",
     header: "Date",
     cell: ({ row }) => (
       <span className="text-sm font-medium text-foreground">
-        {row.original.date}
+        {format(parseISO(row.original.date), "dd MMM yyyy")}
       </span>
     ),
   },
@@ -399,18 +162,7 @@ const columns: ColumnDef<AttendanceRecord>[] = [
     accessorKey: "trainer",
     header: "Trainer",
     cell: ({ row }) =>
-      row.original.trainer ? (
-        <span className="flex items-center gap-1.5">
-          <Avatar className="h-5 w-5">
-            <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
-              RS
-            </AvatarFallback>
-          </Avatar>
-          {row.original.trainer}
-        </span>
-      ) : (
-        <span className="text-muted-foreground">—</span>
-      ),
+      row.original.trainer ?? <span className="text-muted-foreground">—</span>,
   },
   {
     accessorKey: "status",
@@ -419,101 +171,322 @@ const columns: ColumnDef<AttendanceRecord>[] = [
   },
 ];
 
+// ─── Empty state ────────────────────────────────────────────────────────────
+
+function EmptyState({
+  hasFilters,
+  onReset,
+}: {
+  hasFilters: boolean;
+  onReset: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-5">
+        <CalendarCheck className="w-10 h-10 text-muted-foreground" />
+      </div>
+      <h3 className="text-lg font-semibold text-foreground mb-2">
+        No attendance records found
+      </h3>
+      <p className="text-sm text-muted-foreground max-w-sm mb-6 leading-relaxed">
+        {hasFilters
+          ? "Try adjusting your search or filters to find what you're looking for."
+          : "Check-ins will show up here once you start attending sessions."}
+      </p>
+      {hasFilters && (
+        <Button variant="outline" onClick={onReset} className="gap-2">
+          <CircleX className="w-4 h-4" />
+          Reset filters
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ─── Loading skeleton ───────────────────────────────────────────────────────
+
+function AttendancePageSkeleton() {
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto space-y-5">
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-96 mt-2" />
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="border border-border/60 shadow-sm">
+              <CardContent className="flex items-start gap-4 p-5">
+                <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-6 w-16" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <Skeleton className="h-24 w-full rounded-lg" />
+        <Skeleton className="h-10 w-full rounded-full" />
+
+        <Card className="border border-border/60 shadow-sm">
+          <CardHeader className="pb-3 pt-5 px-5">
+            <Skeleton className="h-5 w-40" />
+          </CardHeader>
+          <CardContent className="px-5 pb-5 space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <Skeleton className="h-80 w-full rounded-lg" />
+          <Skeleton className="h-80 w-full rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Error state ────────────────────────────────────────────────────────────
+
+function AttendancePageError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-950/30 flex items-center justify-center mb-5">
+            <AlertTriangle className="w-8 h-8 text-red-500" />
+          </div>
+          <h3 className="text-lg font-semibold text-foreground mb-2">
+            Couldn't load your attendance
+          </h3>
+          <p className="text-sm text-muted-foreground max-w-sm mb-6 leading-relaxed">
+            {message}
+          </p>
+          <Button onClick={onRetry} className="gap-2">
+            <RefreshCw className="w-4 h-4" />
+            Try again
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AttendancePage() {
-  const [activeFilter, setActiveFilter] = useState("all");
+  const {
+    data: result,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isRefetching,
+  } = useMemberAttendanceOverview();
+
   const [search, setSearch] = useState("");
-  const [calendarMonth, setCalendarMonth] = useState(new Date(2026, 6, 1));
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-    new Date(2026, 6, 22),
-  );
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [sortOrder, setSortOrder] = useState("newest");
+  const [activeTab, setActiveTab] = useState<FilterTab>("all");
+  const [sortOrder, setSortOrder] = useState<SortOption>("newest");
+  const [trainer, setTrainer] = useState("all");
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
-  const FILTER_BADGES = [
-    { key: "all", label: "All" },
-    { key: "present", label: "Present" },
-    { key: "late", label: "Late" },
-    { key: "missed", label: "Missed" },
-    { key: "this_month", label: "This Month" },
-    { key: "last_month", label: "Last Month" },
-  ];
+  const history = result?.success ? result.data.history : [];
+  const stats = result?.success ? result.data.stats : null;
+  const membership = result?.success ? result.data.membership : null;
 
-  const statusDates = useMemo(
-    () => getStatusDatesForMonth(calendarMonth),
-    [calendarMonth],
+  const now = new Date();
+  const thisMonthKey = format(now, "yyyy-MM");
+  const lastMonthKey = format(
+    new Date(now.getFullYear(), now.getMonth() - 1, 1),
+    "yyyy-MM",
   );
+
+  const trainers = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          history.map((r) => r.trainer).filter((t): t is string => Boolean(t)),
+        ),
+      ),
+    [history],
+  );
+
+  const counts = useMemo(() => {
+    return Object.fromEntries(
+      FILTER_TABS.map(({ key }) => [
+        key,
+        history.filter((r) => matchesTab(r, key, thisMonthKey, lastMonthKey))
+          .length,
+      ]),
+    ) as Record<FilterTab, number>;
+  }, [history, thisMonthKey, lastMonthKey]);
+
+  const recordsByDate = useMemo(
+    () => new Map(history.map((r) => [r.date, r])),
+    [history],
+  );
+
+  const statusDatesForMonth = useMemo(() => {
+    const present: Date[] = [];
+    const missed: Date[] = [];
+    for (const r of history) {
+      const d = parseISO(r.date);
+      if (
+        d.getFullYear() !== calendarMonth.getFullYear() ||
+        d.getMonth() !== calendarMonth.getMonth()
+      )
+        continue;
+      if (r.status === "present") present.push(d);
+      else if (r.status === "missed") missed.push(d);
+    }
+    return { present, missed };
+  }, [history, calendarMonth]);
 
   const selectedRecord = selectedDate
-    ? (RECORDS_BY_DATE.get(format(selectedDate, "yyyy-MM-dd")) ?? null)
+    ? (recordsByDate.get(format(selectedDate, "yyyy-MM-dd")) ?? null)
     : null;
 
-  // Filter + sort records. Memoized so the `data` array passed to the table
-  // keeps a stable reference across unrelated re-renders (e.g. hovering a
-  // row) — an unstable reference was resetting the table's pagination.
   const sorted = useMemo(() => {
-    const filtered = ATTENDANCE_RECORDS.filter((r) => {
-      const matchesStatus =
-        activeFilter === "all" ||
-        activeFilter === "this_month" ||
-        activeFilter === "last_month" ||
-        r.status === activeFilter;
+    const filtered = history.filter((r) => {
+      const matchesStatus = matchesTab(
+        r,
+        activeTab,
+        thisMonthKey,
+        lastMonthKey,
+      );
+      const matchesTrainer = trainer === "all" || r.trainer === trainer;
+      const q = search.trim().toLowerCase();
       const matchesSearch =
-        search === "" ||
-        r.date.toLowerCase().includes(search.toLowerCase()) ||
-        (r.session ?? "").toLowerCase().includes(search.toLowerCase()) ||
-        (r.trainer ?? "").toLowerCase().includes(search.toLowerCase());
-      return matchesStatus && matchesSearch;
+        q === "" ||
+        r.date.includes(q) ||
+        (r.session ?? "").toLowerCase().includes(q) ||
+        (r.trainer ?? "").toLowerCase().includes(q);
+      return matchesStatus && matchesTrainer && matchesSearch;
     });
 
-    return [...filtered].sort((a, b) => {
-      const da = new Date(
-        `${a.dateObj.year}-${a.dateObj.month}-${a.dateObj.day}`,
-      );
-      const db = new Date(
-        `${b.dateObj.year}-${b.dateObj.month}-${b.dateObj.day}`,
-      );
-      return sortOrder === "newest"
-        ? db.getTime() - da.getTime()
-        : da.getTime() - db.getTime();
-    });
-  }, [activeFilter, search, sortOrder]);
+    return [...filtered].sort((a, b) =>
+      sortOrder === "newest"
+        ? b.date.localeCompare(a.date)
+        : a.date.localeCompare(b.date),
+    );
+  }, [
+    history,
+    activeTab,
+    search,
+    sortOrder,
+    trainer,
+    thisMonthKey,
+    lastMonthKey,
+  ]);
 
   const table = useReactTable({
     data: sorted,
     columns,
+    getRowId: (row) => row.date,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     initialState: { pagination: { pageSize: 6 } },
   });
 
-  const handleFilterApply = () => {
-    if (statusFilter !== "all") setActiveFilter(statusFilter);
-    setFilterOpen(false);
+  const activeFilterCount =
+    (sortOrder !== "newest" ? 1 : 0) + (trainer !== "all" ? 1 : 0);
+
+  const resetFilters = () => {
+    setSortOrder("newest");
+    setTrainer("all");
+  };
+
+  const resetAll = () => {
+    resetFilters();
+    setSearch("");
+    setActiveTab("all");
     table.setPageIndex(0);
   };
 
-  const handleFilterReset = () => {
-    setStatusFilter("all");
-    setSortOrder("newest");
-    setActiveFilter("all");
-    setFilterOpen(false);
-    table.setPageIndex(0);
-  };
+  const hasActiveFilters =
+    search.trim().length > 0 || activeTab !== "all" || trainer !== "all";
 
   const rowCount = sorted.length;
   const pageIndex = table.getState().pagination.pageIndex;
   const pageSize = table.getState().pagination.pageSize;
   const pageCount = table.getPageCount();
 
+  if (isLoading) {
+    return <AttendancePageSkeleton />;
+  }
+
+  if (isError || !result?.success) {
+    const message = isError
+      ? error instanceof Error
+        ? error.message
+        : "Something went wrong."
+      : ((result as { error: string })?.error ?? "Something went wrong.");
+    return <AttendancePageError message={message} onRetry={() => refetch()} />;
+  }
+
+  const s = stats!;
+  const monthProgressPct =
+    s.daysSoFarThisMonth > 0
+      ? Math.round((s.totalCheckInsThisMonth / s.daysSoFarThisMonth) * 100)
+      : 0;
+
+  const insights = [
+    s.currentStreak > 0
+      ? {
+          icon: CheckCircle2,
+          color: "text-green-600",
+          bg: "bg-green-50 dark:bg-green-950/30",
+          text: `You've attended ${s.currentStreak} consecutive day${s.currentStreak > 1 ? "s" : ""}.`,
+        }
+      : null,
+    {
+      icon: TrendingUp,
+      color: "text-primary",
+      bg: "bg-primary/5",
+      text: `Attendance rate is ${s.attendanceRate}% for your current membership.`,
+    },
+    s.mostAttendedWorkout
+      ? {
+          icon: Dumbbell,
+          color: "text-primary",
+          bg: "bg-primary/5",
+          text: `Most attended workout: ${s.mostAttendedWorkout}.`,
+        }
+      : null,
+    s.mostFrequentTrainer
+      ? {
+          icon: UserRound,
+          color: "text-orange-500",
+          bg: "bg-orange-50 dark:bg-orange-950/30",
+          text: `Most frequent trainer: ${s.mostFrequentTrainer}.`,
+        }
+      : null,
+    {
+      icon: Flame,
+      color: "text-amber-500",
+      bg: "bg-amber-50 dark:bg-amber-950/30",
+      text: `Longest streak so far: ${s.longestStreak} day${s.longestStreak !== 1 ? "s" : ""}.`,
+    },
+  ].filter((i): i is NonNullable<typeof i> => i !== null);
+
   return (
     <div className="min-h-screen bg-background">
-      {/* ── Main Content ── */}
       <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto space-y-5">
         {/* Header */}
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-foreground tracking-tight">
               My Attendance
@@ -523,6 +496,18 @@ export default function AttendancePage() {
               consistency.
             </p>
           </div>
+          <Button
+            variant="outline"
+            size="icon"
+            className="shrink-0"
+            onClick={() => refetch()}
+            disabled={isRefetching}
+            aria-label="Refresh"
+          >
+            <RefreshCw
+              className={cn("h-4 w-4", isRefetching && "animate-spin")}
+            />
+          </Button>
         </div>
 
         {/* Stat Cards */}
@@ -531,154 +516,179 @@ export default function AttendancePage() {
             icon={CalendarCheck}
             iconBg="bg-primary/10"
             iconColor="text-primary"
-            label="Total Check-ins"
-            value="22"
-            sub="This Month"
+            title="Total Check-ins"
+            value={s.totalCheckInsThisMonth}
+            subtitle="This Month"
           />
+
           <StatCard
             icon={TrendingUp}
             iconBg="bg-green-100 dark:bg-green-950/40"
             iconColor="text-green-600"
-            label="Attendance Rate"
-            value="84%"
-            sub="Last 30 Days"
+            title="Attendance Rate"
+            value={`${s.attendanceRate}%`}
+            subtitle="Current Membership"
           />
+
           <StatCard
             icon={Flame}
             iconBg="bg-orange-100 dark:bg-orange-950/40"
             iconColor="text-orange-500"
-            label="Current Streak"
-            value="5 Days"
-            sub="Consecutive Days"
+            title="Current Streak"
+            value={`${s.currentStreak} Day${s.currentStreak !== 1 ? "s" : ""}`}
+            subtitle="Consecutive Days"
           />
+
           <StatCard
             icon={Clock3}
             iconBg="bg-primary/10"
             iconColor="text-primary"
-            label="Last Visit"
-            value="22 Jul 2026"
-            sub="07:02 AM — Most Recent Check-in"
+            title="Last Visit"
+            value={
+              s.lastVisitDate
+                ? format(parseISO(s.lastVisitDate), "dd MMM yyyy")
+                : "—"
+            }
+            subtitle={
+              s.lastVisitTime
+                ? `${s.lastVisitTime} — Most Recent Check-in`
+                : "No visits yet"
+            }
           />
         </div>
 
-        {/* Search + Filter */}
-        <div className="flex gap-3 items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-9 h-10 bg-background border-border/70"
-              placeholder="Search by date, session, or trainer..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                table.setPageIndex(0);
-              }}
-            />
-          </div>
-          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="gap-2 h-10 px-4 border-border/70"
-              >
-                <Filter className="h-4 w-4" />
-                Filter
-                <ChevronRight className="h-3 w-3 rotate-90 text-muted-foreground" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 p-4 shadow-lg" align="end">
-              <p className="text-sm font-semibold text-foreground mb-3">
-                Filter Sessions
-              </p>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1.5 font-medium">
-                    Attendance Status
-                  </p>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="h-9 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="present">Present</SelectItem>
-                      <SelectItem value="late">Late</SelectItem>
-                      <SelectItem value="missed">Missed</SelectItem>
-                    </SelectContent>
-                  </Select>
+        {/* Search + Sort & Filter */}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-card border border-border rounded-lg p-3 sm:p-4">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search by date, session, or trainer..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  table.setPageIndex(0);
+                }}
+                className="w-full pl-10 pr-9 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="relative gap-2 px-3 sm:px-4 py-2 h-auto text-sm font-normal shrink-0"
+                >
+                  <SlidersHorizontal className="size-4" />
+                  <span>Sort & Filter</span>
+                  {activeFilterCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64" align="end">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-foreground">
+                    Sort & Filter
+                  </h4>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1.5 font-medium">
-                    Trainer
-                  </p>
-                  <Select defaultValue="all">
-                    <SelectTrigger className="h-9 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Trainers</SelectItem>
-                      <SelectItem value="rahul">Rahul Sharma</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1.5 font-medium">
-                    Sort By
-                  </p>
-                  <Select value={sortOrder} onValueChange={setSortOrder}>
-                    <SelectTrigger className="h-9 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="newest">Newest First</SelectItem>
-                      <SelectItem value="oldest">Oldest First</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={handleFilterReset}
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Sort by
+                    </label>
+                    <select
+                      value={sortOrder}
+                      onChange={(e) =>
+                        setSortOrder(e.target.value as SortOption)
+                      }
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      {SORT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Trainer
+                    </label>
+                    <select
+                      value={trainer}
+                      onChange={(e) => setTrainer(e.target.value)}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="all">All trainers</option>
+                      {trainers.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={resetFilters}
+                    className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted"
                   >
                     Reset
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="flex-1 bg-primary hover:bg-primary/90"
-                    onClick={handleFilterApply}
-                  >
-                    Apply Filters
-                  </Button>
+                  </button>
                 </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Status tabs */}
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+            {FILTER_TABS.map(({ key, label }) => {
+              const isActive = activeTab === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => {
+                    setActiveTab(key);
+                    table.setPageIndex(0);
+                  }}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap shrink-0",
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70",
+                  )}
+                >
+                  {label}
+                  <span
+                    className={cn(
+                      "inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[11px] font-bold px-1",
+                      isActive
+                        ? "bg-primary-foreground/20 text-primary-foreground"
+                        : "bg-background text-muted-foreground",
+                    )}
+                  >
+                    {counts[key]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Filter Badges */}
-        <div className="flex flex-wrap gap-2">
-          {FILTER_BADGES.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => {
-                setActiveFilter(f.key);
-                table.setPageIndex(0);
-              }}
-              className={cn(
-                "px-4 py-1.5 rounded-full text-sm font-medium border transition-all",
-                activeFilter === f.key
-                  ? "bg-primary text-white border-primary"
-                  : "bg-background text-foreground border-border/70 hover:border-primary/50 hover:text-primary",
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Attendance History (full width) */}
+        {/* Attendance History */}
         <Card className="border border-border/60 shadow-sm">
           <CardHeader className="pb-3 pt-5 px-5">
             <div className="flex items-center gap-2">
@@ -688,73 +698,75 @@ export default function AttendancePage() {
               </CardTitle>
             </div>
             <p className="text-xs text-muted-foreground">
-              Recent membership payments.
+              Your check-in and workout session records.
             </p>
           </CardHeader>
           <CardContent className="px-0 pb-0">
-            <Table>
-              <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id} className="border-border/60">
-                    {headerGroup.headers.map((header, i) => (
-                      <TableHead
-                        key={header.id}
-                        className={cn(
-                          "text-xs font-semibold text-muted-foreground",
-                          i === 0 && "pl-5 w-[110px]",
-                          i === headerGroup.headers.length - 1 && "pr-5",
-                        )}
-                      >
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={columns.length}
-                      className="text-center py-12 text-muted-foreground text-sm"
-                    >
-                      No attendance records found.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className={cn(
-                        "border-border/40",
-                        ROW_STATUS_BG[row.original.status],
-                      )}
-                    >
-                      {row.getVisibleCells().map((cell, i) => (
-                        <TableCell
-                          key={cell.id}
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id} className="border-border/60">
+                      {headerGroup.headers.map((header, i) => (
+                        <TableHead
+                          key={header.id}
                           className={cn(
-                            "text-sm text-foreground py-3",
-                            i === 0 && "pl-5 font-medium",
-                            i === row.getVisibleCells().length - 1 && "pr-5",
+                            "text-xs font-semibold text-muted-foreground",
+                            i === 0 && "pl-5 w-[110px]",
+                            i === headerGroup.headers.length - 1 && "pr-5",
                           )}
                         >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
-                        </TableCell>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext(),
+                              )}
+                        </TableHead>
                       ))}
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={columns.length} className="p-0">
+                        <EmptyState
+                          hasFilters={hasActiveFilters}
+                          onReset={resetAll}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    table.getRowModel().rows.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        className={cn(
+                          "border-border/40",
+                          ROW_STATUS_BG[row.original.status],
+                        )}
+                      >
+                        {row.getVisibleCells().map((cell, i) => (
+                          <TableCell
+                            key={cell.id}
+                            className={cn(
+                              "text-sm text-foreground py-3",
+                              i === 0 && "pl-5 font-medium",
+                              i === row.getVisibleCells().length - 1 && "pr-5",
+                            )}
+                          >
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext(),
+                            )}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
             {/* Pagination */}
             <div className="flex items-center justify-between px-5 py-3 border-t border-border/60">
               <p className="text-xs text-muted-foreground">
@@ -803,9 +815,8 @@ export default function AttendancePage() {
           </CardContent>
         </Card>
 
-        {/* Progress + Calendar Row */}
+        {/* Progress + Calendar */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Attendance Progress */}
           <Card className="border border-border/60 shadow-sm">
             <CardHeader className="pb-3 pt-5 px-5">
               <div className="flex items-center gap-2">
@@ -819,13 +830,16 @@ export default function AttendancePage() {
               <div>
                 <div className="flex items-end justify-between mb-2">
                   <p className="text-2xl font-bold text-foreground">
-                    22 / 26 Days
+                    {s.totalCheckInsThisMonth} / {s.daysSoFarThisMonth} Days
                   </p>
                   <span className="text-sm font-semibold text-primary">
-                    84%
+                    {monthProgressPct}%
                   </span>
                 </div>
-                <Progress value={84} className="h-2.5 rounded-full" />
+                <Progress
+                  value={monthProgressPct}
+                  className="h-2.5 rounded-full"
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 {[
@@ -834,28 +848,28 @@ export default function AttendancePage() {
                     color: "text-orange-500",
                     bg: "bg-orange-100 dark:bg-orange-950/40",
                     label: "Current Streak",
-                    value: "5 Days",
+                    value: `${s.currentStreak} Days`,
                   },
                   {
                     icon: Activity,
                     color: "text-amber-500",
                     bg: "bg-amber-100 dark:bg-amber-950/40",
                     label: "Longest Streak",
-                    value: "12 Days",
+                    value: `${s.longestStreak} Days`,
                   },
                   {
                     icon: CircleX,
                     color: "text-red-500",
                     bg: "bg-red-100 dark:bg-red-950/40",
                     label: "Missed Days",
-                    value: "4 Days",
+                    value: `${s.missedThisMonth} Days`,
                   },
                   {
                     icon: CheckCircle2,
                     color: "text-green-600",
                     bg: "bg-green-100 dark:bg-green-950/40",
                     label: "Present Days",
-                    value: "22 Days",
+                    value: `${s.totalCheckInsThisMonth} Days`,
                   },
                 ].map(({ icon: Icon, color, bg, label, value }) => (
                   <div key={label} className="flex items-center gap-3">
@@ -872,43 +886,44 @@ export default function AttendancePage() {
                 ))}
               </div>
 
-              {/* Start/End/Renewal dates */}
-              <div className="grid grid-cols-3 gap-3 pt-1">
-                {[
-                  { label: "Start Date", value: "1 Jul 2026" },
-                  { label: "End Date", value: "31 Jul 2026" },
-                  { label: "Status", value: "Active", green: true },
-                ].map(({ label, value, green }) => (
-                  <div key={label}>
+              {membership && (
+                <div className="grid grid-cols-3 gap-3 pt-1">
+                  <div>
                     <p className="text-[11px] text-muted-foreground mb-0.5">
-                      {label}
+                      Start Date
                     </p>
-                    <p
-                      className={cn(
-                        "text-sm font-semibold",
-                        green ? "text-green-600" : "text-foreground",
-                      )}
-                    >
-                      {value}
+                    <p className="text-sm font-semibold text-foreground">
+                      {format(parseISO(membership.start_date), "d MMM yyyy")}
                     </p>
                   </div>
-                ))}
-              </div>
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-0.5">
+                      End Date
+                    </p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {format(parseISO(membership.end_date), "d MMM yyyy")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-0.5">
+                      Status
+                    </p>
+                    <p className="text-sm font-semibold text-green-600">
+                      {membership.status}
+                    </p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Calendar */}
           <Card className="border border-border/60 shadow-sm">
             <CardHeader className="pb-2 pt-5 px-5">
-              {/* Legend */}
               <div className="flex items-center justify-end gap-3">
                 <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                   <span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" />{" "}
                   Present
-                </span>
-                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />{" "}
-                  Late
                 </span>
                 <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                   <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" />{" "}
@@ -926,22 +941,17 @@ export default function AttendancePage() {
                 showOutsideDays
                 className="w-full p-0"
                 modifiers={{
-                  present: statusDates.present,
-                  late: statusDates.late,
-                  missed: statusDates.missed,
-                  noSession: statusDates.no_session,
+                  present: statusDatesForMonth.present,
+                  missed: statusDatesForMonth.missed,
                 }}
                 modifiersClassNames={{
                   present:
                     "!bg-green-100 !text-green-700 dark:!bg-green-950/50 dark:!text-green-400 rounded-md",
-                  late: "!bg-amber-100 !text-amber-700 dark:!bg-amber-950/50 dark:!text-amber-400 rounded-md",
                   missed:
                     "!bg-red-100 !text-red-700 dark:!bg-red-950/50 dark:!text-red-400 rounded-md",
-                  noSession: "text-muted-foreground",
                 }}
               />
 
-              {/* Selected day detail */}
               {selectedDate && (
                 <div className="mt-3 pt-3 border-t border-border/60">
                   <p className="text-[11px] font-semibold text-foreground mb-2">
@@ -999,7 +1009,7 @@ export default function AttendancePage() {
             </div>
           </CardHeader>
           <CardContent className="px-5 pb-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {INSIGHTS.map(({ icon: Icon, color, bg, text }, i) => (
+            {insights.map(({ icon: Icon, color, bg, text }, i) => (
               <div key={i} className="flex items-start gap-3">
                 <div className={cn("rounded-xl p-2 shrink-0 mt-0.5", bg)}>
                   <Icon className={cn("h-4 w-4", color)} />

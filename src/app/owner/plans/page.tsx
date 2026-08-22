@@ -10,13 +10,15 @@ import { PlansGrid } from "@/components/owner/PlansGrid";
 import { RevenueOverviewChart } from "@/components/owner/RevenueOverviewChart";
 import { QuickActionsGrid } from "@/components/QuickActionsGrid";
 import { plansQuickActions } from "@/components/owner/quick-actions-data";
-import { revenueData, topPlans } from "@/mock/plans";
-import { getMembershipPlans } from "@/services/owner.query";
+import {
+  getMembershipPlans,
+  getGymRevenueMonthly,
+  getTopPerformingPlans,
+} from "@/services/owner.query";
 import { auth } from "@clerk/nextjs/server";
 
 export default async function MembershipPlansPage() {
   const { sessionClaims } = await auth();
-
   const gymId = sessionClaims?.publicMetadata?.gymId as unknown as string;
 
   if (!gymId) {
@@ -25,7 +27,36 @@ export default async function MembershipPlansPage() {
     );
   }
 
-  const { data: initialPlans, success } = await getMembershipPlans(gymId);
+  const [
+    { data: initialPlans },
+    { data: revenueMonthly, error: revenueError },
+    { data: topPerformingPlans, error: topPlansError },
+  ] = await Promise.all([
+    getMembershipPlans(gymId),
+    getGymRevenueMonthly(gymId),
+    getTopPerformingPlans(gymId),
+  ]);
+
+  if (revenueError) {
+    console.error("get_gym_revenue_monthly failed:", revenueError);
+  }
+  if (topPlansError) {
+    console.error("get_plan_performance_monthly failed:", topPlansError);
+  }
+
+  const revenueData = (revenueMonthly ?? []).map((r) => ({
+    month: r.month_label,
+    revenue: r.revenue,
+  }));
+
+  const topPlans = (topPerformingPlans ?? []).map((p, i) => ({
+    rank: i + 1,
+    id: p.plan_id,
+    name: p.plan_name,
+    members: Number(p.member_count),
+    revenue: Number(p.revenue_this_month),
+    growth: Number(p.growth_pct),
+  }));
 
   const totalPlans = initialPlans?.length || 0;
 
@@ -38,13 +69,14 @@ export default async function MembershipPlansPage() {
       0,
     ) || 0;
 
-  const monthlyRevenue = revenueData[revenueData.length - 1]?.revenue || 0;
+  const monthlyRevenue =
+    revenueMonthly?.[revenueMonthly.length - 1]?.revenue ?? 0;
+  const maxTopPlanRevenue = topPlans[0]?.revenue || 1;
 
   const mostPopularPlan =
     initialPlans?.reduce<(typeof initialPlans)[number] | null>((max, plan) => {
       const maxCount = max?.gym_memberships?.[0]?.count ?? 0;
       const planCount = plan.gym_memberships?.[0]?.count ?? 0;
-
       return planCount > maxCount ? plan : max;
     }, null) ?? null;
 
@@ -81,7 +113,7 @@ export default async function MembershipPlansPage() {
           icon={BadgeIndianRupee}
           title="Monthly Revenue"
           value={`₹${(monthlyRevenue / 100000).toFixed(2)}L`}
-          subtitle="+8.6% this month"
+          subtitle="This month, verified payments"
           iconBg="bg-orange-100"
           iconColor="text-orange-600"
         />
@@ -111,46 +143,54 @@ export default async function MembershipPlansPage() {
           </div>
           <p className="text-sm text-muted-foreground mb-4">This month</p>
 
-          <div className="space-y-4">
-            {topPlans.map((plan) => (
-              <div key={plan.rank} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
-                      {plan.rank}
+          {topPlans.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No plan revenue recorded this month yet.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {topPlans.map((plan) => (
+                <div key={plan.id} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+                        {plan.rank}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {plan.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {plan.members} members
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {plan.name}
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-foreground">
+                        ₹{(plan.revenue / 100000).toFixed(2)}L
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {plan.members} members
+                      <p
+                        className={`text-xs ${
+                          plan.growth >= 0 ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
+                        {plan.growth >= 0 ? "+" : ""}
+                        {plan.growth}%
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-foreground">
-                      ₹{(plan.revenue / 100000).toFixed(2)}L
-                    </p>
-                    <p
-                      className={`text-xs ${
-                        plan.growth >= 0 ? "text-green-600" : "text-red-600"
-                      }`}
-                    >
-                      {plan.growth >= 0 ? "+" : ""}
-                      {plan.growth}%
-                    </p>
+                  <div className="bg-muted rounded-full h-2">
+                    <div
+                      className="bg-primary rounded-full h-2 transition-all"
+                      style={{
+                        width: `${(plan.revenue / maxTopPlanRevenue) * 100}%`,
+                      }}
+                    />
                   </div>
                 </div>
-                <div className="bg-muted rounded-full h-2">
-                  <div
-                    className="bg-primary rounded-full h-2 transition-all"
-                    style={{ width: `${(plan.revenue / 4860000) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

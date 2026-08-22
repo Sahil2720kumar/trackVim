@@ -13,7 +13,6 @@ type AttendanceDatum = {
   month: string;
   present: number;
   absent: number;
-  late: number;
 };
 
 function computeStats(data: AttendanceDatum[]) {
@@ -21,12 +20,11 @@ function computeStats(data: AttendanceDatum[]) {
     (acc, d) => ({
       present: acc.present + d.present,
       absent: acc.absent + d.absent,
-      late: acc.late + d.late,
     }),
-    { present: 0, absent: 0, late: 0 },
+    { present: 0, absent: 0 },
   );
 
-  const total = totals.present + totals.absent + totals.late;
+  const total = totals.present + totals.absent;
 
   const percent = (count: number) =>
     total === 0 ? 0 : Math.round((count / total) * 100);
@@ -34,8 +32,17 @@ function computeStats(data: AttendanceDatum[]) {
   return {
     present: { count: totals.present, percent: percent(totals.present) },
     absent: { count: totals.absent, percent: percent(totals.absent) },
-    late: { count: totals.late, percent: percent(totals.late) },
   };
+}
+
+// Drop leading months with no expected/present days at all — these are
+// months before the member's earliest membership existed. A month the
+// member was actually enrolled in will always have present > 0 or
+// absent > 0 (absent = days_expected - present), so present === 0 &&
+// absent === 0 back-to-back only happens pre-join.
+function trimBeforeJoin(data: AttendanceDatum[]) {
+  const firstActiveIndex = data.findIndex((d) => d.present > 0 || d.absent > 0);
+  return firstActiveIndex === -1 ? data : data.slice(firstActiveIndex);
 }
 
 export function AttendanceAnalyticsChart({
@@ -45,7 +52,8 @@ export function AttendanceAnalyticsChart({
 }) {
   const [range, setRange] = useState("Last 12 Months");
 
-  const filteredData = data.slice(-rangeToMonths[range]);
+  const trimmedData = trimBeforeJoin(data);
+  const filteredData = trimmedData.slice(-rangeToMonths[range]);
   const stats = computeStats(filteredData);
 
   return (
@@ -79,13 +87,6 @@ export function AttendanceAnalyticsChart({
           <p className="text-xs text-muted-foreground sm:text-sm">Absent</p>
           <p className="text-sm font-bold sm:text-base">
             {stats.absent.count} ({stats.absent.percent}%)
-          </p>
-        </div>
-        <div className="text-center">
-          <div className="mx-auto mb-2 h-3 w-3 rounded-full bg-yellow-500" />
-          <p className="text-xs text-muted-foreground sm:text-sm">Late</p>
-          <p className="text-sm font-bold sm:text-base">
-            {stats.late.count} ({stats.late.percent}%)
           </p>
         </div>
       </div>

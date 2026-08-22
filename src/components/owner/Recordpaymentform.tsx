@@ -1,9 +1,12 @@
+// components/owner/RecordPaymentForm.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { toast } from "sonner";
 import {
   Calendar,
   Search,
@@ -17,6 +20,7 @@ import {
   CreditCard,
   StickyNote,
   ClipboardList,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,12 +42,21 @@ import {
   SummaryRow,
 } from "@/components/GymFormFields";
 import { bigSquareButton } from "@/lib/styles";
+import { renewMembershipAction } from "@/actions/owner.action";
+import type { Membership, Plan } from "@/services/owner.query";
+import { formatDateStr } from "@/lib/utils";
+
+interface RenewMembershipFormProps {
+  memberships: Membership[];
+  plans: Plan[];
+  ownerName?: string;
+}
 
 // ---------------------------------------------------------------------
 // Validation schema
 // ---------------------------------------------------------------------
-const recordPaymentSchema = z.object({
-  memberId: z.string().min(1, "Please select a member"),
+const renewMembershipSchema = z.object({
+  gymMembershipId: z.string().min(1, "Please select a member"),
   planId: z.string().min(1, "Please select a membership plan"),
   paymentDate: z.string().min(1, "Payment date is required"),
   paymentMethod: z.string().min(1, "Payment method is required"),
@@ -53,122 +66,13 @@ const recordPaymentSchema = z.object({
   notes: z.string().optional(),
 });
 
-type RecordPaymentFormData = z.infer<typeof recordPaymentSchema>;
-
-// ---------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------
-const mockMembers = [
-  {
-    id: "MBR-1024",
-    name: "Rahul Sharma",
-    email: "rahul.sharma@email.com",
-    phone: "+91 98765 43210",
-    avatar:
-      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/ChatGPT%20Image%20Jul%2019%2C%202026%2C%2005_31_12%20PM-kRu2IsVwGdoIShaiTzIUk0XlfNjqrX.png",
-    memberSince: "15 Jan 2026",
-    dob: "12 May 1998",
-    membershipStatus: "Active",
-    currentPlan: "Premium Membership",
-    isNewMember: false,
-  },
-  {
-    id: "MBR-1025",
-    name: "Priya Verma",
-    email: "priya.verma@email.com",
-    phone: "+91 91234 56789",
-    avatar: "",
-    memberSince: "20 Feb 2026",
-    dob: "08 Mar 2000",
-    membershipStatus: "Active",
-    currentPlan: "Gold Plan",
-    isNewMember: false,
-  },
-  {
-    id: "MBR-1026",
-    name: "Aman Das",
-    email: "aman.das@email.com",
-    phone: "+91 87654 32101",
-    avatar: "",
-    memberSince: "10 Jan 2026",
-    dob: "25 Jul 1999",
-    membershipStatus: "Active",
-    currentPlan: "Silver Plan",
-    isNewMember: true,
-  },
-];
-
-const mockPlans = [
-  {
-    id: "PLAN-001",
-    name: "Premium Membership",
-    duration: "12 Months",
-    category: "Premium",
-    price: 2000,
-    joiningFee: 500,
-    discount: 10,
-    startDate: "20 Jul 2026",
-    expiryDate: "19 Jul 2027",
-    nextDueDate: "20 Aug 2027",
-    freezeAllowed: true,
-    maxFreezeDays: 30,
-    features: [
-      "Unlimited Gym Access",
-      "Workout Plan",
-      "Diet Plan",
-      "Locker Facility",
-      "Steam Bath",
-      "Personal Trainer",
-      "Mobile App Access",
-      "Nutrition Consultation",
-    ],
-  },
-  {
-    id: "PLAN-002",
-    name: "Gold Plan",
-    duration: "3 Months",
-    category: "Premium",
-    price: 1500,
-    joiningFee: 300,
-    discount: 5,
-    startDate: "15 Jul 2026",
-    expiryDate: "14 Oct 2026",
-    nextDueDate: "15 Aug 2026",
-    freezeAllowed: true,
-    maxFreezeDays: 15,
-    features: [
-      "Unlimited Gym Access",
-      "Workout Plan",
-      "Locker Facility",
-      "Basic Water Access",
-    ],
-  },
-  {
-    id: "PLAN-003",
-    name: "Silver Plan",
-    duration: "1 Month",
-    category: "Standard",
-    price: 999,
-    joiningFee: 200,
-    discount: 0,
-    startDate: "10 Jul 2026",
-    expiryDate: "09 Aug 2026",
-    nextDueDate: "10 Aug 2026",
-    freezeAllowed: false,
-    maxFreezeDays: 0,
-    features: [
-      "Gym Access (1 Time/Day)",
-      "Locker Facility",
-      "Basic App Access",
-    ],
-  },
-];
+type RenewMembershipFormData = z.infer<typeof renewMembershipSchema>;
 
 const paymentMethods = [
-  { value: "upi", label: "UPI ₹" },
-  { value: "card", label: "Card 💳" },
-  { value: "netbanking", label: "Net Banking 🏦" },
-  { value: "cash", label: "Cash 💵" },
+  { value: "UPI", label: "UPI ₹" },
+  { value: "Card", label: "Card 💳" },
+  { value: "Net Banking", label: "Net Banking 🏦" },
+  { value: "Cash", label: "Cash 💵" },
 ];
 
 const paymentStatuses = [
@@ -176,23 +80,20 @@ const paymentStatuses = [
   { value: "pending", label: "Pending" },
 ];
 
-const defaultValues: RecordPaymentFormData = {
-  memberId: "MBR-1024",
-  planId: "PLAN-001",
-  paymentDate: "",
-  paymentMethod: "upi",
-  paymentStatus: "paid",
-  transactionRef: "UPI123456789012",
-  collectedBy: "Sahil Kumar",
-  notes: "Paid via Google Pay at reception.",
-};
+export const RENEW_MEMBERSHIP_FORM_ID = "renew-membership-form";
 
-export const RECORD_PAYMENT_FORM_ID = "record-payment-form";
-
-export default function RecordPaymentForm() {
+export default function RenewMembershipForm({
+  memberships,
+  plans,
+  ownerName,
+}: RenewMembershipFormProps) {
   const [showDialog, setShowDialog] = useState(false);
   const [memberSearch, setMemberSearch] = useState("");
   const [planSearch, setPlanSearch] = useState("");
+  const [newMembershipId, setNewMembershipId] = useState<string | null>(null);
+
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
 
   const {
     register,
@@ -201,70 +102,109 @@ export default function RecordPaymentForm() {
     watch,
     setValue,
     reset,
-  } = useForm<RecordPaymentFormData>({
-    resolver: zodResolver(recordPaymentSchema),
-    defaultValues,
+  } = useForm<RenewMembershipFormData>({
+    resolver: zodResolver(renewMembershipSchema),
+    defaultValues: {
+      gymMembershipId: "",
+      planId: "",
+      paymentDate: new Date().toISOString().slice(0, 10),
+      paymentMethod: "upi",
+      paymentStatus: "paid",
+      transactionRef: "",
+      collectedBy: ownerName ?? "",
+      notes: "",
+    },
   });
 
-  const memberId = watch("memberId");
+  const gymMembershipId = watch("gymMembershipId");
   const planId = watch("planId");
   const paymentDate = watch("paymentDate");
   const paymentMethod = watch("paymentMethod");
   const transactionRef = watch("transactionRef") || "";
-  const collectedBy = watch("collectedBy") || "";
   const notes = watch("notes") || "";
 
-  const selectedMember = useMemo(
-    () => mockMembers.find((m) => m.id === memberId) || null,
-    [memberId],
+  const selectedMembership = useMemo(
+    () => memberships.find((m) => m.id === gymMembershipId) || null,
+    [memberships, gymMembershipId],
   );
+  const selectedMember = selectedMembership?.members ?? null;
+
   const selectedPlan = useMemo(
-    () => mockPlans.find((p) => p.id === planId) || null,
-    [planId],
+    () => plans.find((p) => p.id === planId) || null,
+    [plans, planId],
   );
 
-  const filteredMembers = useMemo(() => {
+  const filteredMemberships = useMemo(() => {
     if (!memberSearch) return [];
-    return mockMembers.filter(
+    const q = memberSearch.toLowerCase();
+    return memberships.filter(
       (m) =>
-        m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
-        m.id.toLowerCase().includes(memberSearch.toLowerCase()) ||
-        m.phone.includes(memberSearch),
+        m.members?.full_name?.toLowerCase().includes(q) ||
+        m.members?.member_code?.toLowerCase().includes(q) ||
+        m.members?.contact_phone?.includes(memberSearch),
     );
-  }, [memberSearch]);
+  }, [memberships, memberSearch]);
 
   const filteredPlans = useMemo(() => {
     if (!planSearch) return [];
-    return mockPlans.filter((p) =>
-      p.name.toLowerCase().includes(planSearch.toLowerCase()),
+    return plans.filter((p) =>
+      p.plan_name.toLowerCase().includes(planSearch.toLowerCase()),
     );
-  }, [planSearch]);
+  }, [plans, planSearch]);
 
-  // Joining fee only applies to new members
-  const isNewMember = selectedMember?.isNewMember ?? false;
-  const applicableJoiningFee =
-    selectedPlan && isNewMember ? selectedPlan.joiningFee : 0;
+  // Renewals never re-charge a joining fee — renew_membership() hardcodes
+  // joining_fee to 0 on the new row.
+  const finalAmount = useMemo(() => {
+    if (!selectedPlan) return 0;
+    const price = Number(selectedPlan.plan_price);
+    const discountValue = Number(selectedPlan.discount_value ?? 0);
+    const discount =
+      selectedPlan.discount_type === "Percentage"
+        ? (price * discountValue) / 100
+        : selectedPlan.discount_type === "Amount"
+          ? discountValue
+          : 0;
+    return Math.round(Math.max(price - discount, 0));
+  }, [selectedPlan]);
 
-  const finalAmount = selectedPlan
-    ? Math.round(
-        selectedPlan.price +
-          applicableJoiningFee -
-          (selectedPlan.price * selectedPlan.discount) / 100,
-      )
-    : 0;
+  const onSubmit = (formData: RenewMembershipFormData) => {
+    if (isPending) return;
+    if (!selectedMembership) {
+      toast.error("Select a member before recording payment.");
+      return;
+    }
 
-  const onSubmit = (data: RecordPaymentFormData) => {
-    console.log("Payment payload:", data, {
-      finalAmount,
-      joiningFeeCharged: applicableJoiningFee,
+    const planIdToSend =
+      selectedPlan && selectedPlan.id !== selectedMembership.plan_id
+        ? selectedPlan.id
+        : undefined;
+
+    startTransition(async () => {
+      const result = await renewMembershipAction(selectedMembership.id, {
+        planId: planIdToSend,
+        paymentStatus: formData.paymentStatus === "paid" ? "Paid" : "Pending",
+        paymentMethod: formData.paymentMethod,
+        transactionRef: formData.transactionRef || undefined,
+        notes: formData.notes || undefined,
+        paymentDate: formData.paymentDate,
+      });
+
+      if (!result.success) {
+        toast.error(result.error || "Failed to record payment.");
+        return;
+      }
+
+      toast.success("Membership renewed successfully.");
+      setNewMembershipId(result.data.membershipId);
+      router.refresh();
+      setShowDialog(true);
     });
-    setShowDialog(true);
   };
 
   return (
     <>
       <form
-        id={RECORD_PAYMENT_FORM_ID}
+        id={RENEW_MEMBERSHIP_FORM_ID}
         onSubmit={handleSubmit(onSubmit)}
         className="grid grid-cols-1 lg:grid-cols-3 gap-6"
       >
@@ -273,48 +213,55 @@ export default function RecordPaymentForm() {
           {/* 1. Member Information */}
           <SectionCard title="Member Information" icon={UserRound}>
             <p className="text-sm text-muted-foreground -mt-2">
-              Search and select a member.
+              Search and select a member with an active membership.
             </p>
 
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
-                placeholder="Search member by name, phone number or member ID..."
+                placeholder="Search member by name, phone number or member code..."
                 value={memberSearch}
                 onChange={(e) => setMemberSearch(e.target.value)}
                 className="w-full pl-10 pr-3 py-2 rounded-lg border border-border bg-background hover:border-border/80 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
             </div>
 
-            {memberSearch && filteredMembers.length > 0 && (
+            {memberSearch && filteredMemberships.length > 0 && (
               <div className="space-y-2 border border-border rounded-lg max-h-48 overflow-y-auto">
-                {filteredMembers.map((member) => (
+                {filteredMemberships.map((row) => (
                   <button
-                    key={member.id}
+                    key={row.id}
                     type="button"
                     onClick={() => {
-                      setValue("memberId", member.id, {
+                      setValue("gymMembershipId", row.id, {
                         shouldValidate: true,
                       });
+                      setValue("planId", row.plan_id, { shouldValidate: true });
                       setMemberSearch("");
                     }}
                     className="w-full text-left p-3 hover:bg-muted transition-colors flex items-center gap-3 border-b border-border last:border-b-0"
                   >
                     <Avatar className="w-10 h-10">
-                      <AvatarImage src={member.avatar} />
-                      <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
+                      <AvatarImage src={row.members?.photo_url ?? undefined} />
+                      <AvatarFallback>
+                        {row.members?.full_name?.charAt(0) ?? "?"}
+                      </AvatarFallback>
                     </Avatar>
                     <div className="flex-1">
-                      <p className="font-medium">{member.name}</p>
+                      <p className="font-medium">{row.members?.full_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {member.id}
+                        {row.members?.member_code} •{" "}
+                        {row.membership_plans?.plan_name}
                       </p>
                     </div>
-                    {member.isNewMember && (
-                      <Badge variant="secondary" className="shrink-0">
-                        New
-                      </Badge>
-                    )}
+                    <Badge
+                      variant={
+                        row.status === "Expired" ? "destructive" : "secondary"
+                      }
+                      className="shrink-0"
+                    >
+                      {row.status}
+                    </Badge>
                   </button>
                 ))}
               </div>
@@ -324,45 +271,92 @@ export default function RecordPaymentForm() {
               <div className="p-4 rounded-xl bg-muted/50 border border-primary/20">
                 <div className="flex items-start gap-4">
                   <Avatar className="w-16 h-16">
-                    <AvatarImage src={selectedMember.avatar} />
+                    <AvatarImage src={selectedMember.photo_url ?? undefined} />
                     <AvatarFallback>
-                      {selectedMember.name.charAt(0)}
+                      {selectedMember.full_name?.charAt(0) ?? "?"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <h3 className="font-semibold">{selectedMember.name}</h3>
-                      <Badge variant="outline">{selectedMember.id}</Badge>
-                      <Badge variant="secondary">Active</Badge>
-                      {selectedMember.isNewMember ? (
-                        <Badge className="bg-orange-500/15 text-orange-600 border-orange-500/30">
-                          New Member
+                      <h3 className="font-semibold">
+                        {selectedMember.full_name}
+                      </h3>
+                      {selectedMember.member_code && (
+                        <Badge variant="outline">
+                          {selectedMember.member_code}
                         </Badge>
-                      ) : (
-                        <Badge variant="outline">Existing Member</Badge>
                       )}
+                      <Badge
+                        variant={
+                          selectedMembership?.status === "Expired"
+                            ? "destructive"
+                            : "secondary"
+                        }
+                      >
+                        {selectedMembership?.status}
+                      </Badge>
                     </div>
                     <div className="space-y-1 text-sm">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="w-4 h-4" />
-                        {selectedMember.phone}
-                      </div>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Mail className="w-4 h-4" />
-                        {selectedMember.email}
-                      </div>
-                      <p className="text-muted-foreground">
-                        Member Since: {selectedMember.memberSince}
-                      </p>
+                      {selectedMember.contact_phone && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Phone className="w-4 h-4" />
+                          {selectedMember.contact_phone}
+                        </div>
+                      )}
+                      {selectedMember.contact_email && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Mail className="w-4 h-4" />
+                          {selectedMember.contact_email}
+                        </div>
+                      )}
                     </div>
+                    {selectedMembership?.status === "Expired" &&
+                      (() => {
+                        const gracePeriodDays =
+                          selectedMembership.membership_plans
+                            ?.grace_period_days ?? 0;
+                        const endDate = new Date(selectedMembership.end_date);
+                        const graceDeadline = new Date(endDate);
+                        graceDeadline.setDate(
+                          graceDeadline.getDate() + gracePeriodDays,
+                        );
+
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+
+                        const withinGracePeriod = today <= graceDeadline;
+
+                        const newStartDate = new Date(endDate);
+                        if (withinGracePeriod) {
+                          newStartDate.setDate(newStartDate.getDate() + 1);
+                        } else {
+                          newStartDate.setTime(today.getTime());
+                        }
+
+                        const formattedNewStart = formatDateStr(newStartDate);
+
+                        return (
+                          <p className="text-xs text-orange-500 mt-2 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            This membership lapsed on{" "}
+                            {selectedMembership.end_date}
+                            {gracePeriodDays > 0 &&
+                              ` (grace period: ${gracePeriodDays} days)`}
+                            .{" "}
+                            {withinGracePeriod
+                              ? `Still within grace period — the new cycle will continue from ${formattedNewStart} with no gap.`
+                              : `Grace period has ended — the new cycle will start from today (${formattedNewStart}).`}
+                          </p>
+                        );
+                      })()}
                   </div>
                 </div>
               </div>
             ) : (
-              errors.memberId && (
+              errors.gymMembershipId && (
                 <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                  <span>{errors.memberId.message}</span>
+                  <span>{errors.gymMembershipId.message}</span>
                 </div>
               )
             )}
@@ -371,8 +365,8 @@ export default function RecordPaymentForm() {
           {/* 2. Membership Plan */}
           <SectionCard title="Membership Plan" icon={Package}>
             <p className="text-sm text-muted-foreground -mt-2">
-              Select the membership plan the member is paying for. Plan details
-              will update automatically.
+              Defaults to the member's current plan. Change it here to renew
+              onto a different plan.
             </p>
 
             <div className="relative">
@@ -397,9 +391,9 @@ export default function RecordPaymentForm() {
                     }}
                     className="w-full text-left p-3 hover:bg-muted transition-colors border-b border-border last:border-b-0"
                   >
-                    <p className="font-medium">{plan.name}</p>
+                    <p className="font-medium">{plan.plan_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {plan.duration} • ₹{plan.price}
+                      {plan.membership_duration} • ₹{plan.plan_price}
                     </p>
                   </button>
                 ))}
@@ -407,105 +401,48 @@ export default function RecordPaymentForm() {
             )}
 
             {selectedPlan ? (
-              <div className="space-y-4">
-                <div className="p-4 rounded-xl bg-muted/50 border border-primary/20">
-                  <p className="text-sm font-semibold mb-3">Plan Details</p>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-1">
-                        Membership Plan
-                      </p>
-                      <p className="font-medium">{selectedPlan.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-1">
-                        Category
-                      </p>
-                      <p className="font-medium">{selectedPlan.category}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-1">
-                        Duration
-                      </p>
-                      <p className="font-medium">{selectedPlan.duration}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-1">
-                        Plan Price
-                      </p>
-                      <p className="font-medium">₹{selectedPlan.price}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-1">
-                        Joining Fee
-                      </p>
-                      {isNewMember ? (
-                        <p className="font-medium">
-                          ₹{selectedPlan.joiningFee}
-                        </p>
-                      ) : (
-                        <p className="font-medium text-muted-foreground">
-                          Waived (Existing Member)
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-1">
-                        Discount
-                      </p>
-                      <p className="font-medium">{selectedPlan.discount}%</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-1">
-                        Membership Start Date
-                      </p>
-                      <p className="font-medium">{selectedPlan.startDate}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-1">
-                        Membership Expiry Date
-                      </p>
-                      <p className="font-medium">{selectedPlan.expiryDate}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-1">
-                        Next Due Date
-                      </p>
-                      <p className="font-medium text-orange-500">
-                        {selectedPlan.nextDueDate}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs mb-1">
-                        Membership Freeze
-                      </p>
-                      <p className="font-medium">
-                        {selectedPlan.freezeAllowed ? "Allowed" : "Not Allowed"}
-                      </p>
-                    </div>
-                    {selectedPlan.freezeAllowed && (
-                      <div>
-                        <p className="text-muted-foreground text-xs mb-1">
-                          Max Freeze Days
-                        </p>
-                        <p className="font-medium">
-                          {selectedPlan.maxFreezeDays} Days
-                        </p>
-                      </div>
-                    )}
+              <div className="p-4 rounded-xl bg-muted/50 border border-primary/20">
+                <p className="text-sm font-semibold mb-3">Plan Details</p>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground text-xs mb-1">
+                      Membership Plan
+                    </p>
+                    <p className="font-medium">{selectedPlan.plan_name}</p>
                   </div>
-                </div>
-
-                <div>
-                  <p className="text-sm font-semibold mb-2">
-                    Included Features
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedPlan.features.map((feature) => (
-                      <Badge key={feature} variant="secondary">
-                        {feature}
-                      </Badge>
-                    ))}
+                  <div>
+                    <p className="text-muted-foreground text-xs mb-1">
+                      Duration
+                    </p>
+                    <p className="font-medium">
+                      {selectedPlan.membership_duration}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs mb-1">
+                      Plan Price
+                    </p>
+                    <p className="font-medium">₹{selectedPlan.plan_price}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs mb-1">
+                      Discount
+                    </p>
+                    <p className="font-medium">
+                      {selectedPlan.discount_type === "Percentage"
+                        ? `${selectedPlan.discount_value ?? 0}%`
+                        : selectedPlan.discount_type === "Amount"
+                          ? `₹${selectedPlan.discount_value ?? 0}`
+                          : "—"}
+                    </p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-muted-foreground text-xs mb-1">
+                      Joining Fee
+                    </p>
+                    <p className="font-medium text-muted-foreground">
+                      Waived (renewal)
+                    </p>
                   </div>
                 </div>
               </div>
@@ -523,7 +460,7 @@ export default function RecordPaymentForm() {
           <SectionCard title="Payment Information" icon={CreditCard}>
             <p className="text-sm text-muted-foreground -mt-2">
               Enter payment details. Amount is calculated automatically based on
-              the selected plan{isNewMember ? " and joining fee" : ""}.
+              the selected plan.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -551,14 +488,14 @@ export default function RecordPaymentForm() {
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                   <input
                     type="date"
-                    className={`w-full pl-10 pr-3 py-2 rounded-lg border transition-colors ${
-                      errors.paymentDate
-                        ? "border-destructive bg-destructive/5"
-                        : "border-border bg-background hover:border-border/80 focus:border-primary"
-                    } focus:outline-none focus:ring-2 focus:ring-primary/20`}
+                    disabled
+                    className="w-full pl-10 pr-3 py-2 rounded-lg border border-border bg-muted text-muted-foreground cursor-not-allowed"
                     {...register("paymentDate")}
                   />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Payment date is fixed to today.
+                </p>
                 {errors.paymentDate && (
                   <span className="text-xs text-destructive flex items-center gap-1">
                     <AlertCircle className="w-3 h-3" />
@@ -610,19 +547,12 @@ export default function RecordPaymentForm() {
 
               <FormInput
                 label="Collected By"
-                readOnly
-                className="bg-muted"
+                disabled
                 {...register("collectedBy")}
               />
-            </div>
-
-            <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
-              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>
-                {isNewMember
-                  ? "This is a new member, so the plan's joining fee has been added to the payable amount."
-                  : "This is an existing member, so the joining fee has been waived. Only the plan price (minus discount) is payable."}
-              </span>
+              <p className="text-xs text-muted-foreground -mt-1">
+                Recorded automatically as you, the logged-in owner.
+              </p>
             </div>
           </SectionCard>
 
@@ -633,7 +563,7 @@ export default function RecordPaymentForm() {
             </p>
             <FormTextarea
               label="Notes"
-              placeholder="Add internal notes about this membership plan..."
+              placeholder="Add internal notes about this payment..."
               maxLength={500}
               {...register("notes")}
             />
@@ -656,13 +586,14 @@ export default function RecordPaymentForm() {
                   <>
                     <SummaryRow
                       label="Member Name"
-                      value={selectedMember.name}
+                      value={selectedMember.full_name ?? "—"}
                     />
-                    <SummaryRow label="Member ID" value={selectedMember.id} />
-                    <SummaryRow
-                      label="Member Type"
-                      value={isNewMember ? "New Member" : "Existing Member"}
-                    />
+                    {selectedMember.member_code && (
+                      <SummaryRow
+                        label="Member Code"
+                        value={selectedMember.member_code}
+                      />
+                    )}
                   </>
                 ) : (
                   <p className="text-muted-foreground">Select a member</p>
@@ -674,29 +605,19 @@ export default function RecordPaymentForm() {
                   <>
                     <SummaryRow
                       label="Membership Plan"
-                      value={selectedPlan.name}
+                      value={selectedPlan.plan_name}
                     />
                     <SummaryRow
                       label="Duration"
-                      value={selectedPlan.duration}
-                    />
-                    <SummaryRow
-                      label="Category"
-                      value={selectedPlan.category}
+                      value={selectedPlan.membership_duration}
                     />
                     <SummaryRow
                       label="Plan Price"
-                      value={`₹${selectedPlan.price}`}
+                      value={`₹${selectedPlan.plan_price}`}
                     />
                     <SummaryRow
                       label="Joining Fee"
-                      value={
-                        isNewMember ? `₹${selectedPlan.joiningFee}` : "Waived"
-                      }
-                    />
-                    <SummaryRow
-                      label="Discount"
-                      value={`${selectedPlan.discount}%`}
+                      value="Waived"
                       border={false}
                     />
                   </>
@@ -736,21 +657,27 @@ export default function RecordPaymentForm() {
               </div>
 
               <div className="space-y-2 pt-2">
-                <Button type="submit" className={`w-full ${bigSquareButton}`}>
-                  Record Payment
-                </Button>
                 <Button
-                  type="button"
-                  variant="outline"
+                  type="submit"
                   className={`w-full ${bigSquareButton}`}
+                  disabled={isPending}
                 >
-                  Save Draft
+                  {isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Renewing...
+                    </>
+                  ) : (
+                    "Renew Membership"
+                  )}
                 </Button>
+
                 <Button
                   type="button"
                   variant="ghost"
                   className={`w-full ${bigSquareButton}`}
-                  onClick={() => reset(defaultValues)}
+                  onClick={() => reset()}
+                  disabled={isPending}
                 >
                   Cancel
                 </Button>
@@ -770,10 +697,10 @@ export default function RecordPaymentForm() {
               </div>
             </div>
             <DialogTitle className="text-center">
-              Payment Recorded Successfully
+              Membership Renewed Successfully
             </DialogTitle>
             <DialogDescription className="text-center">
-              The payment has been recorded and a receipt has been generated.
+              The membership has been renewed.
             </DialogDescription>
           </DialogHeader>
 
@@ -781,22 +708,20 @@ export default function RecordPaymentForm() {
             <div className="p-4 rounded-xl bg-muted/50 border border-border">
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Receipt Number:</span>
-                  <span className="font-medium">RCPT-10241</span>
+                  <span className="text-muted-foreground">
+                    New Membership ID:
+                  </span>
+                  <span className="font-medium">{newMembershipId ?? "—"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Member:</span>
-                  <span className="font-medium">{selectedMember?.name}</span>
+                  <span className="font-medium">
+                    {selectedMember?.full_name}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Plan:</span>
-                  <span className="font-medium">{selectedPlan?.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Joining Fee:</span>
-                  <span className="font-medium">
-                    {isNewMember ? `₹${selectedPlan?.joiningFee}` : "Waived"}
-                  </span>
+                  <span className="font-medium">{selectedPlan?.plan_name}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Amount:</span>
@@ -827,10 +752,10 @@ export default function RecordPaymentForm() {
               onClick={() => setShowDialog(false)}
               className="flex-1"
             >
-              Record Another Payment
+              Renew Another
             </Button>
             <Button onClick={() => setShowDialog(false)} className="flex-1">
-              View Payment
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

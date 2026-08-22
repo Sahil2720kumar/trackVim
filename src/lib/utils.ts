@@ -23,7 +23,7 @@ export function isPastDate(dateStr: string): boolean {
 }
 
 export function getTodayTimeStr(timezone: string = "Asia/Kolkata"): string {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat("en-In", {
     timeZone: timezone,
     hour: "2-digit",
     minute: "2-digit",
@@ -45,8 +45,15 @@ export function toIndiaDateTime(dateTime: string | Date): string {
   }).format(new Date(dateTime));
 }
 
-export function formatDateTime(ts: string): string {
+export function formatDateTime(ts: string | null | undefined): string {
+  if (!ts) return "—";
+
   const d = new Date(ts);
+
+  if (Number.isNaN(d.getTime())) {
+    console.error("Invalid timestamp:", ts);
+    return "—";
+  }
 
   return `${d.toLocaleDateString("en-GB", {
     timeZone: "Asia/Kolkata",
@@ -69,8 +76,21 @@ export function formatDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function formatDateStr(value: string) {
-  return new Date(value).toLocaleDateString("en-IN", {
+export function daysBetween(endDate: string) {
+  const todayStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+  }).format(new Date());
+
+  const today = new Date(`${todayStr}T00:00:00+05:30`);
+  const end = new Date(`${endDate}T00:00:00+05:30`);
+
+  return Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+export function formatDateStr(value: Date | string) {
+  const date = typeof value === "string" ? new Date(value) : value;
+
+  return date.toLocaleDateString("en-IN", {
     timeZone: "Asia/Kolkata",
     day: "numeric",
     month: "short",
@@ -205,4 +225,30 @@ export function diffMinutesFromTimes(
   const endMinutes = eh * 60 + em;
 
   return endMinutes > startMinutes ? endMinutes - startMinutes : null;
+}
+
+//attendace
+
+export function formatDuration(minutes: number | null) {
+  if (!minutes) return null;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+export function mostFrequent(values: (string | null)[]) {
+  const counts = new Map<string, number>();
+  for (const v of values) {
+    if (!v) continue;
+    counts.set(v, (counts.get(v) ?? 0) + 1);
+  }
+  let top: string | null = null;
+  let max = 0;
+  for (const [v, c] of counts) {
+    if (c > max) {
+      top = v;
+      max = c;
+    }
+  }
+  return top;
 }

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."gym_membership_status" ADD VALUE 'Scheduled';

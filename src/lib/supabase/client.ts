@@ -15,8 +15,6 @@ export function useSupabaseClient() {
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
       {
         accessToken: async () => {
-          console.log("GET TOKEN CALLED");
-
           if (typeof window === "undefined") {
             return null;
           }

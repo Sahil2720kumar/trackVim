@@ -23,27 +23,40 @@ function computeStats(data: RevenueDatum[]) {
     return { total: 0, avgMonthly: 0, thisMonth: 0, lastMonth: 0 };
   }
 
-  const total = data.reduce((sum, d) => sum + d.revenue, 0);
-  const avgMonthly = Math.round(total / data.length);
+  // Defensive coercion — numeric columns from Postgres RPCs arrive as
+  // strings over PostgREST; Number(...) is a no-op if the caller already
+  // coerced, but prevents string-concat totals if it didn't.
+  const values = data.map((d) => Number(d.revenue) || 0);
 
-  const thisMonth = data[data.length - 1].revenue;
-  const lastMonth = data.length > 1 ? data[data.length - 2].revenue : 0;
+  const total = values.reduce((sum, v) => sum + v, 0);
+  const avgMonthly = Math.round(total / values.length);
+
+  const thisMonth = values[values.length - 1];
+  const lastMonth = values.length > 1 ? values[values.length - 2] : 0;
 
   return { total, avgMonthly, thisMonth, lastMonth };
 }
 
 function formatLakhs(value: number) {
-  return `₹${(value / 100000).toFixed(2)}L`;
+  return `₹${(Number(value) / 100000).toFixed(2)}L`;
 }
 
 function formatFull(value: number) {
-  return `₹${value.toLocaleString("en-IN")}`;
+  return `₹${Number(value).toLocaleString("en-IN")}`;
 }
 
 export function RevenueOverviewChart({ data }: { data: RevenueDatum[] }) {
   const [range, setRange] = useState("Last 12 Months");
 
-  const filteredData = data.slice(-rangeToMonths[range]);
+  // Normalize once up front so the chart itself (via dataKey="revenue")
+  // also plots real numbers, not strings — recharts silently mis-renders
+  // string y-values instead of throwing, so this is easy to miss visually.
+  const normalizedData = data.map((d) => ({
+    ...d,
+    revenue: Number(d.revenue) || 0,
+  }));
+
+  const filteredData = normalizedData.slice(-rangeToMonths[range]);
   const stats = computeStats(filteredData);
 
   return (

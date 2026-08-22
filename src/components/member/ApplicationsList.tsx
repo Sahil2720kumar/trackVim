@@ -42,6 +42,7 @@ import {
   getInitials,
 } from "@/lib/application-status";
 import type { MembershipApplication, DisplayStatus } from "@/types";
+import { useMyApplications } from "@/hooks/queries/member.query";
 
 // ── Tab icon styling ────────────────────────────────────────────────────
 
@@ -683,12 +684,11 @@ function EmptyState({ isAll }: { isAll: boolean }) {
   );
 }
 
-export function ApplicationsList({
-  applications,
-}: {
-  applications: MembershipApplication[];
-}) {
+export function ApplicationsList() {
   const [tab, setTab] = useState<DisplayStatus | "All">("All");
+  const { data: response, isLoading, isError, refetch } = useMyApplications();
+
+  const applications = response?.success ? response.data : [];
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { All: applications.length };
@@ -703,6 +703,44 @@ export function ApplicationsList({
     if (tab === "All") return applications;
     return applications.filter((app) => getDisplayStatus(app) === tab);
   }, [applications, tab]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="border-b border-border">
+          <div className="flex items-center gap-2 pb-px -mx-4 px-4 sm:mx-0 sm:px-0">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-9 w-20 flex-shrink-0 animate-pulse rounded-md bg-muted"
+              />
+            ))}
+          </div>
+        </div>
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || !response?.success) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-16 text-center">
+        <h2 className="text-lg font-semibold">
+          We couldn't load your applications
+        </h2>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          {response && !response.success
+            ? response.error
+            : "Something went wrong. Please try again."}
+        </p>
+        <Button onClick={() => refetch()}>Try again</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

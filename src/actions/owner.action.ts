@@ -1131,44 +1131,53 @@ export async function updateTrainerOwnerFieldsAction(
 // Trainer Assignments
 // ============================================================================
 
-export async function assignTrainerToMemberAction(payload: {
-  gymId: string;
+export async function addTrainerAssignment(input: {
   memberId: string;
+  gymId: string;
   trainerId: string;
-  notes?: string;
-}): Promise<ActionResult<{ id: string }>> {
+  isPrimary: boolean;
+}) {
   const supabase = await createServerClient();
-
-  const { data, error } = await supabase
-    .from("trainer_assignments")
-    .insert({
-      gym_id: payload.gymId,
-      member_id: payload.memberId,
-      trainer_id: payload.trainerId,
-      notes: payload.notes,
-      is_active: true,
-    })
-    .select("id")
-    .single();
-
-  if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/members");
-  return { success: true, data: { id: data.id } };
+  await supabase.from("trainer_assignments").insert({
+    gym_id: input.gymId,
+    member_id: input.memberId,
+    trainer_id: input.trainerId,
+    is_primary: input.isPrimary,
+  });
+  revalidatePath(`/owner/members/${input.memberId}`);
 }
 
-export async function unassignTrainerAction(
-  assignmentId: string,
-): Promise<ActionResult> {
+export async function removeTrainerAssignment(input: {
+  assignmentId: string;
+  gymId: string;
+}) {
   const supabase = await createServerClient();
-
-  const { error } = await supabase
+  await supabase
     .from("trainer_assignments")
     .update({ is_active: false, unassigned_at: new Date().toISOString() })
-    .eq("id", assignmentId);
+    .eq("id", input.assignmentId);
+  revalidatePath(`/owner/members`); // or pass memberId through for a tighter revalidate
+}
 
-  if (error) return { success: false, error: error.message };
-  revalidatePath("/dashboard/members");
-  return { success: true, data: undefined };
+export async function setPrimaryTrainerAssignment(input: {
+  assignmentId: string;
+  memberId: string;
+  gymId: string;
+}) {
+  const supabase = await createServerClient();
+  // clear any existing primary for this member first, then set the new one —
+  // the unique partial index is your backstop against a race leaving two primaries
+  await supabase
+    .from("trainer_assignments")
+    .update({ is_primary: false })
+    .eq("member_id", input.memberId)
+    .eq("gym_id", input.gymId)
+    .eq("is_active", true);
+  await supabase
+    .from("trainer_assignments")
+    .update({ is_primary: true })
+    .eq("id", input.assignmentId);
+  revalidatePath(`/owner/members/${input.memberId}`);
 }
 
 // ============================================================================
@@ -1233,20 +1242,8 @@ export async function rejectMembershipApplicationAction(
  * Membership → Active (dates computed from today)
  * Notification sent to member.
  */
-export async function verifyPaymentAction(
-  paymentId: string,
-): Promise<ActionResult> {
-  const supabase = await createServerClient();
 
-  const { error } = await supabase.rpc("verify_payment", {
-    p_payment_id: paymentId,
-  });
-
-  if (error) return { success: false, error: error.message };
-
-  revalidatePath(`/owner/applications/[applicationId]`, "page");
-  return { success: true, data: undefined };
-}
+//I move it to Below Renew Part
 
 /**
  * Reject a member's payment — atomic RPC.
@@ -1284,19 +1281,122 @@ export async function rejectPaymentAction(
  */
 export async function renewMembershipAction(
   gymMembershipId: string,
-  planId?: string,
+  payload: {
+    planId?: string;
+    paymentStatus: "Paid" | "Pending";
+    paymentMethod: string;
+    transactionRef?: string;
+    notes?: string;
+    paymentDate: string;
+  },
 ): Promise<ActionResult<{ membershipId: string }>> {
   const supabase = await createServerClient();
 
   const { data, error } = await supabase.rpc("renew_membership", {
     p_gym_membership_id: gymMembershipId,
-    p_plan_id: planId ?? null,
+    p_plan_id: payload.planId ?? null,
+    p_payment_status: payload.paymentStatus,
+    p_payment_method: payload.paymentMethod,
+    p_transaction_ref: payload.transactionRef || null,
+    p_notes: payload.notes || null,
+    p_payment_date: payload.paymentDate,
+    // p_collected_by intentionally omitted — RPC derives this from
+    // current_user_id() server-side and ignores the client value.
   });
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
 
   revalidatePath("/owner/members");
-  return { success: true, data: { membershipId: data as string } };
+  revalidatePath("/trainer/members");
+
+  return {
+    success: true,
+    data: {
+      membershipId: data as string,
+    },
+  };
+}
+
+// Pending -> PendingVerification. Staff-wide (owner or trainer) — this is
+// just "front desk collected the money and is recording how".
+export async function recordWalkinPaymentAction(input: {
+  paymentId: string;
+  gymId: string;
+  method: "Cash" | "UPI" | "Card" | "Bank Transfer";
+  transactionRef?: string;
+}) {
+  const supabase = await createServerClient();
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+
+  if (
+    !["owner", "trainer"].includes(meta.role ?? "") ||
+    meta.gymId !== input.gymId
+  ) {
+    return {
+      success: false as const,
+      error: "Not authorized to record this payment.",
+    };
+  }
+
+  const { error } = await supabase.rpc("record_walkin_payment", {
+    p_payment_id: input.paymentId,
+    p_method: input.method,
+    p_transaction_ref: input.transactionRef ?? "",
+  });
+
+  if (error) return { success: false as const, error: error.message };
+
+  revalidatePath(`/owner/applications/[applicationId]`, "page");
+  revalidatePath(`/owner/applications/`);
+  revalidatePath("/owner/payments");
+  return { success: true as const };
+}
+
+// PendingVerification -> Verified. Owner-only — verification is the
+// authoritative confirmation step, distinct from front-desk collection.
+// The RPC itself also enforces the PendingVerification precondition —
+// this check is just so the UI fails fast with a clear message instead
+// of a raw Postgres error bubbling up.
+export async function verifyPaymentAction(input: {
+  paymentId: string;
+  gymId: string;
+}) {
+  const supabase = await createServerClient();
+  const { sessionClaims } = await auth();
+  const userId = sessionClaims?.sub;
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+
+  if (meta.role !== "owner" || meta.gymId !== input.gymId) {
+    return {
+      success: false as const,
+      error: "Not authorized to verify this payment.",
+    };
+  }
+
+  const { error } = await supabase.rpc("verify_payment", {
+    p_payment_id: input.paymentId,
+  });
+
+  console.log("payment verified error", error);
+  if (error) return { success: false as const, error: error.message };
+
+  revalidatePath("/owner/payments");
+  revalidatePath(`/owner/applications/[applicationId]`, "page");
+  revalidatePath(`/owner/applications/`);
+
+  return { success: true as const };
 }
 
 /**
@@ -1411,23 +1511,5 @@ export async function correctAttendanceAction(
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/dashboard/attendance");
-  return { success: true, data: undefined };
-}
-
-// ============================================================================
-// Notifications (mutation)
-// ============================================================================
-
-export async function markNotificationReadAction(
-  notificationId: string,
-): Promise<ActionResult> {
-  const supabase = await createServerClient();
-
-  const { error } = await supabase
-    .from("notifications")
-    .update({ is_read: true, read_at: new Date().toISOString() })
-    .eq("id", notificationId);
-
-  if (error) return { success: false, error: error.message };
   return { success: true, data: undefined };
 }

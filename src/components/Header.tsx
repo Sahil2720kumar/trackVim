@@ -1,29 +1,35 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
+import { useQueryClient } from "@tanstack/react-query";
+import { useClerk } from "@clerk/nextjs";
 import {
   Bell,
   Moon,
   Sun,
   ChevronDown,
-  Check,
   LogOut,
   User,
   Settings,
   CreditCard,
   ChevronRight,
-  Building2,
-  CalendarDays,
   Menu,
+  Loader2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 import {
   matchBreadcrumbRoute,
   ownerBreadcrumbRoutes,
   type BreadcrumbRoute,
 } from "@/lib/breadcrumbs-config";
 import { useBreadcrumbOverride } from "@/providers/BreadcrumbProvider";
+import { useNotifications } from "@/hooks/queries/notications.query";
+import {
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+} from "@/actions/notications.action";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -34,15 +40,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { toast } from "sonner";
+import { useTrainerStore } from "@/stores/trainer-store";
 
 // ── Breadcrumb ──────────────────────────────────────────────────────────────
 import type { BreadcrumbItem } from "@/lib/breadcrumbs-config";
+import { useMemberStore } from "@/stores/member.store";
 
 interface BreadcrumbProps {
   items: BreadcrumbItem[];
@@ -91,135 +95,6 @@ const SidebarToggle = ({ onClick }: SidebarToggleProps) => {
   );
 };
 
-// ── Gym Switcher ─────────────────────────────────────────────────────────────
-interface Gym {
-  id: string;
-  name: string;
-  location?: string;
-}
-
-const mockGyms: Gym[] = [
-  { id: "1", name: "PowerFlex Gym", location: "Downtown" },
-  { id: "2", name: "Iron House", location: "Westside" },
-  { id: "3", name: "Fitness Factory", location: "North Park" },
-  { id: "4", name: "Alpha Gym", location: "East End" },
-];
-
-interface GymSwitcherProps {
-  multiGym?: boolean;
-}
-
-const GymSwitcher = ({ multiGym = false }: GymSwitcherProps) => {
-  const [selectedGym, setSelectedGym] = useState<Gym>(mockGyms[0]);
-  const [open, setOpen] = useState(false);
-
-  if (!multiGym) {
-    return (
-      <div className="flex items-center gap-2 h-9 px-3 rounded-xl border border-border/60 bg-background/50/30 text-muted-foreground select-none">
-        <Building2 className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
-        <span className="hidden sm:inline text-sm font-medium max-w-[140px] truncate text-foreground">
-          {selectedGym.name}
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className={cn(
-            "gap-2 h-9 px-3 rounded-xl border-border/60 bg-background/50 hover:bg-accent/60 transition-all duration-200",
-            open && "ring-2 ring-indigo-500/20 border-indigo-300/50",
-          )}
-        >
-          <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          <span className="hidden sm:inline text-sm font-medium max-w-[140px] truncate">
-            {selectedGym.name}
-          </span>
-          <ChevronDown
-            className={cn(
-              "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200",
-              open && "rotate-180",
-            )}
-          />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-2" align="end">
-        <div className="mb-2 px-2 py-1">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Your Gyms
-          </p>
-        </div>
-        <div className="space-y-0.5">
-          {mockGyms.map((gym) => {
-            const isSelected = selectedGym.id === gym.id;
-            return (
-              <button
-                key={gym.id}
-                onClick={() => {
-                  setSelectedGym(gym);
-                  setOpen(false);
-                }}
-                className={cn(
-                  "w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-all duration-150 group",
-                  isSelected
-                    ? "bg-indigo-600 text-white"
-                    : "hover:bg-accent/70 text-foreground",
-                )}
-              >
-                <div
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0",
-                    isSelected
-                      ? "bg-white/20"
-                      : "bg-muted group-hover:bg-background",
-                  )}
-                >
-                  <Building2
-                    className={cn(
-                      "h-4 w-4",
-                      isSelected ? "text-white" : "text-muted-foreground",
-                    )}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p
-                    className={cn(
-                      "text-sm font-medium truncate",
-                      isSelected ? "text-white" : "",
-                    )}
-                  >
-                    {gym.name}
-                  </p>
-                  <p
-                    className={cn(
-                      "text-xs truncate",
-                      isSelected ? "text-indigo-100" : "text-muted-foreground",
-                    )}
-                  >
-                    {gym.location}
-                  </p>
-                </div>
-                {isSelected && (
-                  <Check className="h-4 w-4 text-white flex-shrink-0" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-2 pt-2 border-t border-border/50">
-          <button className="w-full text-left px-3 py-2 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center gap-2 transition-colors">
-            <Building2 className="h-3.5 w-3.5" />
-            Add new gym
-          </button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-};
-
 // ── Theme Toggle ─────────────────────────────────────────────────────────────
 const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
@@ -251,59 +126,77 @@ const ThemeToggle = () => {
 };
 
 // ── Notification Bell ────────────────────────────────────────────────────────
-interface Notification {
+interface NotificationRow {
+  idx?: number;
   id: string;
+  user_id: string;
+  gym_id: string;
+  type: string;
   title: string;
-  description: string;
-  time: string;
-  unread: boolean;
-  type: "member" | "payment" | "session" | "alert";
+  body: string | null;
+  data: string | null;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
 }
 
-const mockNotifications: Notification[] = [
-  {
-    id: "1",
-    title: "New member registered",
-    description: "Alex Johnson joined PowerFlex Gym",
-    time: "5m ago",
-    unread: true,
-    type: "member",
-  },
-  {
-    id: "2",
-    title: "Session cancelled",
-    description: "Morning yoga with Coach Lisa cancelled",
-    time: "1h ago",
-    unread: true,
-    type: "session",
-  },
-  {
-    id: "3",
-    title: "Payment received",
-    description: "₹2,499 received from Maria Garcia",
-    time: "2h ago",
-    unread: true,
-    type: "payment",
-  },
-  {
-    id: "4",
-    title: "Membership expiring",
-    description: "5 memberships expire in 3 days",
-    time: "Yesterday",
-    unread: false,
-    type: "alert",
-  },
-];
+function getNotifColor(type: string): string {
+  if (type.includes("payment")) return "bg-blue-500";
+  if (type.includes("member") || type.includes("application"))
+    return "bg-emerald-500";
+  if (type.includes("session") || type.includes("training"))
+    return "bg-amber-500";
+  if (
+    type.includes("reject") ||
+    type.includes("expir") ||
+    type.includes("alert") ||
+    type.includes("fail")
+  )
+    return "bg-rose-500";
+  return "bg-indigo-500";
+}
 
-const notifTypeColors: Record<Notification["type"], string> = {
-  member: "bg-emerald-500",
-  payment: "bg-blue-500",
-  session: "bg-amber-500",
-  alert: "bg-rose-500",
-};
+function timeAgo(dateString: string) {
+  const diffMs = Date.now() - new Date(dateString).getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay === 1) return "Yesterday";
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(dateString).toLocaleDateString();
+}
 
 const NotificationMenu = () => {
-  const unreadCount = mockNotifications.filter((n) => n.unread).length;
+  const { data: notifications = [], isLoading } = useNotifications();
+  const queryClient = useQueryClient();
+  const [isPending, startTransition] = useTransition();
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
+  const rows = notifications as NotificationRow[];
+  const unreadCount = rows.filter((n) => !n.is_read).length;
+
+  const handleMarkRead = (id: string) => {
+    setPendingId(id);
+    startTransition(async () => {
+      const result = await markNotificationReadAction(id);
+      if (result.success) {
+        await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      }
+      setPendingId(null);
+    });
+  };
+
+  const handleMarkAllRead = () => {
+    startTransition(async () => {
+      const result = await markAllNotificationsReadAction();
+      if (result.success) {
+        await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      }
+    });
+  };
 
   return (
     <DropdownMenu>
@@ -340,7 +233,9 @@ const NotificationMenu = () => {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
+                disabled={isPending || unreadCount === 0}
+                onClick={handleMarkAllRead}
+                className="h-7 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 disabled:opacity-40"
               >
                 Mark all read
               </Button>
@@ -349,38 +244,63 @@ const NotificationMenu = () => {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          {mockNotifications.map((notif) => (
-            <DropdownMenuItem key={notif.id} className="cursor-pointer">
-              <div className="flex items-start gap-3 py-0.5 w-full">
-                <div
+          {isLoading ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              Loading…
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              You&apos;re all caught up
+            </div>
+          ) : (
+            rows.map((notif) => {
+              const rowPending = pendingId === notif.id && isPending;
+              return (
+                <DropdownMenuItem
+                  key={notif.id}
                   className={cn(
-                    "h-2 w-2 rounded-full mt-1.5 flex-shrink-0",
-                    notif.unread
-                      ? notifTypeColors[notif.type]
-                      : "bg-muted-foreground/30",
+                    "cursor-pointer",
+                    rowPending && "opacity-50 pointer-events-none",
                   )}
-                />
-                <div className="flex-1 min-w-0">
-                  <p
-                    className={cn(
-                      "text-sm leading-snug",
-                      notif.unread
-                        ? "font-medium text-foreground"
-                        : "text-muted-foreground",
-                    )}
-                  >
-                    {notif.title}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate mt-0.5">
-                    {notif.description}
-                  </p>
-                </div>
-                <span className="text-[11px] text-muted-foreground/70 flex-shrink-0 mt-0.5">
-                  {notif.time}
-                </span>
-              </div>
-            </DropdownMenuItem>
-          ))}
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    if (!notif.is_read) handleMarkRead(notif.id);
+                  }}
+                >
+                  <div className="flex items-start gap-3 py-0.5 w-full">
+                    <div
+                      className={cn(
+                        "h-2 w-2 rounded-full mt-1.5 flex-shrink-0",
+                        !notif.is_read
+                          ? getNotifColor(notif.type)
+                          : "bg-muted-foreground/30",
+                      )}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={cn(
+                          "text-sm leading-snug",
+                          !notif.is_read
+                            ? "font-medium text-foreground"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {notif.title}
+                      </p>
+                      {notif.body && (
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {notif.body}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-muted-foreground/70 flex-shrink-0 mt-0.5">
+                      {timeAgo(notif.created_at)}
+                    </span>
+                  </div>
+                </DropdownMenuItem>
+              );
+            })
+          )}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
@@ -399,21 +319,42 @@ const NotificationMenu = () => {
 interface UserMenuProps {
   userName?: string;
   userEmail?: string;
-  userRole?: string;
+  userRole?: "owner" | "trainer" | "member";
   userImage?: string;
 }
 
 const UserMenu = ({
   userName = "Sahil Kumar",
   userEmail = "sahil@trackvim.com",
-  userRole = "Owner",
+  userRole = "owner",
   userImage = undefined,
 }: UserMenuProps) => {
-  const initials = userName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
+  const settingsHref = `/${userRole}/settings`;
+  const isOwner = userRole.toLowerCase() === "owner";
+
+  const clearTrainerContext = useTrainerStore(
+    (state) => state.clearTrainerContext,
+  );
+  const clearMemberContext = useMemberStore((state) => state.clearActiveMember);
+  const [isPending, setIsPending] = useState(false);
+  const { signOut } = useClerk();
+
+  const handleSignOut = async () => {
+    try {
+      setIsPending(true);
+
+      clearTrainerContext();
+      clearMemberContext();
+
+      await signOut({
+        redirectUrl: "/sign-in",
+      });
+    } catch (error) {
+      console.error("Sign out failed:", error);
+      toast.error("Something went wrong signing out");
+      setIsPending(false);
+    }
+  };
 
   return (
     <DropdownMenu>
@@ -425,7 +366,7 @@ const UserMenu = ({
           <Avatar className="h-7 w-7 ring-2 ring-indigo-500/20">
             <AvatarImage src={userImage} alt={userName} />
             <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-xs font-semibold">
-              {initials}
+              {getInitials(userName)}
             </AvatarFallback>
           </Avatar>
           <div className="hidden md:flex flex-col items-start">
@@ -446,7 +387,7 @@ const UserMenu = ({
               <Avatar className="h-10 w-10 ring-2 ring-indigo-500/20">
                 <AvatarImage src={userImage} alt={userName} />
                 <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-sm font-semibold">
-                  {initials}
+                  {getInitials(userName)}
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col min-w-0">
@@ -465,25 +406,54 @@ const UserMenu = ({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem className="cursor-pointer">
-            <User className="h-4 w-4 mr-2 text-muted-foreground" />
-            <span>Profile</span>
+          {/* Profile redirects into the role's settings page — there's no standalone profile route */}
+          <DropdownMenuItem asChild className="cursor-pointer">
+            <Link
+              className="flex flex-row flex-1 items-center "
+              href={settingsHref}
+            >
+              <User className="h-4 w-4 mr-2 text-muted-foreground" />
+              <span>Profile</span>
+            </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem className="cursor-pointer">
-            <Settings className="h-4 w-4 mr-2 text-muted-foreground" />
-            <span>Settings</span>
+          <DropdownMenuItem asChild className="cursor-pointer">
+            <Link
+              className="flex flex-row flex-1 items-center "
+              href={settingsHref}
+            >
+              <Settings className="h-4 w-4 mr-2 text-muted-foreground" />
+              <span>Settings</span>
+            </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem className="cursor-pointer">
-            <CreditCard className="h-4 w-4 mr-2 text-muted-foreground" />
-            <span>Billing</span>
-          </DropdownMenuItem>
+          {isOwner && (
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link
+                className="flex flex-row flex-1 items-center "
+                href="/owner/payments"
+              >
+                <CreditCard className="h-4 w-4 mr-2 text-muted-foreground" />
+                <span>Billing </span>
+              </Link>
+            </DropdownMenuItem>
+          )}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem className="cursor-pointer">
-            <LogOut className="h-4 w-4 mr-2 text-rose-500" />
+          <DropdownMenuItem
+            disabled={isPending}
+            onClick={handleSignOut}
+            className={cn(
+              "cursor-pointer",
+              isPending && "opacity-50 pointer-events-none",
+            )}
+          >
+            {isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 text-rose-500 animate-spin" />
+            ) : (
+              <LogOut className="h-4 w-4 mr-2 text-rose-500" />
+            )}
             <span className="text-rose-600 dark:text-rose-500 font-medium">
-              Sign Out
+              {isPending ? "Signing out…" : "Sign Out"}
             </span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -498,23 +468,23 @@ interface HeaderProps {
   title?: string;
   /** Route → breadcrumb config. Defaults to the owner route map. */
   breadcrumbRoutes?: BreadcrumbRoute[];
+  /** Drives Settings/Profile routing and role-gated menu items (e.g. Billing). */
   userName?: string;
   userEmail?: string;
-  userRole?: string;
+  userRole?: "owner" | "trainer" | "member";
   userImage?: string;
   onSidebarToggle?: () => void;
-  multiGym?: boolean;
 }
 
 export function Header({
   title,
   breadcrumbRoutes = ownerBreadcrumbRoutes,
-  userName = "Sahil Kumar",
-  userEmail = "sahil@trackvim.com",
-  userRole = "Owner",
+
+  userName = "",
+  userEmail = "",
+  userRole = "member",
   userImage = undefined,
   onSidebarToggle,
-  multiGym = false,
 }: HeaderProps) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
@@ -528,22 +498,16 @@ export function Header({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Dashboard is the root/landing screen — it only ever shows its own
-  // title, never a breadcrumb trail, even if a route match exists.
   const isDashboard =
     pathname === "/" ||
     pathname === "/dashboard" ||
     pathname === "/owner" ||
     pathname === "/owner/dashboard";
 
-  // Look up the current path against the breadcrumb config. Returns null
-  // if nothing matches (e.g. a page not yet added to the map).
   const matchedItems = !isDashboard
     ? matchBreadcrumbRoute(pathname, breadcrumbRoutes)
     : null;
 
-  // If a dynamic page has called useBreadcrumbOverride() to set a real
-  // entity name (e.g. a member's name), swap it in for the last crumb.
   const breadcrumbItems =
     matchedItems && overrideLabel
       ? matchedItems.map((item, idx) =>
@@ -556,8 +520,6 @@ export function Header({
   const showBreadcrumbs =
     mounted && !isDashboard && breadcrumbItems && breadcrumbItems.length > 0;
 
-  // Page heading: explicit title prop > last breadcrumb label > derived
-  // from the URL segment > "Dashboard" as the final fallback.
   const derivedTitle =
     pathname
       .split("/")
@@ -581,7 +543,6 @@ export function Header({
       )}
     >
       <div className="flex items-center justify-between gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-3 md:py-4">
-        {/* Left */}
         <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
           {onSidebarToggle && <SidebarToggle onClick={onSidebarToggle} />}
           <div className="flex flex-col gap-1 min-w-0">
@@ -592,12 +553,9 @@ export function Header({
           </div>
         </div>
 
-        {/* Right */}
         <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
           <ThemeToggle />
           <NotificationMenu />
-          <div className="hidden sm:block h-6 w-px bg-border/60 mx-1 sm:mx-1.5" />
-          <GymSwitcher multiGym={multiGym} />
           <div className="hidden md:block h-6 w-px bg-border/60 mx-1.5" />
           <UserMenu
             userName={userName}

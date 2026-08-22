@@ -1503,6 +1503,7 @@ export type Database = {
           gym_id: string
           id: string
           is_active: boolean
+          is_primary: boolean
           member_id: string
           notes: string | null
           trainer_id: string
@@ -1513,6 +1514,7 @@ export type Database = {
           gym_id: string
           id?: string
           is_active?: boolean
+          is_primary?: boolean
           member_id: string
           notes?: string | null
           trainer_id: string
@@ -1523,6 +1525,7 @@ export type Database = {
           gym_id?: string
           id?: string
           is_active?: boolean
+          is_primary?: boolean
           member_id?: string
           notes?: string | null
           trainer_id?: string
@@ -2004,6 +2007,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_scheduled_memberships: { Args: never; Returns: number }
       approve_membership_application: {
         Args: { p_application_id: string }
         Returns: string
@@ -2133,6 +2137,62 @@ export type Database = {
         Args: { p_period_end: string; p_period_start: string }
         Returns: number
       }
+      get_gym_monthly_revenue: {
+        Args: { p_as_of?: string; p_gym_id: string; p_months?: number }
+        Returns: {
+          month_label: string
+          month_start: string
+          revenue: number
+        }[]
+      }
+      get_gym_payment_stats: {
+        Args: { p_as_of?: string; p_gym_id: string }
+        Returns: {
+          overdue_amount: number
+          overdue_count: number
+          payments_received_this_month: number
+          pending_amount: number
+          pending_count: number
+          revenue_last_month: number
+          revenue_this_month: number
+        }[]
+      }
+      get_gym_payment_status_counts: {
+        Args: { p_gym_id: string }
+        Returns: {
+          count: number
+          status: Database["public"]["Enums"]["payment_status"]
+          total_amount: number
+        }[]
+      }
+      get_gym_revenue_monthly: {
+        Args: { p_as_of?: string; p_gym_id: string; p_months?: number }
+        Returns: {
+          month_label: string
+          month_start: string
+          revenue: number
+        }[]
+      }
+      get_member_attendance_history: {
+        Args: {
+          p_end_date: string
+          p_gym_id: string
+          p_member_id: string
+          p_start_date: string
+        }
+        Returns: {
+          activity_date: string
+          check_in: string
+          check_out: string
+          duration_minutes: number
+          session_id: string
+          session_name: string
+          session_status: string
+          status: string
+          trainer_name: string
+          workout_type: string
+        }[]
+      }
       get_member_attendance_rate: {
         Args: { p_as_of?: string; p_gym_id: string; p_member_id: string }
         Returns: number
@@ -2141,14 +2201,84 @@ export type Database = {
         Args: { p_as_of?: string; p_gym_id: string; p_member_ids: string[] }
         Returns: {
           attendance_rate: number
+          current_streak: number
           days_attended: number
+          longest_streak: number
           member_id: string
           total_days: number
+        }[]
+      }
+      get_member_monthly_attendance: {
+        Args: {
+          p_as_of?: string
+          p_gym_id: string
+          p_member_id: string
+          p_months?: number
+        }
+        Returns: {
+          attendance_rate: number
+          days_absent: number
+          days_expected: number
+          days_present: number
+          month_label: string
+          month_start: string
         }[]
       }
       get_membership_application_page_data: {
         Args: { p_gym_id: string; p_plan_id: string }
         Returns: Json
+      }
+      get_membership_growth_monthly: {
+        Args: { p_as_of?: string; p_gym_id: string; p_months?: number }
+        Returns: {
+          members: number
+          month_label: string
+          month_start: string
+        }[]
+      }
+      get_membership_plan_distribution: {
+        Args: { p_as_of?: string; p_gym_id: string }
+        Returns: {
+          member_count: number
+          plan_color: string
+          plan_id: string
+          plan_name: string
+        }[]
+      }
+      get_my_attendance_stats: {
+        Args: { p_as_of?: string; p_gym_id: string; p_member_id: string }
+        Returns: {
+          attendance_rate: number
+          current_streak: number
+          days_attended: number
+          longest_streak: number
+          member_id: string
+          total_days: number
+        }[]
+      }
+      get_owner_dashboard_stats: {
+        Args: { p_as_of?: string; p_gym_id: string }
+        Returns: {
+          active_trainers: number
+          attendance_yesterday: number
+          monthly_revenue: number
+          monthly_revenue_last_month: number
+          today_attendance: number
+          total_members: number
+          total_members_last_month: number
+          trainers_available: number
+        }[]
+      }
+      get_plan_performance_monthly: {
+        Args: { p_as_of?: string; p_gym_id: string }
+        Returns: {
+          growth_pct: number
+          member_count: number
+          plan_id: string
+          plan_name: string
+          revenue_last_month: number
+          revenue_this_month: number
+        }[]
       }
       get_public_gyms: {
         Args: { p_city?: string; p_limit?: number; p_offset?: number }
@@ -2165,6 +2295,17 @@ export type Database = {
           starting_price: number
           state: string
           trainer_count: number
+        }[]
+      }
+      get_trainer_activity: {
+        Args: { p_as_of?: string; p_gym_id: string }
+        Returns: {
+          assigned_members: number
+          full_name: string
+          max_members: number
+          sessions_today: number
+          status: string
+          trainer_id: string
         }[]
       }
       gym_subscription_plan_for: {
@@ -2243,7 +2384,16 @@ export type Database = {
         Returns: undefined
       }
       renew_membership: {
-        Args: { p_gym_membership_id: string; p_plan_id?: string }
+        Args: {
+          p_collected_by?: string
+          p_gym_membership_id: string
+          p_notes?: string
+          p_payment_date?: string
+          p_payment_method?: string
+          p_payment_status?: string
+          p_plan_id?: string
+          p_transaction_ref?: string
+        }
         Returns: string
       }
       replace_template_exercises: {
@@ -2321,6 +2471,7 @@ export type Database = {
         | "Expired"
         | "Cancelled"
         | "Frozen"
+        | "Scheduled"
       muscle_group:
         | "Back"
         | "Biceps"
@@ -2555,6 +2706,7 @@ export const Constants = {
         "Expired",
         "Cancelled",
         "Frozen",
+        "Scheduled",
       ],
       muscle_group: [
         "Back",

@@ -187,10 +187,10 @@ export default function SelectRolePage() {
         {/* Continue Button */}
         <Button
           onClick={handleContinue}
-          disabled={!selectedRole || isLoading}
+          disabled={!selectedRole || isPending}
           className="mb-8 w-full rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 py-6 text-base font-medium"
         >
-          {isLoading ? (
+          {isPending ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
               Processing...

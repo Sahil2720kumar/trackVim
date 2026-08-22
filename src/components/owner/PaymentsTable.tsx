@@ -1,6 +1,14 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useMemo, useState, useTransition } from "react";
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  useReactTable,
+  RowSelectionState,
+} from "@tanstack/react-table";
 import {
   Receipt,
   Search,
@@ -14,29 +22,98 @@ import {
   FileDown,
   CheckCircle2,
   Bell,
+  Wallet,
 } from "lucide-react";
-import {
-  type Payment,
-  planOptions,
-  methodOptions,
-  statusOptions,
-} from "@/mock/payments";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Popover,
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { getInitials } from "@/lib/utils";
+import { RecordPaymentDialog } from "@/components/owner/payments/RecordPaymentDialog";
+import {
+  recordWalkinPaymentAction,
+  verifyPaymentAction,
+} from "@/actions/owner.action";
+import type { PaymentRow } from "@/services/owner.query";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
-type PaymentsTableProps = {
-  initialPayments: Payment[];
+const STATUS_LABELS: Record<string, string> = {
+  Pending: "Pending",
+  PendingVerification: "Pending Verification",
+  Rejected: "Rejected",
+  Verified: "Verified",
 };
 
-export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
-  const [payments, setPayments] = useState<Payment[]>(initialPayments);
+const QUICK_STATUS_TABS = [
+  "All",
+  "Pending",
+  "PendingVerification",
+  "Rejected",
+  "Verified",
+];
+const METHOD_OPTIONS = [
+  "All Methods",
+  "Cash",
+  "UPI",
+  "Card",
+  "Bank Transfer",
+  "Net Banking",
+  "Razorpay",
+];
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "Verified":
+      return "bg-green-100 text-green-700";
+    case "Pending":
+    case "PendingVerification":
+      return "bg-yellow-100 text-yellow-700";
+    case "Overdue":
+    case "Rejected":
+      return "bg-red-100 text-red-700";
+    case "Refunded":
+      return "bg-indigo-100 text-indigo-700";
+    case "Cancelled":
+    case "Partial":
+      return "bg-purple-100 text-purple-700";
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
+};
+
+type PaymentsTableProps = {
+  gymId: string;
+  initialPayments: PaymentRow[];
+};
+
+export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
+  const router = useRouter();
+  const [payments, setPayments] = useState<PaymentRow[]>(initialPayments);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [isVerifying, startVerifying] = useTransition();
+  const [recordDialogPaymentId, setRecordDialogPaymentId] = useState<
+    string | null
+  >(null);
 
   // Advanced filter popover state
   const [showFilterPanel, setShowFilterPanel] = useState(false);
@@ -45,33 +122,26 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // Row action menu state (which row's menu is open)
-  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
-  const actionMenuRef = useRef<HTMLDivElement>(null);
-
   const itemsPerPage = 5;
 
-  // Close action menu on outside click (Popover manages its own outside-click)
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (
-        actionMenuRef.current &&
-        !actionMenuRef.current.contains(e.target as Node)
-      ) {
-        setOpenActionMenuId(null);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  // Plans are gym-specific and change over time — derive the filter's
+  // option list from what's actually in this batch of payments rather
+  // than a static mock list.
+  const planOptions = useMemo(() => {
+    const plans = new Set(
+      payments.map((p) => p.plan).filter(Boolean) as string[],
+    );
+    return ["All Plans", ...Array.from(plans).sort()];
+  }, [payments]);
 
-  // Filter and search logic
+  // Filter and search logic (runs before the table ever sees the data)
   const filteredPayments = useMemo(() => {
     return payments.filter((payment) => {
+      const q = searchQuery.toLowerCase();
       const matchesSearch =
-        payment.member.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        payment.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        payment.phone.includes(searchQuery);
+        (payment.memberName ?? "").toLowerCase().includes(q) ||
+        (payment.receiptId ?? "").toLowerCase().includes(q) ||
+        (payment.memberPhone ?? "").includes(searchQuery);
 
       const matchesStatus =
         !selectedStatus || payment.status === selectedStatus;
@@ -79,7 +149,9 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
         planFilter === "All Plans" || payment.plan === planFilter;
       const matchesMethod =
         methodFilter === "All Methods" || payment.method === methodFilter;
-      const matchesDateRange = (!dateFrom && !dateTo) || true; // date comparison left as a hook point since paymentDate is a display string, not an ISO value
+      const matchesDateRange =
+        (!dateFrom || (payment.paymentDate ?? "") >= dateFrom) &&
+        (!dateTo || (payment.paymentDate ?? "") <= dateTo);
 
       return (
         matchesSearch &&
@@ -99,53 +171,19 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
     dateTo,
   ]);
 
-  // Pagination logic
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredPayments.length / itemsPerPage),
-  );
-  const safePage = Math.min(currentPage, totalPages);
-  const startIdx = (safePage - 1) * itemsPerPage;
-  const paginatedPayments = filteredPayments.slice(
-    startIdx,
-    startIdx + itemsPerPage,
-  );
-
   const activeFilterCount =
     (planFilter !== "All Plans" ? 1 : 0) +
     (methodFilter !== "All Methods" ? 1 : 0) +
     (dateFrom && dateTo ? 1 : 0);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Paid":
-        return "bg-green-100 text-green-700";
-      case "Pending":
-        return "bg-yellow-100 text-yellow-700";
-      case "Overdue":
-        return "bg-red-100 text-red-700";
-      case "Refunded":
-        return "bg-indigo-100 text-indigo-700";
-      case "Cancelled":
-        return "bg-purple-100 text-purple-700";
-      default:
-        return "bg-gray-100 text-gray-700";
-    }
-  };
-
-  const goToPage = (page: number) => {
-    setCurrentPage(Math.min(Math.max(1, page), totalPages));
-  };
 
   const resetAdvancedFilters = () => {
     setPlanFilter("All Plans");
     setMethodFilter("All Methods");
     setDateFrom("");
     setDateTo("");
-    setCurrentPage(1);
+    table.setPageIndex(0);
   };
 
-  // Export filtered payments to CSV and trigger a download
   const handleExport = () => {
     const headers = [
       "Receipt No",
@@ -159,18 +197,20 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
       "Status",
     ];
     const rows = filteredPayments.map((p) => [
-      p.id,
-      p.member,
-      p.phone,
-      p.plan,
+      p.receiptId ?? p.id.slice(0, 8),
+      p.memberName ?? "—",
+      p.memberPhone ?? "—",
+      p.plan ?? "—",
       p.amount,
-      p.method,
-      p.paymentDate,
-      p.dueDate,
-      p.status,
+      p.method ?? "—",
+      p.paymentDate ?? "—",
+      p.dueDate ?? "—",
+      STATUS_LABELS[p.status] ?? p.status,
     ]);
     const csvContent = [headers, ...rows]
-      .map((row) => row.map((val) => `"${val}"`).join(","))
+      .map((row) =>
+        row.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(","),
+      )
       .join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -184,12 +224,234 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
     URL.revokeObjectURL(url);
   };
 
-  const handleMarkAsPaid = (id: string) => {
+  const handleVerify = (id: string) => {
+    const previousStatus = payments.find((p) => p.id === id)?.status;
+    // optimistic update so the row flips immediately
     setPayments((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: "Paid" } : p)),
+      prev.map((p) => (p.id === id ? { ...p, status: "Verified" } : p)),
     );
-    setOpenActionMenuId(null);
+    startVerifying(async () => {
+      const result = await verifyPaymentAction({ paymentId: id, gymId });
+      if (!result.success) {
+        setPayments((prev) =>
+          prev.map((p) =>
+            p.id === id ? { ...p, status: previousStatus ?? p.status } : p,
+          ),
+        );
+        toast.error("Couldn't verify payment — try again");
+      }
+    });
   };
+
+  const handleRecorded = (id: string, method: string) => {
+    setPayments((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              status: "PendingVerification",
+              method: method as PaymentRow["method"],
+            }
+          : p,
+      ),
+    );
+  };
+
+  const handleDownloadReceipt = () =>
+    toast.error("Download receipt is not implemented yet");
+
+  const handleSendReminder = () =>
+    toast.error("Send reminder is not implemented yet");
+
+  const handleViewDetails = (paymentId: string) =>
+    router.push(`/owner/payments/${paymentId}`);
+
+  // Column definitions for TanStack Table
+  const columns = useMemo<ColumnDef<PaymentRow>[]>(
+    () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() && "indeterminate")
+            }
+            onCheckedChange={(value) =>
+              table.toggleAllPageRowsSelected(!!value)
+            }
+            aria-label="Select all"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+          />
+        ),
+      },
+      {
+        accessorKey: "receiptId",
+        header: "Receipt No",
+        cell: ({ row }) => (
+          <p className="font-medium text-foreground text-sm">
+            {row.original.receiptId ?? row.original.id.slice(0, 8)}
+          </p>
+        ),
+      },
+      {
+        accessorKey: "memberName",
+        header: "Member",
+        cell: ({ row }) => {
+          const payment = row.original;
+          return (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+                {getInitials(payment.memberName ?? "?")}
+              </div>
+              <div className="min-w-0">
+                <p className="font-medium text-foreground truncate">
+                  {payment.memberName ?? "—"}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {payment.memberPhone ?? "—"}
+                </p>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "plan",
+        header: "Plan",
+        cell: ({ row }) => (
+          <span className="px-2.5 py-1 rounded-full text-xs font-medium border border-border text-foreground">
+            {row.original.plan ?? "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "amount",
+        header: "Amount",
+        cell: ({ row }) => (
+          <p className="font-medium text-foreground text-sm">
+            ₹{row.original.amount.toLocaleString()}
+          </p>
+        ),
+      },
+      {
+        accessorKey: "method",
+        header: "Method",
+        cell: ({ row }) => (
+          <p className="text-sm text-foreground">
+            {row.original.method ?? "—"}
+          </p>
+        ),
+      },
+      {
+        accessorKey: "paymentDate",
+        header: "Payment Date",
+        cell: ({ row }) => (
+          <p className="text-sm text-foreground">
+            {row.original.paymentDate ?? "—"}
+          </p>
+        ),
+      },
+      {
+        accessorKey: "dueDate",
+        header: "Next Due",
+        cell: ({ row }) => (
+          <p className="text-sm text-foreground">
+            {row.original.dueDate ?? "—"}
+          </p>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => (
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
+              row.original.status,
+            )}`}
+          >
+            {STATUS_LABELS[row.original.status] ?? row.original.status}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: ({ row }) => {
+          const payment = row.original;
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="p-2 hover:bg-muted rounded-lg transition-colors">
+                  <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => handleViewDetails(payment.id)}>
+                  <Eye className="w-4 h-4 mr-2" />
+                  View Details
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadReceipt}>
+                  <FileDown className="w-4 h-4 mr-2" />
+                  Download Receipt
+                </DropdownMenuItem>
+
+                {payment.status === "Pending" && (
+                  <DropdownMenuItem
+                    onClick={() => setRecordDialogPaymentId(payment.id)}
+                  >
+                    <Wallet className="w-4 h-4 mr-2" />
+                    Record Payment
+                  </DropdownMenuItem>
+                )}
+
+                {payment.status === "PendingVerification" && (
+                  <DropdownMenuItem
+                    onClick={() => handleVerify(payment.id)}
+                    disabled={isVerifying}
+                    className="text-green-600 focus:text-green-600"
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Verify Payment
+                  </DropdownMenuItem>
+                )}
+
+                <DropdownMenuItem onClick={handleSendReminder}>
+                  <Bell className="w-4 h-4 mr-2" />
+                  Send Reminder
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isVerifying],
+  );
+
+  const table = useReactTable({
+    data: filteredPayments,
+    columns,
+    getRowId: (row) => row.id,
+    state: { rowSelection },
+    onRowSelectionChange: setRowSelection,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageSize: itemsPerPage } },
+  });
+
+  const rows = table.getRowModel().rows;
+  const { pageIndex, pageSize } = table.getState().pagination;
+  const startIdx = pageIndex * pageSize;
+  const totalPages = table.getPageCount();
+  const safePage = pageIndex + 1;
 
   return (
     <>
@@ -205,7 +467,7 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
-                setCurrentPage(1);
+                table.setPageIndex(0);
               }}
               className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
             />
@@ -214,7 +476,7 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
                 onClick={() => setSearchQuery("")}
                 className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
               >
-                ✕
+                <X className="w-4 h-4 hover:text-primary" />
               </button>
             )}
           </div>
@@ -255,7 +517,7 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
                       value={planFilter}
                       onChange={(e) => {
                         setPlanFilter(e.target.value);
-                        setCurrentPage(1);
+                        table.setPageIndex(0);
                       }}
                       className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
                     >
@@ -275,11 +537,11 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
                       value={methodFilter}
                       onChange={(e) => {
                         setMethodFilter(e.target.value);
-                        setCurrentPage(1);
+                        table.setPageIndex(0);
                       }}
                       className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
                     >
-                      {methodOptions.map((m) => (
+                      {METHOD_OPTIONS.map((m) => (
                         <option key={m} value={m}>
                           {m}
                         </option>
@@ -297,7 +559,7 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
                         value={dateFrom}
                         onChange={(e) => {
                           setDateFrom(e.target.value);
-                          setCurrentPage(1);
+                          table.setPageIndex(0);
                         }}
                         className="w-full px-2 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
                       />
@@ -306,7 +568,7 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
                         value={dateTo}
                         onChange={(e) => {
                           setDateTo(e.target.value);
-                          setCurrentPage(1);
+                          table.setPageIndex(0);
                         }}
                         className="w-full px-2 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
                       />
@@ -315,7 +577,7 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
 
                   <button
                     onClick={resetAdvancedFilters}
-                    className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
+                    className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors cursor-pointer"
                   >
                     Reset filters
                   </button>
@@ -326,7 +588,7 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
             {/* Export Button */}
             <button
               onClick={handleExport}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors cursor-pointer"
             >
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">Export</span>
@@ -336,12 +598,12 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
 
         {/* Quick Filter Tabs */}
         <div className="flex gap-2 overflow-x-auto pb-2 -mx-3 px-3 sm:mx-0 sm:px-0">
-          {statusOptions.map((status) => (
+          {QUICK_STATUS_TABS.map((status) => (
             <button
               key={status}
               onClick={() => {
                 setSelectedStatus(status === "All" ? null : status);
-                setCurrentPage(1);
+                table.setPageIndex(0);
               }}
               className={`px-3 sm:px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors shrink-0 ${
                 (status === "All" && !selectedStatus) ||
@@ -350,7 +612,7 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
-              {status}
+              {status === "All" ? "All" : STATUS_LABELS[status]}
             </button>
           ))}
         </div>
@@ -358,156 +620,51 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
 
       {/* Payments Table (desktop/tablet) + Cards (mobile) */}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
-        {/* Desktop table */}
+        {/* Desktop table — shadcn Table + TanStack Table */}
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-muted/50">
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Receipt No
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Member
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Plan
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Amount
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Method
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Payment Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Next Due
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedPayments.length > 0 ? (
-                paginatedPayments.map((payment) => (
-                  <tr
-                    key={payment.id}
-                    className="border-b border-border hover:bg-muted/50 transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <p className="font-medium text-foreground text-sm">
-                        {payment.id}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                          {payment.avatar}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-foreground truncate">
-                            {payment.member}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {payment.phone}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 rounded-full text-xs font-medium border border-border text-foreground">
-                        {payment.plan}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="font-medium text-foreground text-sm">
-                        ₹{payment.amount.toLocaleString()}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-foreground">
-                        {payment.method}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-foreground">
-                        {payment.paymentDate}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-foreground">
-                        {payment.dueDate}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                          payment.status,
-                        )}`}
-                      >
-                        {payment.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 relative">
-                      <button
-                        onClick={() =>
-                          setOpenActionMenuId((id) =>
-                            id === payment.id ? null : payment.id,
-                          )
-                        }
-                        className="p-2 hover:bg-muted rounded-lg transition-colors"
-                      >
-                        <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-                      </button>
-
-                      {openActionMenuId === payment.id && (
-                        <div
-                          ref={actionMenuRef}
-                          className="absolute right-6 top-10 w-44 bg-card border border-border rounded-lg shadow-lg z-20 overflow-hidden"
-                        >
-                          <button
-                            onClick={() => setOpenActionMenuId(null)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
-                          >
-                            <Eye className="w-4 h-4" />
-                            View Details
-                          </button>
-                          <button
-                            onClick={() => setOpenActionMenuId(null)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
-                          >
-                            <FileDown className="w-4 h-4" />
-                            Download Receipt
-                          </button>
-                          {payment.status !== "Paid" && (
-                            <button
-                              onClick={() => handleMarkAsPaid(payment.id)}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left text-green-600"
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                              Mark as Paid
-                            </button>
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow
+                  key={headerGroup.id}
+                  className="bg-muted/50 hover:bg-muted/50"
+                >
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className="text-xs font-semibold text-muted-foreground uppercase tracking-wide"
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
                           )}
-                          <button
-                            onClick={() => setOpenActionMenuId(null)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
-                          >
-                            <Bell className="w-4 h-4" />
-                            Send Reminder
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {rows.length > 0 ? (
+                rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="py-4">
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
                 ))
               ) : (
-                <tr>
-                  <td colSpan={9} className="px-6 py-12">
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="py-12">
                     <div className="text-center">
                       <Receipt className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                       <h3 className="font-semibold text-foreground mb-2">
@@ -517,121 +674,124 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
                         Try adjusting your search or filters
                       </p>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
-        {/* Mobile card list */}
+        {/* Mobile card list — same row data from the table instance */}
         <div className="md:hidden divide-y divide-border">
-          {paginatedPayments.length > 0 ? (
-            paginatedPayments.map((payment) => (
-              <div key={payment.id} className="p-4">
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                      {payment.avatar}
+          {rows.length > 0 ? (
+            rows.map((row) => {
+              const payment = row.original;
+              return (
+                <div key={row.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Checkbox
+                        checked={row.getIsSelected()}
+                        onCheckedChange={(value) => row.toggleSelected(!!value)}
+                        aria-label="Select row"
+                        className="shrink-0"
+                      />
+                      <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+                        {getInitials(payment.memberName ?? "?")}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground truncate">
+                          {payment.memberName ?? "—"}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {payment.receiptId ?? payment.id.slice(0, 8)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-2 hover:bg-muted rounded-lg transition-colors shrink-0">
+                          <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={handleViewDetails}>
+                          <Eye className="w-4 h-4 mr-2" />
+                          View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleDownloadReceipt}>
+                          <FileDown className="w-4 h-4 mr-2" />
+                          Download Receipt
+                        </DropdownMenuItem>
+
+                        {payment.status === "Pending" && (
+                          <DropdownMenuItem
+                            onClick={() => setRecordDialogPaymentId(payment.id)}
+                          >
+                            <Wallet className="w-4 h-4 mr-2" />
+                            Record Payment
+                          </DropdownMenuItem>
+                        )}
+
+                        {payment.status === "PendingVerification" && (
+                          <DropdownMenuItem
+                            onClick={() => handleVerify(payment.id)}
+                            disabled={isVerifying}
+                            className="text-green-600 focus:text-green-600"
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-2" />
+                            Verify Payment
+                          </DropdownMenuItem>
+                        )}
+
+                        <DropdownMenuItem onClick={handleSendReminder}>
+                          <Bell className="w-4 h-4 mr-2" />
+                          Send Reminder
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-y-2 gap-x-3 text-sm mb-3">
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Plan</p>
+                      <p className="text-foreground truncate">
+                        {payment.plan ?? "—"}
+                      </p>
                     </div>
                     <div className="min-w-0">
-                      <p className="font-medium text-foreground truncate">
-                        {payment.member}
+                      <p className="text-xs text-muted-foreground">Amount</p>
+                      <p className="text-foreground truncate">
+                        ₹{payment.amount.toLocaleString()}
                       </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {payment.id}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">
+                        Payment Date
+                      </p>
+                      <p className="text-foreground truncate">
+                        {payment.paymentDate ?? "—"}
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Next Due</p>
+                      <p className="text-foreground truncate">
+                        {payment.dueDate ?? "—"}
                       </p>
                     </div>
                   </div>
 
-                  <div className="relative shrink-0">
-                    <button
-                      onClick={() =>
-                        setOpenActionMenuId((id) =>
-                          id === payment.id ? null : payment.id,
-                        )
-                      }
-                      className="p-2 hover:bg-muted rounded-lg transition-colors"
-                    >
-                      <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-                    </button>
-
-                    {openActionMenuId === payment.id && (
-                      <div
-                        ref={actionMenuRef}
-                        className="absolute right-0 top-10 w-44 bg-card border border-border rounded-lg shadow-lg z-20 overflow-hidden"
-                      >
-                        <button
-                          onClick={() => setOpenActionMenuId(null)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View Details
-                        </button>
-                        <button
-                          onClick={() => setOpenActionMenuId(null)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
-                        >
-                          <FileDown className="w-4 h-4" />
-                          Download Receipt
-                        </button>
-                        {payment.status !== "Paid" && (
-                          <button
-                            onClick={() => handleMarkAsPaid(payment.id)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left text-green-600"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                            Mark as Paid
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setOpenActionMenuId(null)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
-                        >
-                          <Bell className="w-4 h-4" />
-                          Send Reminder
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <span
+                    className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                      payment.status,
+                    )}`}
+                  >
+                    {STATUS_LABELS[payment.status] ?? payment.status}
+                  </span>
                 </div>
-
-                <div className="grid grid-cols-2 gap-y-2 gap-x-3 text-sm mb-3">
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">Plan</p>
-                    <p className="text-foreground truncate">{payment.plan}</p>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">Amount</p>
-                    <p className="text-foreground truncate">
-                      ₹{payment.amount.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">
-                      Payment Date
-                    </p>
-                    <p className="text-foreground truncate">
-                      {payment.paymentDate}
-                    </p>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">Next Due</p>
-                    <p className="text-foreground truncate">
-                      {payment.dueDate}
-                    </p>
-                  </div>
-                </div>
-
-                <span
-                  className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                    payment.status,
-                  )}`}
-                >
-                  {payment.status}
-                </span>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="px-6 py-12 text-center">
               <Receipt className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
@@ -651,13 +811,13 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
             Showing {startIdx + 1} to{" "}
-            {Math.min(startIdx + itemsPerPage, filteredPayments.length)} of{" "}
+            {Math.min(startIdx + pageSize, filteredPayments.length)} of{" "}
             {filteredPayments.length} payments
           </p>
           <div className="flex items-center gap-2 self-end sm:self-auto">
             <button
-              onClick={() => goToPage(safePage - 1)}
-              disabled={safePage === 1}
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
               className="p-2 hover:bg-muted rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -681,7 +841,7 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
                 return (
                   <button
                     key={page}
-                    onClick={() => goToPage(page)}
+                    onClick={() => table.setPageIndex(page - 1)}
                     className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
                       page === safePage
                         ? "bg-primary text-primary-foreground"
@@ -699,8 +859,8 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
             </span>
 
             <button
-              onClick={() => goToPage(safePage + 1)}
-              disabled={safePage === totalPages}
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
               className="p-2 hover:bg-muted rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight className="w-4 h-4" />
@@ -708,6 +868,15 @@ export function PaymentsTable({ initialPayments }: PaymentsTableProps) {
           </div>
         </div>
       )}
+
+      <RecordPaymentDialog
+        gymId={gymId}
+        paymentId={recordDialogPaymentId}
+        amount={payments.find((p) => p.id === recordDialogPaymentId)?.amount}
+        open={recordDialogPaymentId !== null}
+        onOpenChange={(open) => !open && setRecordDialogPaymentId(null)}
+        onRecorded={handleRecorded}
+      />
     </>
   );
 }
