@@ -132,7 +132,7 @@ export async function getOwnerDashboardData(gymId: string) {
           id,
           full_name,
           photo_url
-        )
+        ),
         plan:membership_plans ( plan_name )
       `,
       )
@@ -152,7 +152,7 @@ export async function getOwnerDashboardData(gymId: string) {
           id,
           full_name,
           photo_url
-        )
+        ),
         plan:membership_plans ( plan_name )
       `,
       )
