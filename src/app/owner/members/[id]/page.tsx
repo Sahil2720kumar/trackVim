@@ -1,3 +1,6 @@
+import { auth } from "@clerk/nextjs/server";
+import { notFound } from "next/navigation";
+import Link from "next/link";
 import { AttendanceAnalyticsChart } from "@/components/owner/AttendanceAnalyticsChart";
 import { memberQuickActions } from "@/components/owner/quick-actions-data";
 import { QuickActionsGrid } from "@/components/QuickActionsGrid";
@@ -18,144 +21,112 @@ import {
   Activity,
   Calendar,
   Check,
-  ChevronDown,
   Clock,
   CreditCard,
   Crown,
-  Edit3,
   Mail,
   MapPin,
   MessageCircle,
+  Pencil,
   Phone,
   Plus,
   Shield,
+  Star,
+  User,
   UserRound,
   Users,
   Wallet,
 } from "lucide-react";
+import {
+  getAllTrainers,
+  getMembersByIdWithAttendence,
+} from "@/services/owner.query";
+import { daysBetween, getInitials } from "@/lib/utils";
+import { TrainerManagerDialog } from "@/components/owner/member/TrainerManagerDialog";
 
-// Mock Data
-const memberData = {
-  id: "MB-1024",
-  name: "Rohan Sharma",
-  age: 26,
-  gender: "Male",
-  email: "rohan@email.com",
-  phone: "+91 98765 43210",
-  address: "221B Baker Street, London",
-  avatar: "",
-  occupation: "Software Engineer",
-  bloodGroup: "B+",
-  height: 175,
-  weight: 72,
-  fitnessGoal: "Muscle Building",
-  memberSince: "12 Jan 2025",
-  joinedDate: "12 Jan 2025",
-  status: "Active",
-  membershipTier: "Gold Member",
-  plan: "Gold Plan",
-  planAmount: 2000,
-  startDate: "12 Jan 2025",
-  expiryDate: "12 Aug 2026",
-  daysRemaining: 18,
-  membershipProgress: 72,
-  monthsCompleted: "8.5 / 12 Months Completed",
-  attendance: 91,
-  checkIns: 142,
-  sessionsCompleted: 84,
-  totalPayments: 28500,
-  emergencyContactName: "Neha Sharma",
-  emergencyContactRelation: "Sister",
-  emergencyContactPhone: "+91 91234 56789",
-  trainer: {
-    name: "Rahul Sharma",
-    role: "Senior Trainer",
-    specialization: "Strength & Conditioning",
-    experience: "7+ Years",
-    membersAssigned: 320,
-    phone: "+91 98765 12345",
-    email: "rahul@gym.com",
-  },
-  healthNotes: {
-    medicalConditions: "None",
-    allergies: "Peanuts",
-    injuries: "Knee pain (mild)",
-    doctorNotes: "Avoid heavy squats",
-  },
-  autoRenewal: true,
-  paymentStatus: "Paid",
-  lastPayment: "12 May 2026",
-  nextDue: "12 Aug 2026",
-  outstanding: "\u20b90",
-};
+function getAge(dateOfBirth: string | null) {
+  if (!dateOfBirth) return null;
+  const diff = Date.now() - new Date(dateOfBirth).getTime();
+  return Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000));
+}
 
-const attendanceData = [
-  { month: "Jan", present: 45, absent: 12, late: 3 },
-  { month: "Feb", present: 52, absent: 10, late: 4 },
-  { month: "Mar", present: 48, absent: 14, late: 5 },
-  { month: "Apr", present: 61, absent: 9, late: 3 },
-  { month: "May", present: 55, absent: 11, late: 6 },
-  { month: "Jun", present: 67, absent: 8, late: 2 },
-  { month: "Jul", present: 72, absent: 7, late: 4 },
-  { month: "Aug", present: 68, absent: 10, late: 3 },
-  { month: "Sep", present: 74, absent: 6, late: 2 },
-  { month: "Oct", present: 79, absent: 5, late: 3 },
-  { month: "Nov", present: 85, absent: 4, late: 2 },
-  { month: "Dec", present: 91, absent: 3, late: 1 },
-];
+function membershipProgress(startDate: string | null, endDate: string | null) {
+  if (!startDate || !endDate) return 0;
+  const start = new Date(startDate).getTime();
+  const end = new Date(endDate).getTime();
+  if (end <= start) return 0;
+  return Math.min(
+    100,
+    Math.max(0, Math.round(((Date.now() - start) / (end - start)) * 100)),
+  );
+}
 
-const upcomingSessions = [
-  {
-    id: 1,
-    date: "23 May",
-    day: "Tomorrow",
-    workout: "Strength Training",
-    focus: "Upper Body Focus",
-    time: "10:00 AM - 11:00 AM",
-  },
-  {
-    id: 2,
-    date: "24 May",
-    day: "Fri",
-    workout: "Cardio",
-    focus: "Treadmill & HIIT",
-    time: "6:00 PM - 7:00 PM",
-  },
-  {
-    id: 3,
-    date: "27 May",
-    day: "Mon",
-    workout: "HIIT Training",
-    focus: "Full Body Workout",
-    time: "7:30 PM - 8:30 PM",
-  },
-];
+function waLink(phone: string | null) {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return null;
+  const e164 = phone.trim().startsWith("+") ? digits : `91${digits.slice(-10)}`;
+  return `https://wa.me/${e164}`;
+}
 
-const recentActivity = [
-  {
-    id: 1,
-    title: "Membership Renewed",
-    description: "Gold Plan renewed for 12 months",
-    timestamp: "12 May 2026, 10:30 AM",
-    icon: Activity,
-  },
-  {
-    id: 2,
-    title: "Payment Received",
-    description: "\u20b92,000 received for membership",
-    timestamp: "12 May 2026, 10:28 AM",
-    icon: CreditCard,
-  },
-  {
-    id: 3,
-    title: "Trainer Assigned",
-    description: "Assigned to Rahul Sharma",
-    timestamp: "5 days ago",
-    icon: Users,
-  },
-];
+export default async function MemberProfilePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const memberId = (await params).id;
+  const { sessionClaims } = await auth();
+  const gymId = sessionClaims?.publicMetadata?.gymId as string | undefined;
+  if (!gymId) notFound();
 
-export default function MemberProfilePage() {
+  const [result, trainersResult] = await Promise.all([
+    getMembersByIdWithAttendence(memberId, gymId),
+    getAllTrainers(gymId),
+  ]);
+
+  if (!result.success) notFound();
+
+  const allTrainers = trainersResult.success ? trainersResult.data : [];
+
+  const {
+    member,
+    membership,
+    scheduledMembership,
+    trainers,
+    monthlyAttendance,
+    attendanceRate,
+    totalCheckIns,
+    payments,
+    totalPaymentsThisYear,
+    outstanding,
+    lastPayment,
+    upcomingSessions,
+  } = result.data;
+
+  const age = getAge(member.date_of_birth);
+  const progress = membership
+    ? membershipProgress(membership.start_date, membership.end_date)
+    : 0;
+  const daysLeft = membership ? daysBetween(membership.end_date) : 0;
+
+  const chartData = monthlyAttendance.map((m) => ({
+    month: m.month_label,
+    present: m.days_present,
+    absent: m.days_absent,
+  }));
+
+  const recentActivity = payments.slice(0, 3).map((p) => ({
+    id: p.id,
+    title:
+      p.status === "Verified"
+        ? "Payment Received"
+        : p.status === "Rejected"
+          ? "Payment Rejected"
+          : "Payment Recorded",
+    description: `₹${Number(p.amount).toLocaleString("en-IN")} via ${p.method ?? "—"}`,
+    timestamp: p.payment_date ?? p.created_at,
+  }));
+
   return (
     <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
       {/* Profile Header */}
@@ -163,99 +134,150 @@ export default function MemberProfilePage() {
         <div className="flex flex-col items-start gap-4 sm:flex-row">
           <Avatar className="h-20 w-20 flex-shrink-0 border-2 border-indigo-100 sm:h-24 sm:w-24">
             <AvatarImage
-              src={memberData.avatar || undefined}
-              alt={memberData.name}
+              src={member.photo_url ?? undefined}
+              alt={member.full_name ?? ""}
             />
             <AvatarFallback className="bg-indigo-50 text-lg font-bold text-indigo-600 sm:text-xl">
-              {memberData.name
-                .split(" ")
-                .map((n) => n[0])
-                .join("")}
+              {getInitials(member.full_name ?? "?")}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-2xl font-bold text-gray-900 sm:text-3xl">
-              {memberData.name}
+              {member.full_name}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Badge className="gap-1 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">
-                <Crown className="h-3 w-3" />
-                {memberData.membershipTier}
-              </Badge>
+              {membership?.plan?.plan_name && (
+                <Badge className="gap-1 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">
+                  <Crown className="h-3 w-3" />
+                  {membership.plan.plan_name}
+                </Badge>
+              )}
               <Badge className="gap-1 border-green-200 bg-green-50 text-green-700 hover:bg-green-50">
                 <Check className="h-3 w-3" />
-                {memberData.status}
+                {membership?.status ?? member.account_status}
+              </Badge>
+              <Badge
+                className={`gap-1 ${
+                  member.member_type === "WalkIn"
+                    ? "border-primary/20 bg-primary/5 text-primary"
+                    : "border-sky-200 bg-sky-50 text-sky-700"
+                }`}
+              >
+                <User className="h-3 w-3" />
+                {member.member_type}
               </Badge>
             </div>
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-              <span>ID #{memberData.id}</span>
+              <span>ID #{member.member_code}</span>
               <span className="hidden sm:inline">&bull;</span>
-              <span>Joined {memberData.joinedDate}</span>
+              <span>
+                Joined{" "}
+                {member.created_at
+                  ? new Date(member.created_at).toLocaleDateString("en-IN")
+                  : "—"}
+              </span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5" />
-                {memberData.age} Years
-              </span>{" "}
-              <span className="flex items-center gap-1.5">
-                <UserRound className="h-3.5 w-3.5" />
-                {memberData.gender}
-              </span>
+              {age !== null && (
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {age} Years
+                </span>
+              )}
+              {member.gender && (
+                <span className="flex items-center gap-1.5">
+                  <UserRound className="h-3.5 w-3.5" />
+                  {member.gender}
+                </span>
+              )}
             </div>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
-            <Edit3 className="mr-2 h-4 w-4" />
-            Edit Member
-          </Button>
-          <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
-            <Calendar className="mr-2 h-4 w-4" />
-            Attendance
-          </Button>
-          <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
-            <CreditCard className="mr-2 h-4 w-4" />
-            Payments
+          {/* <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 sm:flex-none"
+            asChild
+          >
+            <Link
+              className="flex flex-row gap-1"
+              href={`/owner/members/${member.id}/edit`}
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </Link>
           </Button>
           <Button
+            variant="outline"
             size="sm"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 sm:w-auto"
+            className="flex-1 sm:flex-none"
+            asChild
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Renew Membership
+            <Link
+              className="flex flex-row gap-1"
+              href={`/owner/members/${member.id}/attendance`}
+            >
+              <Calendar className="mr-2 h-4 w-4" />
+              Attendance
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 sm:flex-none"
+            asChild
+          >
+            <Link
+              className="flex flex-row gap-1"
+              href={`/owner/members/${member.id}/payments`}
+            >
+              <CreditCard className="mr-2 h-4 w-4" />
+              Payments
+            </Link>
+          </Button> */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 sm:flex-none"
+            asChild
+          >
+            <Link
+              className="flex flex-row gap-1"
+              href={`/owner/members/renew?memberId=${member.id}`}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Renew Membership
+            </Link>
           </Button>
         </div>
       </div>
 
-      {/* Two Column Layout */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left Column */}
         <div className="flex flex-col gap-6 lg:col-span-2">
-          {/* Profile & Membership Cards */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* Member Information */}
-            <Card className="border-gray-100 ">
+            {/* Member Information — purely display, server-rendered */}
+            <Card className="border-gray-100">
               <CardHeader className="flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-base">Member Information</CardTitle>
-                <Button variant="outline" size="sm">
-                  <Edit3 className="mr-1.5 h-3.5 w-3.5" />
-                  Edit
-                </Button>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Phone className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Phone</p>
-                    <p className="font-medium">{memberData.phone}</p>
+                    <p className="font-medium">{member.contact_phone ?? "—"}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Mail className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Email</p>
-                    <p className="truncate font-medium">{memberData.email}</p>
+                    <p className="truncate font-medium">
+                      {member.contact_email ?? "—"}
+                    </p>
                   </div>
                 </div>
                 <Separator />
@@ -263,34 +285,42 @@ export default function MemberProfilePage() {
                   <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Address</p>
-                    <p className="font-medium">{memberData.address}</p>
+                    <p className="font-medium">
+                      {[member.address, member.city, member.state]
+                        .filter(Boolean)
+                        .join(", ") || "—"}
+                    </p>
                   </div>
                 </div>
                 <Separator />
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Occupation</p>
-                    <p className="font-medium">{memberData.occupation}</p>
+                    <p className="font-medium">{member.occupation ?? "—"}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Blood Group</p>
-                    <p className="font-medium">{memberData.bloodGroup}</p>
+                    <p className="font-medium">{member.blood_group ?? "—"}</p>
                   </div>
                 </div>
                 <Separator />
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <p className="text-xs text-muted-foreground">Height</p>
-                    <p className="font-medium">{memberData.height} cm</p>
+                    <p className="font-medium">
+                      {member.height_cm ? `${member.height_cm} cm` : "—"}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Weight</p>
-                    <p className="font-medium">{memberData.weight} kg</p>
+                    <p className="font-medium">
+                      {member.weight_kg ? `${member.weight_kg} kg` : "—"}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Goal</p>
                     <p className="text-xs font-medium">
-                      {memberData.fitnessGoal}
+                      {member.fitness_goal ?? "—"}
                     </p>
                   </div>
                 </div>
@@ -300,15 +330,17 @@ export default function MemberProfilePage() {
                     Emergency Contact
                   </p>
                   <p className="font-medium">
-                    {memberData.emergencyContactName} (
-                    {memberData.emergencyContactPhone})
+                    {member.emergency_contact_name ?? "—"}
+                    {member.emergency_contact_phone
+                      ? ` (${member.emergency_contact_phone})`
+                      : ""}
                   </p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Membership Summary */}
-            <Card className="border-gray-100 ">
+            {/* Membership Summary — purely display */}
+            <Card className="border-gray-100">
               <CardHeader>
                 <CardTitle className="text-base">Membership Summary</CardTitle>
               </CardHeader>
@@ -316,283 +348,320 @@ export default function MemberProfilePage() {
                 <div className="flex items-center justify-between rounded-xl bg-amber-50 px-4 py-3">
                   <span className="flex items-center gap-1.5 text-base font-semibold text-amber-800">
                     <Crown className="h-4 w-4" />
-                    {memberData.plan}
+                    {membership?.plan?.plan_name ?? "No active plan"}
                   </span>
-                  <span className="text-xl font-bold text-indigo-600">
-                    ₹{memberData.planAmount}
-                    <span className="text-sm font-medium text-muted-foreground">
-                      {" "}
-                      / month
+                  {membership?.plan?.plan_price && (
+                    <span className="text-xl font-bold text-indigo-600">
+                      ₹{membership.plan.plan_price}
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {" "}
+                        / month
+                      </span>
                     </span>
-                  </span>
+                  )}
                 </div>
-
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-xs text-muted-foreground">Start Date</p>
-                    <p className="font-medium">{memberData.startDate}</p>
+                    <p className="font-medium">
+                      {membership?.start_date ?? "—"}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Expiry Date</p>
-                    <p className="font-medium">{memberData.expiryDate}</p>
+                    <p className="font-medium">{membership?.end_date ?? "—"}</p>
                   </div>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Days Remaining</span>
-                  <span className="font-medium">
-                    {memberData.daysRemaining} Days
-                  </span>
+                  <span className="font-medium">{daysLeft} Days</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">
-                    Assigned Trainer
+                    {trainers.length > 1
+                      ? "Primary Trainer"
+                      : "Assigned Trainer"}
                   </span>
                   <span className="font-medium text-indigo-600">
-                    {memberData.trainer.name}
+                    {trainers.length === 0
+                      ? "Unassigned"
+                      : (trainers.find((t) => t.isPrimary)?.full_name ??
+                        trainers[0].full_name)}
+                    {trainers.length > 1 && (
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">
+                        +{trainers.length - 1} more
+                      </span>
+                    )}
                   </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Auto Renewal</span>
-                  <Badge className="border-green-200 bg-green-50 text-green-700 hover:bg-green-50">
-                    Enabled
-                  </Badge>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Payment Status</span>
                   <Badge className="border-green-200 bg-green-50 text-green-700 hover:bg-green-50">
-                    {memberData.paymentStatus}
+                    {membership?.status ?? "—"}
                   </Badge>
                 </div>
-
                 <div>
                   <div className="mb-2 flex items-center justify-between">
                     <p className="text-sm font-medium">Membership Duration</p>
-                    <p className="text-sm font-semibold">
-                      {memberData.membershipProgress}%
-                    </p>
+                    <p className="text-sm font-semibold">{progress}%</p>
                   </div>
-                  <Progress
-                    value={memberData.membershipProgress}
-                    className="h-2"
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {memberData.monthsCompleted}
-                  </p>
+                  <Progress value={progress} className="h-2" />
                 </div>
               </CardContent>
             </Card>
+
+            {scheduledMembership && (
+              <Card className="border-blue-100 bg-blue-50/40">
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    Upcoming Membership
+                  </CardTitle>
+                  <CardDescription>
+                    Scheduled to start once the current plan ends
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Plan</p>
+                    <p className="font-medium">
+                      {scheduledMembership.plan?.plan_name ?? "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Price</p>
+                    <p className="font-medium">
+                      ₹
+                      {scheduledMembership.plan?.plan_price ??
+                        scheduledMembership.plan_price}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Starts</p>
+                    <p className="font-medium">
+                      {scheduledMembership.start_date}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Ends</p>
+                    <p className="font-medium">
+                      {scheduledMembership.end_date}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
-          {/* Statistics Cards */}
+          {/* Stat Cards */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard
               title="Attendance"
-              value={`${memberData.attendance}%`}
-              subtitle={`${memberData.checkIns} Check-ins`}
+              value={`${attendanceRate}%`}
+              subtitle={`${totalCheckIns} Check-ins (12mo)`}
               icon={Activity}
-              trend={{ value: "8%", positive: true }}
               iconBg="bg-green-100"
               iconColor="text-green-600"
             />
             <StatCard
               title="Total Payments"
-              value={`₹${memberData.totalPayments.toLocaleString("en-IN")}`}
+              value={`₹${totalPaymentsThisYear.toLocaleString("en-IN")}`}
               icon={Wallet}
-              trend={{ value: "12%", positive: true }}
               iconBg="bg-purple-100"
               iconColor="text-purple-600"
             />
             <StatCard
-              title="Sessions Completed"
-              value={memberData.sessionsCompleted}
-              subtitle="This year"
+              title="Upcoming Sessions"
+              value={upcomingSessions.length}
+              subtitle="Scheduled"
               icon={Users}
-              trend={{ value: "16%", positive: true }}
               iconBg="bg-blue-100"
               iconColor="text-blue-600"
             />
             <StatCard
               title="Days Remaining"
-              value={memberData.daysRemaining}
+              value={daysLeft}
               subtitle="Until expiry"
               icon={Calendar}
-              trend={{ value: "16%", positive: true }}
               iconBg="bg-orange-100"
               iconColor="text-orange-600"
             />
           </div>
 
-          {/* Attendance Chart */}
-          <AttendanceAnalyticsChart data={attendanceData} />
+          {/* Chart component is already a client component internally — fine to import directly */}
+          <AttendanceAnalyticsChart data={chartData} />
 
-          {/* Trainer & Sessions */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <Card className="border-gray-100 ">
-              <CardHeader>
-                <CardTitle className="text-base">Assigned Trainer</CardTitle>
+            <Card className="border-gray-100">
+              <CardHeader className="flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-base">
+                  Trainers {trainers.length > 0 && `(${trainers.length})`}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-start gap-4">
-                  <Avatar className="h-14 w-14 border-2 border-indigo-100">
-                    <AvatarFallback className="bg-indigo-50 text-base font-bold text-indigo-600">
-                      {memberData.trainer.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold">{memberData.trainer.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {memberData.trainer.role}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {memberData.trainer.specialization}
-                    </p>
-                    <Badge variant="outline" className="mt-2 text-xs">
-                      {memberData.trainer.experience}
-                    </Badge>
-                  </div>
-                </div>
+                {trainers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No trainer assigned yet.
+                  </p>
+                ) : (
+                  trainers.map((trainer) => (
+                    <div
+                      key={trainer.assignmentId}
+                      className="flex items-start gap-4"
+                    >
+                      <Avatar className="h-14 w-14 border-2 border-indigo-100">
+                        <AvatarFallback className="bg-indigo-50 text-base font-bold text-indigo-600">
+                          {getInitials(trainer.full_name ?? "?")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold">{trainer.full_name}</p>
+                          {trainer.isPrimary && (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 text-[10px]"
+                            >
+                              <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                              Primary
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {trainer.professional_title}
+                        </p>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-indigo-600"
+                          asChild
+                        >
+                          <Link href={`/owner/trainers/${trainer.id}`}>
+                            View Trainer
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
                 <Separator />
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Users className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                    {memberData.trainer.membersAssigned} Members Assigned
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                    {memberData.trainer.phone}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                    {memberData.trainer.email}
-                  </div>
-                </div>
-                <Separator />
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1">
-                    View Trainer
-                  </Button>
-                  <Button variant="outline" size="sm" className="flex-1">
-                    Change Trainer
-                  </Button>
-                </div>
+                <TrainerManagerDialog
+                  memberId={member.id}
+                  gymId={gymId}
+                  assignedTrainers={trainers}
+                  availableTrainers={allTrainers}
+                />
               </CardContent>
             </Card>
 
-            <Card className="border-gray-100 ">
+            <Card className="border-gray-100">
               <CardHeader>
                 <CardTitle className="text-base">Upcoming Sessions</CardTitle>
                 <CardDescription>Next scheduled workouts</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {upcomingSessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className="flex items-start gap-3 border-b border-gray-100 pb-4 last:border-0 last:pb-0"
-                    >
-                      <div className="min-w-[64px] rounded-lg bg-indigo-50 px-3 py-2 text-center">
-                        <p className="text-xs font-medium text-muted-foreground">
-                          {session.day}
-                        </p>
-                        <p className="font-bold text-indigo-600">
-                          {session.date}
-                        </p>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold">
-                          {session.workout}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {session.focus}
-                        </p>
-                        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3 flex-shrink-0" />
-                          {session.time}
+                {upcomingSessions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No upcoming sessions.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {upcomingSessions.map((session) => (
+                      <div
+                        key={session.id}
+                        className="flex items-start gap-3 border-b border-gray-100 pb-4 last:border-0 last:pb-0"
+                      >
+                        <div className="min-w-[64px] rounded-lg bg-indigo-50 px-3 py-2 text-center">
+                          <p className="font-bold text-indigo-600">
+                            {session.session_date}
+                          </p>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold">
+                            {session.session_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {session.workout_type}
+                          </p>
+                          <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                            <Clock className="h-3 w-3 flex-shrink-0" />
+                            {session.start_time} - {session.end_time}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Payments & Recent Activity */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <Card className="border-gray-100 ">
+            <Card className="border-gray-100">
               <CardHeader className="flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-base">Payment Summary</CardTitle>
                 <Button
                   variant="link"
                   size="sm"
                   className="h-auto p-0 text-indigo-600"
+                  asChild
                 >
-                  View All
+                  <Link href={`/owner/members/${member.id}/payments`}>
+                    View All
+                  </Link>
                 </Button>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Paid This Year</span>
                   <span className="font-bold">
-                    ₹{memberData.totalPayments.toLocaleString("en-IN")}
+                    ₹{totalPaymentsThisYear.toLocaleString("en-IN")}
                   </span>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Pending</span>
-                  <Badge className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">
-                    ₹0
+                  <span className="text-muted-foreground">Outstanding</span>
+                  <Badge
+                    className={
+                      outstanding > 0
+                        ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50"
+                        : "border-green-200 bg-green-50 text-green-700 hover:bg-green-50"
+                    }
+                  >
+                    ₹{outstanding.toLocaleString("en-IN")}
                   </Badge>
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Next Due</span>
-                  <span className="font-medium">{memberData.nextDue}</span>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Last Payment</span>
-                  <span className="font-medium">{memberData.lastPayment}</span>
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Outstanding</span>
-                  <Badge className="border-green-200 bg-green-50 text-green-700 hover:bg-green-50">
-                    {memberData.outstanding}
-                  </Badge>
+                  <span className="font-medium">
+                    {lastPayment?.payment_date ?? "—"}
+                  </span>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-gray-100 ">
+            <Card className="border-gray-100">
               <CardHeader className="flex-row items-center justify-between space-y-0">
                 <div>
                   <CardTitle className="text-base">Recent Activity</CardTitle>
                   <CardDescription>Latest member updates</CardDescription>
                 </div>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="h-auto p-0 text-indigo-600"
-                >
-                  View All
-                </Button>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {recentActivity.map((activity) => {
-                    const ActivityIcon = activity.icon;
-                    return (
+                {recentActivity.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No recent activity.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {recentActivity.map((activity) => (
                       <div
                         key={activity.id}
                         className="flex items-start gap-3 border-b border-gray-100 pb-4 last:border-0 last:pb-0"
                       >
                         <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-indigo-50">
-                          <ActivityIcon className="h-4 w-4 text-indigo-600" />
+                          <CreditCard className="h-4 w-4 text-indigo-600" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium">
@@ -606,15 +675,14 @@ export default function MemberProfilePage() {
                           </p>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Health Notes */}
-          <Card className="border-gray-100 ">
+          <Card className="border-gray-100">
             <CardHeader>
               <CardTitle className="text-base">Health Notes</CardTitle>
             </CardHeader>
@@ -625,7 +693,7 @@ export default function MemberProfilePage() {
                     Medical Conditions
                   </p>
                   <p className="mt-1 font-medium">
-                    {memberData.healthNotes.medicalConditions}
+                    {member.medical_conditions ?? "None"}
                   </p>
                 </div>
                 <div>
@@ -633,23 +701,15 @@ export default function MemberProfilePage() {
                     Allergies
                   </p>
                   <p className="mt-1 font-medium">
-                    {memberData.healthNotes.allergies}
+                    {member.allergies ?? "None"}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">
-                    Injuries
+                    Notes
                   </p>
                   <p className="mt-1 font-medium">
-                    {memberData.healthNotes.injuries}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Doctor Notes
-                  </p>
-                  <p className="mt-1 font-medium">
-                    {memberData.healthNotes.doctorNotes}
+                    {member.physical_notes ?? "—"}
                   </p>
                 </div>
               </div>
@@ -659,37 +719,43 @@ export default function MemberProfilePage() {
                   Emergency Contact
                 </p>
                 <p className="mt-1 font-medium">
-                  {memberData.emergencyContactName} (
-                  {memberData.emergencyContactRelation}) &bull;{" "}
-                  {memberData.emergencyContactPhone}
+                  {member.emergency_contact_name ?? "—"}
+                  {member.emergency_contact_relationship
+                    ? ` (${member.emergency_contact_relationship})`
+                    : ""}
+                  {member.emergency_contact_phone
+                    ? ` • ${member.emergency_contact_phone}`
+                    : ""}
                 </p>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Right Sidebar */}
+        {/* Right Sidebar — Today's Tasks removed */}
         <div className="flex flex-col gap-6 lg:col-span-1">
-          <Card className="border-gray-100 ">
+          <Card className="border-gray-100">
             <CardHeader>
               <CardTitle className="text-base">Member Status</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Check className="h-4 w-4 flex-shrink-0 text-green-600" />
-                {memberData.status} Member
+                {membership?.status ?? member.account_status} Member
               </div>
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Shield className="h-4 w-4 flex-shrink-0 text-amber-600" />
-                Gold Plan
-              </div>
+              {membership?.plan?.plan_name && (
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Shield className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                  {membership.plan.plan_name}
+                </div>
+              )}
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Activity className="h-4 w-4 flex-shrink-0 text-indigo-600" />
-                {memberData.attendance}% Attendance
+                {attendanceRate}% Attendance
               </div>
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Users className="h-4 w-4 flex-shrink-0 text-indigo-600" />
-                Trainer Assigned
+                {trainers.length > 0 ? "Trainer Assigned" : "No Trainer"}
               </div>
             </CardContent>
           </Card>
@@ -704,74 +770,91 @@ export default function MemberProfilePage() {
                   Expires In
                 </p>
                 <p className="text-2xl font-bold text-orange-600 sm:text-3xl">
-                  {memberData.daysRemaining} Days
+                  {daysLeft} Days
                 </p>
               </div>
-              <Progress value={memberData.membershipProgress} className="h-2" />
+              <Progress value={progress} className="h-2" />
               <p className="text-xs text-muted-foreground">
-                Renewal due on {memberData.expiryDate}
+                Renewal due on {membership?.end_date ?? "—"}
               </p>
             </CardContent>
           </Card>
 
-          <Card className="border-gray-100 ">
-            <CardHeader>
-              <CardTitle className="text-base">Today&apos;s Tasks</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1">
-              {[
-                { label: "Record Attendance", checked: true },
-                { label: "Payment Reminder", checked: false },
-                { label: "Schedule Follow-up", checked: false },
-              ].map((task) => (
-                <label
-                  key={task.label}
-                  className="flex cursor-pointer items-center gap-2 rounded-md p-2 hover:bg-gray-50"
-                >
-                  <input
-                    type="checkbox"
-                    defaultChecked={task.checked}
-                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span className="text-sm">{task.label}</span>
-                </label>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card className="border-gray-100 ">
+          {/* Quick Contact — plain <a> hrefs, no client JS needed */}
+          <Card className="border-gray-100">
             <CardHeader>
               <CardTitle className="text-base">Quick Contact</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-3 gap-2">
+              {/* Call */}
               <Button
                 variant="outline"
                 className="flex h-16 flex-col gap-1.5 border-green-100 bg-green-50 text-green-700 hover:bg-green-100"
+                asChild={Boolean(member.contact_phone)}
+                disabled={!member.contact_phone}
               >
-                <Phone className="h-5 w-5" />
-                <span className="text-xs">Call</span>
+                {member.contact_phone ? (
+                  <a href={`tel:${member.contact_phone}`}>
+                    <Phone className="h-5 w-5" />
+                    <span className="text-xs">Call</span>
+                  </a>
+                ) : (
+                  <>
+                    <Phone className="h-5 w-5" />
+                    <span className="text-xs">Call</span>
+                  </>
+                )}
               </Button>
+
+              {/* WhatsApp */}
               <Button
                 variant="outline"
                 className="flex h-16 flex-col gap-1.5 border-green-100 bg-green-50 text-green-700 hover:bg-green-100"
+                asChild={Boolean(member.contact_phone)}
+                disabled={!member.contact_phone}
               >
-                <MessageCircle className="h-5 w-5" />
-                <span className="text-xs">WhatsApp</span>
+                {member.contact_phone ? (
+                  <a
+                    href={waLink(member.contact_phone)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <MessageCircle className="h-5 w-5" />
+                    <span className="text-xs">WhatsApp</span>
+                  </a>
+                ) : (
+                  <>
+                    <MessageCircle className="h-5 w-5" />
+                    <span className="text-xs">WhatsApp</span>
+                  </>
+                )}
               </Button>
+
+              {/* Email */}
               <Button
                 variant="outline"
                 className="flex h-16 flex-col gap-1.5 border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                asChild={Boolean(member.contact_email)}
+                disabled={!member.contact_email}
               >
-                <Mail className="h-5 w-5" />
-                <span className="text-xs">Email</span>
+                {member.contact_email ? (
+                  <a href={`mailto:${member.contact_email}`}>
+                    <Mail className="h-5 w-5" />
+                    <span className="text-xs">Email</span>
+                  </a>
+                ) : (
+                  <>
+                    <Mail className="h-5 w-5" />
+                    <span className="text-xs">Email</span>
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <Card className="border-gray-100  mt-6">
+      <Card className="border-gray-100 mt-6">
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
         </CardHeader>

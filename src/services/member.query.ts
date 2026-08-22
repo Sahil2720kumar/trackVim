@@ -1,14 +1,16 @@
+import { SupabaseClient } from "@supabase/supabase-js";
+
 import { ActionResult } from "@/actions/owner.action";
-import { Json } from "@/db/database.types";
+import { Database, Json } from "@/db/database.types";
 import { getDisplayStatus } from "@/lib/application-status";
-import { createServerClient } from "@/lib/supabase/server";
-import { getTodayDateStr } from "@/lib/utils";
+import { formatDateTime, formatDuration, getTodayDateStr } from "@/lib/utils";
 import {
   DisplayStatus,
   MembershipApplication,
   MyGymMembershipStatus,
 } from "@/types";
-import { auth } from "@clerk/nextjs/server";
+
+type TypedSupabaseClient = SupabaseClient<Database>;
 
 // ============================================================================
 // Gym Discovery
@@ -17,9 +19,10 @@ import { auth } from "@clerk/nextjs/server";
 /**
  * Find a gym by its unique code (e.g. "Q8K7PW").
  */
-export async function findGymByCode(code: string) {
-  const supabase = await createClient();
-
+export async function findGymByCode(
+  supabase: TypedSupabaseClient,
+  code: string,
+) {
   const { data, error } = await supabase
     .from("gyms")
     .select(
@@ -49,14 +52,14 @@ export async function findGymByCode(code: string) {
  * subqueries (PostgREST turns `foo(count)` into a lateral subquery,
  * not a join, so it doesn't blow up row counts).
  */
-
-export async function listActiveGyms(options?: {
-  city?: string;
-  limit?: number;
-  offset?: number;
-}) {
-  const supabase = await createServerClient();
-
+export async function listActiveGyms(
+  supabase: TypedSupabaseClient,
+  options?: {
+    city?: string;
+    limit?: number;
+    offset?: number;
+  },
+) {
   const { data, error } = await supabase.rpc("get_public_gyms", {
     p_city: options?.city ?? null,
     p_limit: options?.limit ?? 20,
@@ -117,16 +120,17 @@ export type SelectedPlan = {
   durationMonths: number;
 };
 
-export async function getDiscoverGyms(city?: string) {
-  const { userId, sessionClaims } = await auth();
-  const meta = (sessionClaims?.publicMetadata ?? {}) as { memberId?: string };
-
-  if (!userId || !meta.memberId) {
-    return { success: false as const, error: "User not found" };
-  }
-  const supabase = await createServerClient();
-
-  const result = await listActiveGyms({ city, limit: 500 });
+/**
+ * `memberId` is resolved by the caller (from the member store / session)
+ * instead of being re-derived here via a Clerk `auth()` call on every
+ * invocation.
+ */
+export async function getDiscoverGyms(
+  supabase: TypedSupabaseClient,
+  memberId: string,
+  city?: string,
+) {
+  const result = await listActiveGyms(supabase, { city, limit: 500 });
   if (!result.success) return { success: false as const, error: result.error };
 
   type Entry = {
@@ -153,7 +157,7 @@ export async function getDiscoverGyms(city?: string) {
       )
     `,
     )
-    .eq("member_id", meta.memberId!)
+    .eq("member_id", memberId)
     .order("created_at", { ascending: false });
 
   if (appsError) {
@@ -216,9 +220,10 @@ export async function getDiscoverGyms(city?: string) {
 }
 
 //Member/discover/[id] Queries
-export async function getGymDetail(gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getGymDetail(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("gyms")
     .select(
@@ -278,11 +283,6 @@ export async function getGymDetail(gymId: string) {
   };
 }
 
-/**
- * Current member's application status for a given gym.
- * Returns "none" if the member has never applied.
- */
-
 export type MembershipApplicationByPlanIdPageData = {
   gym: {
     id: string;
@@ -336,10 +336,10 @@ export type MembershipApplicationByPlanIdPageData = {
 };
 
 export async function MembershipApplicationPageDataByPlanId(
+  supabase: TypedSupabaseClient,
   gymId: string,
   planId: string,
 ): Promise<MembershipApplicationByPlanIdPageData | null> {
-  const supabase = await createServerClient();
   const { data, error } = await supabase.rpc(
     "get_membership_application_page_data",
     {
@@ -370,19 +370,14 @@ export type MyMembershipStatusResult = {
   } | null;
 };
 
-export async function getMyMembershipStatusWithPlanDetails(gymId: string) {
-  const { userId, sessionClaims } = await auth();
-  const meta = (sessionClaims?.publicMetadata ?? {}) as { memberId?: string };
-
-  if (!userId || !meta.memberId) {
-    return {
-      success: false,
-      error: "You must be signed in to view your applications.",
-    };
-  }
-
-  const supabase = await createServerClient();
-
+/**
+ * `memberId` and `gymId` are resolved by the caller — no `auth()` call here.
+ */
+export async function getMyMembershipStatusWithPlanDetails(
+  supabase: TypedSupabaseClient,
+  memberId: string,
+  gymId: string,
+) {
   const { data: application } = await supabase
     .from("membership_applications")
     .select(
@@ -407,7 +402,7 @@ export async function getMyMembershipStatusWithPlanDetails(gymId: string) {
     `,
     )
     .eq("gym_id", gymId)
-    .eq("member_id", meta.memberId)
+    .eq("member_id", memberId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -429,9 +424,7 @@ export async function getMyMembershipStatusWithPlanDetails(gymId: string) {
 
 // ============================================================================
 // Dashboard read-only queries
-export async function getMyProfile() {
-  const supabase = await createClient();
-
+export async function getMyProfile(supabase: TypedSupabaseClient) {
   const { data, error } = await supabase
     .from("members")
     .select(
@@ -450,9 +443,7 @@ export async function getMyProfile() {
   return { success: true as const, data };
 }
 
-export async function getMyMemberships() {
-  const supabase = await createClient();
-
+export async function getMyMemberships(supabase: TypedSupabaseClient) {
   const { data, error } = await supabase
     .from("gym_memberships")
     .select(
@@ -470,19 +461,13 @@ export async function getMyMemberships() {
   return { success: true as const, data };
 }
 
-export async function getMyApplications() {
-  const { userId, sessionClaims } = await auth();
-  const meta = (sessionClaims?.publicMetadata ?? {}) as { memberId?: string };
-
-  if (!userId || !meta.memberId) {
-    return {
-      success: false,
-      error: "You must be signed in to view your applications.",
-    };
-  }
-
-  const supabase = await createServerClient();
-
+/**
+ * `memberId` is resolved by the caller — no `auth()` call here.
+ */
+export async function getMyApplications(
+  supabase: TypedSupabaseClient,
+  memberId: string,
+) {
   const { data, error } = await supabase
     .from("membership_applications")
     .select(
@@ -561,7 +546,7 @@ export async function getMyApplications() {
       )
     `,
     )
-    .eq("member_id", meta.memberId)
+    .eq("member_id", memberId)
     .order("created_at", { ascending: false });
 
   if (error || !data) {
@@ -571,19 +556,14 @@ export async function getMyApplications() {
   return { success: true, data: data };
 }
 
-export async function getMyApplicationById(applicationId: string) {
-  const { userId, sessionClaims } = await auth();
-  const meta = (sessionClaims?.publicMetadata ?? {}) as { memberId?: string };
-
-  if (!userId || !meta.memberId) {
-    return {
-      success: false,
-      error: "You must be signed in to view your applications.",
-    };
-  }
-
-  const supabase = await createServerClient();
-
+/**
+ * `memberId` is resolved by the caller — no `auth()` call here.
+ */
+export async function getMyApplicationById(
+  supabase: TypedSupabaseClient,
+  memberId: string,
+  applicationId: string,
+) {
   const { data, error } = await supabase
     .from("membership_applications")
     .select(
@@ -654,7 +634,7 @@ export async function getMyApplicationById(applicationId: string) {
     `,
     )
     .eq("id", applicationId)
-    .eq("member_id", meta.memberId)
+    .eq("member_id", memberId)
     .order("uploaded_at", {
       referencedTable: "gym_memberships.payments.payment_receipts",
       ascending: false,
@@ -678,9 +658,10 @@ export async function getMyApplicationById(applicationId: string) {
 /**
  * Get the active payment for a membership (Pending or Rejected = needs action).
  */
-export async function getPaymentForMembership(gymMembershipId: string) {
-  const supabase = await createClient();
-
+export async function getPaymentForMembership(
+  supabase: TypedSupabaseClient,
+  gymMembershipId: string,
+) {
   const { data, error } = await supabase
     .from("payments")
     .select(
@@ -698,9 +679,7 @@ export async function getPaymentForMembership(gymMembershipId: string) {
   return { success: true as const, data };
 }
 
-export async function getMyPayments() {
-  const supabase = await createClient();
-
+export async function getMyPayments(supabase: TypedSupabaseClient) {
   const { data, error } = await supabase
     .from("payments")
     .select(
@@ -717,9 +696,13 @@ export async function getMyPayments() {
   return { success: true as const, data };
 }
 
-export async function getMyAttendance(gymId?: string) {
-  const supabase = await createClient();
-
+export async function getMyAttendance(
+  supabase: TypedSupabaseClient,
+  gymId?: string,
+) {
+  if (!gymId) {
+    return { success: false as const, error: "Gym ID is required." };
+  }
   let query = supabase
     .from("attendance")
     .select(
@@ -738,8 +721,10 @@ export async function getMyAttendance(gymId?: string) {
   return { success: true as const, data };
 }
 
-export async function getMyTrainingSessions() {
-  const supabase = await createServerClient();
+export async function getMyTrainingSessions(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("training_sessions")
     .select(
@@ -752,6 +737,7 @@ export async function getMyTrainingSessions() {
       )
     `,
     )
+    .eq("gym_id", gymId)
     .order("session_date", { ascending: true })
     .order("start_time", { ascending: true });
 
@@ -759,9 +745,10 @@ export async function getMyTrainingSessions() {
   return { success: true as const, data };
 }
 
-export async function getTrainingSessionById(sessionId: string) {
-  const supabase = await createServerClient();
-
+export async function getTrainingSessionById(
+  supabase: TypedSupabaseClient,
+  sessionId: string,
+) {
   const { data, error } = await supabase
     .from("training_sessions")
     .select(
@@ -781,22 +768,23 @@ export async function getTrainingSessionById(sessionId: string) {
   return { success: true as const, data };
 }
 
-export async function getMyUpcomingSessions() {
-  const supabase = await createClient();
-
-  const { data: memberProfile } = await supabase
-    .from("members")
-    .select(
-      `
-      gym_memberships:active_gym_membership_id(
-        gyms(timezone)
-      )
-    `,
-    )
+/**
+ * `gymId` is resolved by the caller. This replaces the old two-hop lookup
+ * (members -> active_gym_membership_id -> gyms(timezone)) with a single
+ * direct `gyms` read, and scopes the sessions query to that gym instead of
+ * relying on RLS alone to narrow the rows.
+ */
+export async function getMyUpcomingSessions(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
+  const { data: gym } = await supabase
+    .from("gyms")
+    .select("timezone")
+    .eq("id", gymId)
     .maybeSingle();
 
-  const timezone =
-    (memberProfile?.gym_memberships as any)?.gyms?.timezone ?? "Asia/Kolkata";
+  const timezone = gym?.timezone ?? "Asia/Kolkata";
   const today = getTodayDateStr(timezone);
 
   const { data, error } = await supabase
@@ -808,6 +796,7 @@ export async function getMyUpcomingSessions() {
         users:profile_id(full_name, avatar_url))
     `,
     )
+    .eq("gym_id", gymId)
     .eq("status", "Upcoming")
     .gte("session_date", today)
     .order("session_date", { ascending: true })
@@ -817,9 +806,15 @@ export async function getMyUpcomingSessions() {
   return { success: true as const, data };
 }
 
-export async function getMyAssignedTrainers() {
-  const supabase = await createClient();
-
+/**
+ * `gymId` is resolved by the caller and used to scope the query directly,
+ * instead of fetching every active assignment across all of the member's
+ * gyms and relying on RLS to narrow it.
+ */
+export async function getMyAssignedTrainers(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("trainer_assignments")
     .select(
@@ -833,28 +828,480 @@ export async function getMyAssignedTrainers() {
       gyms(id, name, logo_url)
     `,
     )
+    .eq("gym_id", gymId)
     .eq("is_active", true);
 
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
 
-export async function getMyNotifications() {
-  const supabase = await createClient();
+//Get Membership details
 
-  const { data, error } = await supabase
-    .from("notifications")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(50);
+export type MemberPayment = {
+  id: string;
+  date: string | null;
+  amount: number;
+  method: string | null;
+  plan: string;
+  duration: string;
+  status: "paid" | "pending" | "failed";
+};
 
-  if (error) return { success: false as const, error: error.message };
-  return { success: true as const, data };
+export type MembershipTimelineEvent = {
+  id: string;
+  label: string;
+  date: string;
+  completed: boolean;
+};
+
+function mapPaymentStatus(status: string): MemberPayment["status"] {
+  if (status === "Verified") return "paid";
+  if (status === "Rejected" || status === "Cancelled") return "failed";
+  return "pending";
 }
 
-export async function getMyMessages() {
-  const supabase = await createClient();
+/**
+ * `gymId` is now resolved by the caller (the member store already tracks
+ * the active gym), so this skips the extra `gym_memberships` round trip
+ * that used to exist purely to derive it.
+ */
+export async function getMyMembershipDetails(
+  supabase: TypedSupabaseClient,
+  memberId: string,
+  gymId: string,
+) {
+  const asOfDate = getTodayDateStr("Asia/Kolkata");
 
+  /*
+   * ------------------------------------------------------------
+   * Fetch all required data in parallel
+   * ------------------------------------------------------------
+   */
+  const [
+    { data: memberships, error: membershipError },
+    { data: gym, error: gymError },
+    { data: trainerAssignment, error: trainerAssignmentError },
+    { data: payments, error: paymentsError },
+    { data: attendanceStats, error: attendanceError },
+  ] = await Promise.all([
+    /*
+     * ----------------------------------------------------------
+     * All memberships for this member in the current gym.
+     *
+     * Includes:
+     *   Active
+     *   Scheduled
+     *
+     * Excludes:
+     *   Cancelled
+     * ----------------------------------------------------------
+     */
+    supabase
+      .from("gym_memberships")
+      .select(
+        `
+        id,
+        status,
+        start_date,
+        end_date,
+        duration_months,
+        final_amount,
+        created_at,
+        plan:membership_plans (
+          id,
+          plan_name,
+          plan_category,
+          membership_duration,
+          selected_features,
+          custom_features
+        )
+      `,
+      )
+      .eq("member_id", memberId)
+      .eq("gym_id", gymId)
+      .neq("status", "Cancelled")
+      .order("start_date", { ascending: true }),
+
+    /*
+     * ----------------------------------------------------------
+     * Gym details
+     * ----------------------------------------------------------
+     */
+    supabase
+      .from("gyms")
+      .select("id, name, city, state")
+      .eq("id", gymId)
+      .single(),
+
+    /*
+     * ----------------------------------------------------------
+     * Active trainer assignment
+     * ----------------------------------------------------------
+     */
+    supabase
+      .from("trainer_assignments")
+      .select(
+        `
+        trainer:trainers (
+          id,
+          full_name,
+          photo_url
+        )
+      `,
+      )
+      .eq("gym_id", gymId)
+      .eq("member_id", memberId)
+      .eq("is_active", true)
+      .eq("is_primary", true)
+      .maybeSingle(),
+
+    /*
+     * ----------------------------------------------------------
+     * Latest payments
+     * ----------------------------------------------------------
+     */
+    supabase
+      .from("payments")
+      .select(
+        `
+        id,
+        amount,
+        payment_date,
+        method,
+        status,
+        gym_membership:gym_memberships (
+          duration_months,
+          plan:membership_plans (
+            plan_name
+          )
+        )
+      `,
+      )
+      .eq("gym_id", gymId)
+      .eq("member_id", memberId)
+      .order("payment_date", { ascending: false })
+      .limit(10),
+
+    /*
+     * ----------------------------------------------------------
+     * Attendance statistics
+     *
+     * ONE RPC now returns:
+     *
+     *   days_attended
+     *   total_days
+     *   attendance_rate
+     *   current_streak
+     *   longest_streak
+     *
+     * No attendance rows are transferred to Next.js.
+     * ----------------------------------------------------------
+     */
+    supabase.rpc("get_member_attendance_stats", {
+      p_member_ids: [memberId],
+      p_gym_id: gymId,
+      p_as_of: asOfDate,
+    }),
+  ]);
+
+  /*
+   * ------------------------------------------------------------
+   * Handle membership error
+   * ------------------------------------------------------------
+   */
+  if (membershipError || !memberships || memberships.length === 0) {
+    return {
+      success: false as const,
+      error: membershipError?.message ?? "No membership found",
+    };
+  }
+
+  /*
+   * ------------------------------------------------------------
+   * Log independent query errors
+   * ------------------------------------------------------------
+   */
+
+  if (gymError) {
+    console.error("Gym fetch failed:", gymError.message);
+  }
+
+  if (trainerAssignmentError) {
+    console.error(
+      "Trainer assignment fetch failed:",
+      trainerAssignmentError.message,
+    );
+  }
+
+  if (paymentsError) {
+    console.error("Payments fetch failed:", paymentsError.message);
+  }
+
+  if (attendanceError) {
+    console.error(
+      "get_member_attendance_stats failed:",
+      attendanceError.message,
+    );
+  }
+
+  /*
+   * ------------------------------------------------------------
+   * Determine CURRENT membership
+   * ------------------------------------------------------------
+   *
+   * First preference:
+   *   Active + currently within start/end date
+   *
+   * Second preference:
+   *   Any Active membership
+   *
+   * Scheduled memberships are never selected as current.
+   * ------------------------------------------------------------
+   */
+  const current =
+    memberships.find(
+      (m) =>
+        m.status === "Active" &&
+        m.start_date <= asOfDate &&
+        m.end_date >= asOfDate,
+    ) ?? memberships.find((m) => m.status === "Active");
+
+  if (!current) {
+    return {
+      success: false as const,
+      error: "No current active membership found",
+    };
+  }
+
+  /*
+   * ------------------------------------------------------------
+   * Determine SCHEDULED membership
+   * ------------------------------------------------------------
+   *
+   * If multiple scheduled memberships exist, use the one
+   * starting soonest.
+   * ------------------------------------------------------------
+   */
+  const scheduledMembership =
+    memberships
+      .filter((m) => m.status === "Scheduled" && m.start_date > asOfDate)
+      .sort(
+        (a, b) =>
+          new Date(a.start_date).getTime() - new Date(b.start_date).getTime(),
+      )[0] ?? null;
+
+  /*
+   * ------------------------------------------------------------
+   * Membership duration calculations
+   * ------------------------------------------------------------
+   */
+  const totalDays =
+    Math.round(
+      (new Date(current.end_date).getTime() -
+        new Date(current.start_date).getTime()) /
+        (1000 * 60 * 60 * 24),
+    ) + 1;
+
+  const usedDays = Math.min(
+    Math.max(
+      Math.round(
+        (new Date(asOfDate).getTime() -
+          new Date(current.start_date).getTime()) /
+          (1000 * 60 * 60 * 24),
+      ) + 1,
+      0,
+    ),
+    totalDays,
+  );
+
+  /*
+   * ------------------------------------------------------------
+   * Total verified payments
+   * ------------------------------------------------------------
+   */
+  const totalPayments = (payments ?? [])
+    .filter((p) => p.status === "Verified")
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+
+  /*
+   * ------------------------------------------------------------
+   * Attendance statistics
+   * ------------------------------------------------------------
+   *
+   * Everything is calculated inside PostgreSQL.
+   *
+   * No:
+   *
+   *   .from("attendance")
+   *   .select("attendance_date")
+   *   computeStreak()
+   *
+   * is required anymore.
+   * ------------------------------------------------------------
+   */
+  const attendance = attendanceStats?.[0];
+
+  const presentDays = Number(attendance?.days_attended ?? 0);
+
+  const attendanceRate = Number(attendance?.attendance_rate ?? 0);
+
+  const currentStreak = Number(attendance?.current_streak ?? 0);
+
+  const longestStreak = Number(attendance?.longest_streak ?? 0);
+
+  /*
+   * ------------------------------------------------------------
+   * First membership / first verified payment
+   * ------------------------------------------------------------
+   */
+  const firstMembership = memberships[0];
+
+  const firstVerifiedPayment = [...(payments ?? [])]
+    .filter((p) => p.status === "Verified")
+    .sort((a, b) =>
+      (a.payment_date ?? "").localeCompare(b.payment_date ?? ""),
+    )[0];
+
+  /*
+   * ------------------------------------------------------------
+   * Membership timeline
+   * ------------------------------------------------------------
+   */
+  const timeline: MembershipTimelineEvent[] = [
+    {
+      id: "started",
+      label: "Membership Started",
+      date: firstMembership.start_date,
+      completed: true,
+    },
+
+    ...(firstVerifiedPayment
+      ? [
+          {
+            id: "first-payment",
+            label: "First Payment",
+            date:
+              firstVerifiedPayment.payment_date ?? firstMembership.start_date,
+            completed: true,
+          },
+        ]
+      : []),
+
+    ...memberships.slice(1).map((m) => ({
+      id: `renewed-${m.id}`,
+      label: "Plan Renewed",
+      date: m.start_date,
+      completed: m.start_date <= asOfDate,
+    })),
+
+    {
+      id: "current",
+      label: "Current Plan Active",
+      date: current.start_date,
+      completed:
+        current.status === "Active" &&
+        current.start_date <= asOfDate &&
+        current.end_date >= asOfDate,
+    },
+
+    {
+      id: "next-renewal",
+      label: scheduledMembership
+        ? "Upcoming Renewal Scheduled"
+        : "Next Renewal",
+      date: scheduledMembership?.start_date ?? current.end_date,
+      completed: false,
+    },
+  ];
+
+  /*
+   * ------------------------------------------------------------
+   * Return result
+   * ------------------------------------------------------------
+   */
+  return {
+    success: true as const,
+
+    data: {
+      /*
+       * Current active membership
+       */
+      membership: current,
+
+      /*
+       * Paid scheduled renewal, if any
+       */
+      scheduledMembership,
+
+      /*
+       * Gym
+       */
+      gym,
+
+      /*
+       * Active trainer
+       */
+      trainer: trainerAssignment?.trainer ?? null,
+
+      /*
+       * Membership duration
+       */
+      totalDays,
+
+      usedDays,
+
+      /*
+       * Total verified payments
+       */
+      totalPayments,
+
+      /*
+       * Payment history
+       */
+      payments: (payments ?? []).map(
+        (p): MemberPayment => ({
+          id: p.id,
+          date: p.payment_date,
+          amount: Number(p.amount),
+          method: p.method,
+
+          plan: p.gym_membership?.plan?.plan_name ?? "—",
+
+          duration: p.gym_membership?.duration_months
+            ? `${p.gym_membership.duration_months} Month${
+                p.gym_membership.duration_months > 1 ? "s" : ""
+              }`
+            : "—",
+
+          status: mapPaymentStatus(p.status),
+        }),
+      ),
+
+      /*
+       * Membership timeline
+       */
+      timeline,
+
+      /*
+       * Attendance statistics
+       */
+      stats: {
+        totalVisits: presentDays,
+        presentDays,
+        attendanceRate,
+        currentStreak,
+        longestStreak,
+      },
+    },
+  };
+}
+
+export type MyMembershipResult = Extract<
+  Awaited<ReturnType<typeof getMyMembershipDetails>>,
+  { success: true }
+>["data"];
+
+export async function getMyMessages(supabase: TypedSupabaseClient) {
   const { data, error } = await supabase
     .from("messages")
     .select(
@@ -870,11 +1317,9 @@ export async function getMyMessages() {
   return { success: true as const, data };
 }
 
-export async function getUnreadMessageCount(): Promise<
-  ActionResult<{ count: number }>
-> {
-  const supabase = await createClient();
-
+export async function getUnreadMessageCount(
+  supabase: TypedSupabaseClient,
+): Promise<ActionResult<{ count: number }>> {
   const { data: currentUser, error: userError } = await supabase
     .from("users")
     .select("id")
@@ -893,9 +1338,10 @@ export async function getUnreadMessageCount(): Promise<
   return { success: true, data: { count: count ?? 0 } };
 }
 
-export async function getTodayAttendanceStatus(gymId: string) {
-  const supabase = await createClient();
-
+export async function getTodayAttendanceStatus(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data: gym } = await supabase
     .from("gyms")
     .select("timezone")
@@ -914,3 +1360,196 @@ export async function getTodayAttendanceStatus(gymId: string) {
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
+
+export type MemberAttendanceStats = {
+  daysAttended: number;
+  totalDays: number;
+  attendanceRate: number;
+  currentStreak: number;
+  longestStreak: number;
+};
+
+export async function getMemberAttendanceStats(
+  supabase: TypedSupabaseClient,
+  memberId: string,
+  gymId: string,
+  asOfDate: string,
+) {
+  const { data, error } = await supabase.rpc("get_my_attendance_stats", {
+    p_member_id: memberId,
+    p_gym_id: gymId,
+    p_as_of: asOfDate,
+  });
+
+  if (error) {
+    return { success: false as const, error: error.message };
+  }
+
+  const row = data?.[0];
+
+  // Postgres numeric/int columns arrive as strings over PostgREST — coerce
+  // at the boundary so every consumer gets real numbers.
+  const stats: MemberAttendanceStats = {
+    daysAttended: Number(row?.days_attended ?? 0),
+    totalDays: Number(row?.total_days ?? 0),
+    attendanceRate: Number(row?.attendance_rate ?? 0),
+    currentStreak: Number(row?.current_streak ?? 0),
+    longestStreak: Number(row?.longest_streak ?? 0),
+  };
+
+  return { success: true as const, data: stats };
+}
+
+export type AttendanceHistoryRow = {
+  date: string; // yyyy-MM-dd
+  checkIn: string | null; // formatted "07:02 AM"
+  checkOut: string | null;
+  duration: string | null; // formatted "1h 13m"
+  session: string | null;
+  workoutType: string | null;
+  trainer: string | null;
+  status: "present" | "missed" | "no_session";
+};
+
+export function mostFrequent(values: (string | null)[]) {
+  const counts = new Map<string, number>();
+  for (const v of values) {
+    if (!v) continue;
+    counts.set(v, (counts.get(v) ?? 0) + 1);
+  }
+  let top: string | null = null;
+  let max = 0;
+  for (const [v, c] of counts) {
+    if (c > max) {
+      top = v;
+      max = c;
+    }
+  }
+  return top;
+}
+
+export async function getMemberAttendanceOverview(
+  supabase: TypedSupabaseClient,
+  memberId: string,
+  gymId: string,
+) {
+  const asOfDate = getTodayDateStr("Asia/Kolkata");
+  const calendarMonthStart = asOfDate.slice(0, 8) + "01";
+
+  // Membership must be fetched first — the history window is bounded by
+  // its start_date, so there's nothing to parallelize here anymore.
+  const { data: membership, error: membershipError } = await supabase
+    .from("gym_memberships")
+    .select("start_date, end_date, status")
+    .eq("member_id", memberId)
+    .eq("gym_id", gymId)
+    .eq("status", "Active")
+    .order("start_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (membershipError) {
+    return { success: false as const, error: membershipError.message };
+  }
+
+  // Fallback: no active membership found (e.g. lapsed member) — still show
+  // a year of history rather than nothing, but this is the exception path,
+  // not the normal one.
+  const fallbackStart = new Date(asOfDate);
+  fallbackStart.setDate(fallbackStart.getDate() - 365);
+  const historyStart =
+    membership?.start_date ?? fallbackStart.toISOString().slice(0, 10);
+
+  const [{ data: historyRaw, error: historyError }, statsResult] =
+    await Promise.all([
+      supabase.rpc("get_member_attendance_history", {
+        p_member_id: memberId,
+        p_gym_id: gymId,
+        p_start_date: historyStart,
+        p_end_date: asOfDate,
+      }),
+
+      getMemberAttendanceStats(supabase, memberId, gymId, asOfDate),
+    ]);
+
+  if (historyError) {
+    return { success: false as const, error: historyError.message };
+  }
+  if (!statsResult.success) {
+    console.error("get_my_attendance_stats failed:", statsResult.error);
+  }
+
+  const rows = historyRaw ?? [];
+
+  const history: AttendanceHistoryRow[] = rows.map((r) => ({
+    date: r.activity_date,
+    checkIn: formatDateTime(r.check_in),
+    checkOut: formatDateTime(r.check_out),
+    duration: formatDuration(r.duration_minutes),
+    session: r.session_name,
+    workoutType: r.workout_type,
+    trainer: r.trainer_name,
+    status: r.status as AttendanceHistoryRow["status"],
+  }));
+
+  const presentRows = history.filter((r) => r.status === "present");
+
+  // "This month" is still capped at the membership start, same as before —
+  // now redundant with the RPC's own lower bound when a membership exists,
+  // but kept as a safety net for the fallback (no-membership) path.
+  const effectiveMonthStart =
+    membership?.start_date && membership.start_date > calendarMonthStart
+      ? membership.start_date
+      : calendarMonthStart;
+
+  const thisMonthPresent = presentRows.filter(
+    (r) => r.date >= effectiveMonthStart,
+  );
+  const thisMonthMissed = history.filter(
+    (r) => r.status === "missed" && r.date >= effectiveMonthStart,
+  );
+  const daysSoFarThisMonth =
+    Math.round(
+      (new Date(asOfDate).getTime() - new Date(effectiveMonthStart).getTime()) /
+        (1000 * 60 * 60 * 24),
+    ) + 1;
+
+  const lastVisit = presentRows[0] ?? null;
+
+  const stats = statsResult.success
+    ? statsResult.data
+    : {
+        daysAttended: 0,
+        totalDays: 0,
+        attendanceRate: 0,
+        currentStreak: 0,
+        longestStreak: 0,
+      };
+
+  return {
+    success: true as const,
+    data: {
+      membership,
+      history,
+      stats: {
+        totalCheckInsThisMonth: thisMonthPresent.length,
+        missedThisMonth: thisMonthMissed.length,
+        daysSoFarThisMonth,
+        attendanceRate: stats.attendanceRate,
+        currentStreak: stats.currentStreak,
+        longestStreak: stats.longestStreak,
+        lastVisitDate: lastVisit?.date ?? null,
+        lastVisitTime: lastVisit?.checkIn ?? null,
+        mostAttendedWorkout: mostFrequent(
+          presentRows.map((r) => r.workoutType),
+        ),
+        mostFrequentTrainer: mostFrequent(presentRows.map((r) => r.trainer)),
+      },
+    },
+  };
+}
+
+export type AttendanceOverviewResult = Extract<
+  Awaited<ReturnType<typeof getMemberAttendanceOverview>>,
+  { success: true }
+>["data"];

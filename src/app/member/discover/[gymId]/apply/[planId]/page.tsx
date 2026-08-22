@@ -8,6 +8,7 @@ import ReviewApplicationStep from "@/components/member/ReviewApplicationStep";
 import AwaitingApprovalStep from "@/components/member/AwaitingApprovalStep";
 import PaymentPendingStep from "@/components/member/PaymentPendingStep";
 import { MembershipApplicationPageDataByPlanId } from "@/services/member.query";
+import { createServerClient } from "@/lib/supabase/server";
 
 interface ApplyPageProps {
   params: Promise<{ gymId: string; planId: string }>;
@@ -37,7 +38,13 @@ const HEADER_COPY = {
 export default async function ApplyPage({ params }: ApplyPageProps) {
   const { gymId, planId } = await params;
 
-  const data = await MembershipApplicationPageDataByPlanId(gymId, planId);
+  const supabase = await createServerClient();
+  const data = await MembershipApplicationPageDataByPlanId(
+    supabase,
+    gymId,
+    planId,
+  );
+
   if (!data) notFound();
 
   const { gym, plan, member, existingApplicationStatus, gymMembership } = data;
@@ -86,20 +93,23 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
 
         {(existingApplicationStatus === "none" ||
           existingApplicationStatus === "rejected") && (
-            <ReviewApplicationStep
-              gym={gym}
-              plan={plan}
-              member={member}
-              gymId={gym.id}
-              planId={plan.id}
-              rejected={existingApplicationStatus === "rejected"}
-            />
-          )}
+          <ReviewApplicationStep
+            gym={gym}
+            plan={plan}
+            member={member}
+            gymId={gym.id}
+            planId={plan.id}
+            rejected={existingApplicationStatus === "rejected"}
+          />
+        )}
       </div>
 
       <div className="bg-background/95 backdrop-blur-sm border-t border-border">
         <div className="px-4 py-4 flex flex-col sm:flex-row gap-3 items-center justify-between max-w-[1400px] mx-auto">
-          <Link href={`/member/discover/${gym.id}`} className="w-full sm:w-auto">
+          <Link
+            href={`/member/discover/${gym.id}`}
+            className="w-full sm:w-auto"
+          >
             <Button variant="outline" className="w-full sm:w-auto gap-2">
               <ChevronLeft className="w-4 h-4" />
               Back to Gym Details

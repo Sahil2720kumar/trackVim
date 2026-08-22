@@ -8,23 +8,9 @@ import { PaymentSection } from "@/components/member/applications/PaymentSection"
 import { getMyApplicationById } from "@/services/member.query";
 import { AppStatus } from "@/types";
 import { notFound } from "next/navigation";
-
-
-function formatDate(iso: string | null) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-function formatTime(iso: string | null) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+import { createServerClient } from "@/lib/supabase/server";
+import { auth } from "@clerk/nextjs/server";
+import { formatDateStr, formatDateTime } from "@/lib/utils";
 
 function resolveStatus(
   applicationStatus: string,
@@ -32,18 +18,10 @@ function resolveStatus(
   rejectionReason: string | null,
   latestPaymentStatus: string | null,
 ): AppStatus {
-  // Application rejected — no membership row will exist yet.
-  // if (rejectionReason) return "rejected";
-
-  // // No membership row yet = application hasn't been approved.
-  // if (!membershipStatus) return "pending_review";
-  //New
   if (applicationStatus === "Rejected") return "rejected";
   if (applicationStatus === "Pending") return "pending_review";
   if (!membershipStatus) return "approved_awaiting_payment";
-  //End News
-  // Payment-level rejection takes priority over whatever the
-  // membership row's status currently says.
+
   if (latestPaymentStatus === "Rejected") return "payment_rejected";
 
   switch (membershipStatus) {
@@ -62,18 +40,33 @@ function resolveStatus(
   }
 }
 
-
 export default async function ApplicationDetailsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const { sessionClaims } = await auth();
+  const memberMeta = (sessionClaims?.publicMetadata ?? {}) as {
+    memberId?: string;
+  };
 
-  const { success, data, error } = await getMyApplicationById(id);
+  if (!memberMeta?.memberId) {
+    throw new Error("Member ID not found");
+  }
+
+  const supabase = await createServerClient();
+  const { success, data, error } = await getMyApplicationById(
+    supabase,
+    memberMeta.memberId,
+    id,
+  );
 
   if (!success || !data) {
-    if (error === "Application not found." || error === "You must be signed in to view your applications.") {
+    if (
+      error === "Application not found." ||
+      error === "You must be signed in to view your applications."
+    ) {
       notFound();
     }
     throw new Error("Unable to load this application.");
@@ -128,10 +121,10 @@ export default async function ApplicationDetailsPage({
 
   const application = {
     id: data.id,
-    applicationDate: formatDate(data.created_at),
-    applicationTime: formatTime(data.created_at),
-    approvedDate: formatDate(data.reviewed_at),
-    approvedTime: formatTime(data.reviewed_at),
+    applicationDate: formatDateStr(data.created_at) ?? "—",
+    applicationTime: formatDateTime(data.created_at) ?? "—",
+    approvedDate: data.reviewed_at ? formatDateStr(data.reviewed_at) : "—",
+    approvedTime: data.reviewed_at ? formatDateTime(data.reviewed_at) : "—",
     reviewedBy: data.reviewer?.full_name
       ? `${data.reviewer.full_name} (Owner)`
       : "—",
@@ -144,7 +137,7 @@ export default async function ApplicationDetailsPage({
   // this for a real rejected_at/updated_at once that column exists.
   const paymentRejectedAt =
     currentPayment?.status === "Rejected" && currentPayment?.updated_at
-      ? formatDate(currentPayment.updated_at)
+      ? formatDateStr(currentPayment.updated_at)
       : undefined;
   const paymentRejectionReason =
     currentPayment?.status === "Rejected"
@@ -180,24 +173,24 @@ export default async function ApplicationDetailsPage({
           }}
           payment={{
             uploadedAt: currentPayment?.created_at
-              ? formatDate(currentPayment.created_at)
+              ? formatDateStr(currentPayment.created_at)
               : undefined,
             verifiedAt: currentPayment?.verified_at
-              ? formatDate(currentPayment.verified_at)
+              ? formatDateStr(currentPayment.verified_at)
               : undefined,
             rejectedAt: paymentRejectedAt,
           }}
           payment_receipt={{
             uploaded_at: currentReceipt?.uploaded_at
-              ? formatDate(currentReceipt.uploaded_at)
+              ? formatDateStr(currentReceipt.uploaded_at)
               : undefined,
           }}
           membership={{
             activatedAt: membershipRow?.activated_at
-              ? formatDate(membershipRow.activated_at)
+              ? formatDateStr(membershipRow.activated_at)
               : undefined,
             cancelledAt: membershipRow?.cancelled_at
-              ? formatDate(membershipRow.cancelled_at)
+              ? formatDateStr(membershipRow.cancelled_at)
               : undefined,
           }}
         />
@@ -221,20 +214,20 @@ export default async function ApplicationDetailsPage({
               }}
               payment={{
                 uploadedAt: currentPayment?.created_at
-                  ? formatDate(currentPayment.created_at)
+                  ? formatDateStr(currentPayment.created_at)
                   : undefined,
                 verifiedAt: currentPayment?.verified_at
-                  ? formatDate(currentPayment.verified_at)
+                  ? formatDateStr(currentPayment.verified_at)
                   : undefined,
                 rejectedAt: paymentRejectedAt,
                 rejectionReason: paymentRejectionReason,
               }}
               membership={{
                 activatedAt: membershipRow?.activated_at
-                  ? formatDate(membershipRow.activated_at)
+                  ? formatDateStr(membershipRow.activated_at)
                   : undefined,
                 cancelledAt: membershipRow?.cancelled_at
-                  ? formatDate(membershipRow.cancelled_at)
+                  ? formatDateStr(membershipRow.cancelled_at)
                   : undefined,
                 cancellationReason:
                   membershipRow?.cancellation_reason ?? undefined,
@@ -259,18 +252,18 @@ export default async function ApplicationDetailsPage({
               receipt={
                 currentReceipt
                   ? {
-                    url: currentReceipt.file_url,
-                    uploadedAt: formatDate(currentReceipt.uploaded_at),
-                    amount: currentPayment?.amount
-                      ? Number(currentPayment.amount)
-                      : undefined,
-                    method: currentPayment?.method ?? undefined,
-                    verifiedAt: currentPayment?.verified_at
-                      ? formatDate(currentPayment.verified_at)
-                      : undefined,
-                    rejectedAt: paymentRejectedAt,
-                    rejectionReason: paymentRejectionReason,
-                  }
+                      url: currentReceipt.file_url,
+                      uploadedAt: formatDateStr(currentReceipt.uploaded_at),
+                      amount: currentPayment?.amount
+                        ? Number(currentPayment.amount)
+                        : undefined,
+                      method: currentPayment?.method ?? undefined,
+                      verifiedAt: currentPayment?.verified_at
+                        ? formatDateStr(currentPayment.verified_at)
+                        : undefined,
+                      rejectedAt: paymentRejectedAt,
+                      rejectionReason: paymentRejectionReason,
+                    }
                   : null
               }
             />

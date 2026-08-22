@@ -189,6 +189,7 @@ export const gymMembershipStatusEnum = pgEnum("gym_membership_status", [
   "Expired",
   "Cancelled",
   "Frozen",
+  "Scheduled",
 ]);
 
 export const paymentMethodEnum = pgEnum("payment_method", [
@@ -1164,6 +1165,8 @@ export const trainerAssignments = pgTable(
       .notNull()
       .references(() => trainers.id, { onDelete: "cascade" }),
 
+    isPrimary: boolean("is_primary").notNull().default(false), // NEW
+
     assignedAt: timestamp("assigned_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -1174,11 +1177,17 @@ export const trainerAssignments = pgTable(
   (t) => [
     index("trainer_assignments_gym_member_idx").on(t.gymId, t.memberId),
     index("trainer_assignments_trainer_idx").on(t.trainerId),
-    // NEW — "Members can view their own trainer assignments" filters by
-    // member_id alone, with no gym_id in the predicate. The existing
-    // (gymId, memberId) composite doesn't cover that since memberId isn't
-    // the leading column.
     index("trainer_assignments_member_idx").on(t.memberId),
+
+    // NEW — can't double-assign the same trainer to the same member while active
+    uniqueIndex("trainer_assignments_unique_active")
+      .on(t.gymId, t.memberId, t.trainerId)
+      .where(sql`is_active = true`),
+
+    // NEW — at most one primary trainer per member, per gym, while active
+    uniqueIndex("trainer_assignments_one_primary_per_member")
+      .on(t.gymId, t.memberId)
+      .where(sql`is_active = true and is_primary = true`),
     pgPolicy("Members can view their own trainer assignments", {
       for: "select",
       to: authenticatedRole,

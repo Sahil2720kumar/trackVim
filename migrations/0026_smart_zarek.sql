@@ -1,0 +1,3 @@
+ALTER TABLE "trainer_assignments" ADD COLUMN "is_primary" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "trainer_assignments_unique_active" ON "trainer_assignments" USING btree ("gym_id","member_id","trainer_id") WHERE is_active = true;--> statement-breakpoint
+CREATE UNIQUE INDEX "trainer_assignments_one_primary_per_member" ON "trainer_assignments" USING btree ("gym_id","member_id") WHERE is_active = true and is_primary = true;

@@ -1,6 +1,5 @@
 import { processAttendance } from "@/actions/scan.actions";
 import MemberHomeClient from "@/components/member/home/MemberHomeClient";
-import { getMemberHomeState } from "@/services/scan.query";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
@@ -10,7 +9,5 @@ export default async function MemberHomePage() {
     redirect("/sign-in");
   }
 
-  const state = await getMemberHomeState();
-
-  return <MemberHomeClient state={state} onScan={processAttendance} />;
+  return <MemberHomeClient onScan={processAttendance} />;
 }

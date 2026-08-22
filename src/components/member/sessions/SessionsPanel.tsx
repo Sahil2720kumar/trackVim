@@ -14,6 +14,8 @@ import {
   Search,
   SlidersHorizontal,
   X,
+  CheckCircle2,
+  Flame,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,6 +44,8 @@ import {
   isToday,
 } from "@/lib/utils";
 import Link from "next/link";
+import { useMyTrainingSessions } from "@/hooks/queries/member.query";
+import { StatCard } from "@/components/StatCard";
 
 export type RawSessionStatus =
   | "Upcoming"
@@ -419,11 +423,33 @@ function EmptyState({
 
 // ── Panel ──────────────────────────────────────────────────────────────
 
-export function SessionsPanel({ sessions }) {
+export function SessionsPanel() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<SessionTab>("All");
   const [sortBy, setSortBy] = useState<SortOption>("soonest");
   const [trainer, setTrainer] = useState("all");
+
+  const {
+    data: response,
+    isLoading,
+    isError,
+    refetch,
+  } = useMyTrainingSessions();
+
+  const sessions = response?.success ? response.data : [];
+
+  const upcoming = sessions.filter((s) => getDisplayStatus(s) === "Upcoming");
+  const completed = sessions.filter((s) => getDisplayStatus(s) === "Completed");
+
+  const exerciseCount = sessions.reduce(
+    (sum, s) => sum + (s.session_exercises?.length ?? 0),
+    0,
+  );
+  const nextSession = [...upcoming].sort((a, b) =>
+    `${a.session_date}T${a.start_time}`.localeCompare(
+      `${b.session_date}T${b.start_time}`,
+    ),
+  )[0];
 
   const trainers = useMemo(
     () =>
@@ -498,144 +524,237 @@ export function SessionsPanel({ sessions }) {
     setActiveTab("All");
   };
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-card border border-border rounded-lg p-3 sm:p-4">
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search sessions, trainer, or exercise..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-9 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                aria-label="Clear search"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3.5" />
-              </button>
-            )}
-          </div>
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="relative gap-2 px-3 sm:px-4 py-2 h-auto text-sm font-normal shrink-0"
-              >
-                <SlidersHorizontal className="size-4" />
-                <span>Sort & Filter</span>
-                {activeFilterCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64" align="end">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-foreground">
-                  Sort & Filter
-                </h4>
-              </div>
-              <div className="flex flex-col gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">
-                    Sort by
-                  </label>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as SortOption)}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    {SORT_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">
-                    Trainer
-                  </label>
-                  <select
-                    value={trainer}
-                    onChange={(e) => setTrainer(e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="all">All trainers</option>
-                    {trainers.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  onClick={resetFilters}
-                  className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted"
-                >
-                  Reset
-                </button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
-          {STATUS_TABS.map(({ key, label }) => {
-            const count = counts[key];
-            const isActive = activeTab === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap shrink-0",
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:bg-muted/70",
-                )}
-              >
-                {label}
-                <span
-                  className={cn(
-                    "inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[11px] font-bold px-1",
-                    isActive
-                      ? "bg-primary-foreground/20 text-primary-foreground"
-                      : "bg-background text-muted-foreground",
-                  )}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {filteredSessions.length > 0 ? (
-        <div className="flex flex-col gap-3">
-          {filteredSessions.map((s) => (
-            <SessionAccordionCard key={s.id} session={s} />
+  if (isLoading) {
+    return (
+      <>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-24 animate-pulse rounded-lg bg-muted" />
           ))}
         </div>
-      ) : (
-        <EmptyState
-          hasFilters={
-            search.trim().length > 0 || activeTab !== "All" || trainer !== "all"
+        <div className="flex flex-col gap-6 mt-6">
+          <div className="flex flex-col gap-3">
+            <div className="h-14 animate-pulse rounded-lg bg-muted" />
+            <div className="flex gap-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-8 w-20 flex-shrink-0 animate-pulse rounded-full bg-muted"
+                />
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-20 animate-pulse rounded-lg bg-muted" />
+            ))}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Error state — covers both a network/query-level failure (isError)
+  // and a request that resolved but reported success: false.
+  if (isError || !response?.success) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-16 text-center">
+        <h2 className="text-lg font-semibold">
+          We couldn't load your sessions
+        </h2>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          {response && !response.success
+            ? response.error
+            : "Something went wrong. Please try again."}
+        </p>
+        <Button onClick={() => refetch()}>Try again</Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          icon={CalendarDays}
+          iconBg="bg-primary/10"
+          iconColor="text-primary"
+          title="Upcoming Sessions"
+          value={upcoming.length}
+          subtitle={
+            nextSession
+              ? `Next: ${nextSession.session_name}`
+              : "Nothing scheduled"
           }
-          onReset={resetAll}
         />
-      )}
-    </div>
+
+        <StatCard
+          icon={CheckCircle2}
+          iconBg="bg-green-100 dark:bg-green-950/40"
+          iconColor="text-green-600"
+          title="Completed Sessions"
+          value={completed.length}
+          subtitle="All time"
+        />
+
+        <StatCard
+          icon={Flame}
+          iconBg="bg-orange-100 dark:bg-orange-950/40"
+          iconColor="text-orange-500"
+          title="Current Streak"
+          value="—"
+          subtitle="Coming soon"
+        />
+
+        <StatCard
+          icon={Dumbbell}
+          iconBg="bg-primary/10"
+          iconColor="text-primary"
+          title="Exercises Assigned"
+          value={exerciseCount}
+          subtitle="All sessions"
+        />
+      </div>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-card border border-border rounded-lg p-3 sm:p-4">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search sessions, trainer, or exercise..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-9 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="relative gap-2 px-3 sm:px-4 py-2 h-auto text-sm font-normal shrink-0"
+                >
+                  <SlidersHorizontal className="size-4" />
+                  <span>Sort & Filter</span>
+                  {activeFilterCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64" align="end">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-foreground">
+                    Sort & Filter
+                  </h4>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Sort by
+                    </label>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as SortOption)}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      {SORT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Trainer
+                    </label>
+                    <select
+                      value={trainer}
+                      onChange={(e) => setTrainer(e.target.value)}
+                      className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="all">All trainers</option>
+                      {trainers.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={resetFilters}
+                    className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+            {STATUS_TABS.map(({ key, label }) => {
+              const count = counts[key];
+              const isActive = activeTab === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap shrink-0",
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70",
+                  )}
+                >
+                  {label}
+                  <span
+                    className={cn(
+                      "inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[11px] font-bold px-1",
+                      isActive
+                        ? "bg-primary-foreground/20 text-primary-foreground"
+                        : "bg-background text-muted-foreground",
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {filteredSessions.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {filteredSessions.map((s) => (
+              <SessionAccordionCard key={s.id} session={s} />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            hasFilters={
+              search.trim().length > 0 ||
+              activeTab !== "All" ||
+              trainer !== "all"
+            }
+            onReset={resetAll}
+          />
+        )}
+      </div>
+    </>
   );
 }

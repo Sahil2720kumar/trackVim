@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useDiscoverGyms } from "@/hooks/queries/member.query";
 
 export type ApplicationStatus = "none" | "pending" | "approved" | "rejected";
 
@@ -127,7 +128,6 @@ const filterChips: {
     icon: <ShieldCheck className="w-3.5 h-3.5" />,
   },
 ];
-
 
 function GymLogo({ gym }: { gym: Gym }) {
   if (gym.logoUrl) {
@@ -526,8 +526,7 @@ function EmptyState({
   );
 }
 
-export function GymDiscoveryList({ initialGyms }: GymDiscoveryListProps) {
-  const [gyms, setGyms] = useState<Gym[]>(initialGyms);
+export function GymDiscoveryList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterChip>("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -537,9 +536,13 @@ export function GymDiscoveryList({ initialGyms }: GymDiscoveryListProps) {
     useState<PriceRangeFilter>("All Prices");
   const [sortBy, setSortBy] = useState<SortOption>("Recommended");
 
-  useEffect(() => {
-    setGyms(initialGyms);
-  }, [initialGyms]);
+  const { data: response, isLoading, isError, refetch } = useDiscoverGyms();
+
+  // Unwrap the response envelope once. `gyms` is always a real array here
+  // (empty until the fetch succeeds), so every hook below runs
+  // unconditionally on every render — hooks must never sit after an early
+  // return, since that changes how many hooks React sees between renders.
+  const gyms = response?.success ? response.data : [];
 
   const activeFilterCount =
     (priceFilter !== "All Prices" ? 1 : 0) + (sortBy !== "Recommended" ? 1 : 0);
@@ -625,215 +628,298 @@ export function GymDiscoveryList({ initialGyms }: GymDiscoveryListProps) {
     setCurrentPage(1);
   }, [searchQuery]);
 
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="relative flex-1 min-w-0 py-2">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search gyms by name or location..."
-            className="pl-10 h-10 rounded-xl border-border bg-card text-sm focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-0"
-          />
-        </div>
-
-        <Popover open={showFilterPanel} onOpenChange={setShowFilterPanel}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className="relative gap-2 px-4 h-12 rounded-xl text-sm font-normal"
-            >
-              <Filter className="w-4 h-4" />
-              <span className="hidden xs:inline">Filters</span>
-              {activeFilterCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
-                  {activeFilterCount}
-                </span>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64" align="end">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-semibold text-foreground">
-                Advanced filters
-              </h4>
+  // Loading state — skeleton placeholders shaped like the header, search
+  // bar, filter chips, and gym cards that render once data arrives.
+  if (isLoading) {
+    return (
+      <>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Building2 className="w-5 h-5 text-primary" />
             </div>
-
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  Price Range
-                </label>
-                <select
-                  value={priceFilter}
-                  onChange={(e) => {
-                    setPriceFilter(e.target.value as PriceRangeFilter);
-                    setCurrentPage(1);
-                  }}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="All Prices">All Prices</option>
-                  {priceRangeOptions.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  Sort By
-                </label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => {
-                    setSortBy(e.target.value as SortOption);
-                    setCurrentPage(1);
-                  }}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="Recommended">Recommended</option>
-                  {sortOptions.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                onClick={resetAdvancedFilters}
-                className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
-              >
-                Reset filters
-              </button>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">
+                Discover Gyms
+              </h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Find the perfect gym and apply for membership.
+              </p>
             </div>
-          </PopoverContent>
-        </Popover>
-      </div>
-
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible scrollbar-hide">
-        {filterChips.map((chip) => (
-          <button
-            key={chip.value}
-            onClick={() => {
-              setActiveFilter(chip.value);
-              setCurrentPage(1);
-            }}
-            className={cn(
-              "inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-colors duration-150 flex-shrink-0",
-              activeFilter === chip.value
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-card text-foreground border-border hover:border-primary/50 hover:text-primary",
-            )}
-          >
-            {chip.icon}
-            {chip.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-y-3">
-        {paginatedGyms.length === 0 ? (
-          gyms.length === 0 ? (
-            <EmptyState type="no-gyms" />
-          ) : (
-            <EmptyState
-              type="no-results"
-              onClear={() => {
-                setSearchQuery("");
-                setActiveFilter("all");
-                resetAdvancedFilters();
-              }}
-            />
-          )
-        ) : (
-          paginatedGyms.map((gym) => (
-            <GymCard
-              key={gym.id}
-              gym={gym}
-              onApply={handleApply}
-              onViewDetails={handleViewDetails}
-            />
-          ))
-        )}
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
-          <p className="text-sm text-muted-foreground">
-            Showing{" "}
-            <span className="font-medium text-foreground">
-              {startIdx + 1}–
-              {Math.min(startIdx + ITEMS_PER_PAGE, filteredGyms.length)}
-            </span>{" "}
-            of{" "}
-            <span className="font-medium text-foreground">
-              {filteredGyms.length}
-            </span>{" "}
-            gyms
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => goToPage(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="p-2 border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(
-                (p) =>
-                  p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1,
-              )
-              .reduce<(number | "...")[]>((acc, p, idx, arr) => {
-                if (idx > 0 && p - (arr[idx - 1] as number) > 1)
-                  acc.push("...");
-                acc.push(p);
-                return acc;
-              }, [])
-              .map((item, idx) =>
-                item === "..." ? (
-                  <span
-                    key={`ellipsis-${idx}`}
-                    className="px-2 text-muted-foreground"
-                  >
-                    …
-                  </span>
-                ) : (
-                  <button
-                    key={item}
-                    onClick={() => goToPage(item as number)}
-                    className={`min-w-[36px] h-9 px-3 border rounded-lg text-sm font-medium transition-colors ${
-                      item === currentPage
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    {item}
-                  </button>
-                ),
-              )}
-
-            <button
-              onClick={() => goToPage(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className="p-2 border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
           </div>
         </div>
-      )}
+        <div className="space-y-5">
+          <div className="h-12 w-full animate-pulse rounded-xl bg-muted" />
+          <div className="flex items-center gap-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-9 w-24 flex-shrink-0 animate-pulse rounded-full bg-muted"
+              />
+            ))}
+          </div>
+          <div className="flex flex-col gap-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
+            ))}
+          </div>
+        </div>
+      </>
+    );
+  }
 
-      {totalPages <= 1 && filteredGyms.length > 0 && (
-        <p className="text-sm text-muted-foreground px-1">
-          {filteredGyms.length} gym{filteredGyms.length !== 1 ? "s" : ""}
+  // Error state — covers both a network/query-level failure (isError)
+  // and a request that resolved but reported success: false.
+  if (isError || !response?.success) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-16 text-center">
+        <h2 className="text-lg font-semibold">We couldn't load gyms</h2>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          {response && !response.success
+            ? response.error
+            : "Something went wrong. Please try again."}
         </p>
-      )}
-    </div>
+        <Button onClick={() => refetch()}>Try again</Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+        <div className="flex items-start gap-3">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <Building2 className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">
+              Discover Gyms
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Find the perfect gym and apply for membership.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-4 py-2.5 flex-shrink-0 self-start">
+          <Building2 className="w-4 h-4 text-primary" />
+          <span className="text-sm font-bold text-foreground">
+            {filteredGyms.length}
+          </span>
+          <span className="text-sm text-muted-foreground">Gyms Found</span>
+        </div>
+      </div>
+      <div className="space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="relative flex-1 min-w-0 py-2">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search gyms by name or location..."
+              className="pl-10 h-10 rounded-xl border-border bg-card text-sm focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-0"
+            />
+          </div>
+
+          <Popover open={showFilterPanel} onOpenChange={setShowFilterPanel}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="relative gap-2 px-4 h-12 rounded-xl text-sm font-normal"
+              >
+                <Filter className="w-4 h-4" />
+                <span className="hidden xs:inline">Filters</span>
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64" align="end">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-foreground">
+                  Advanced filters
+                </h4>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">
+                    Price Range
+                  </label>
+                  <select
+                    value={priceFilter}
+                    onChange={(e) => {
+                      setPriceFilter(e.target.value as PriceRangeFilter);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="All Prices">All Prices</option>
+                    {priceRangeOptions.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">
+                    Sort By
+                  </label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => {
+                      setSortBy(e.target.value as SortOption);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="Recommended">Recommended</option>
+                    {sortOptions.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={resetAdvancedFilters}
+                  className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
+                >
+                  Reset filters
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible scrollbar-hide">
+          {filterChips.map((chip) => (
+            <button
+              key={chip.value}
+              onClick={() => {
+                setActiveFilter(chip.value);
+                setCurrentPage(1);
+              }}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-colors duration-150 flex-shrink-0",
+                activeFilter === chip.value
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card text-foreground border-border hover:border-primary/50 hover:text-primary",
+              )}
+            >
+              {chip.icon}
+              {chip.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-y-3">
+          {paginatedGyms.length === 0 ? (
+            gyms.length === 0 ? (
+              <EmptyState type="no-gyms" />
+            ) : (
+              <EmptyState
+                type="no-results"
+                onClear={() => {
+                  setSearchQuery("");
+                  setActiveFilter("all");
+                  resetAdvancedFilters();
+                }}
+              />
+            )
+          ) : (
+            paginatedGyms.map((gym) => (
+              <GymCard
+                key={gym.id}
+                gym={gym}
+                onApply={handleApply}
+                onViewDetails={handleViewDetails}
+              />
+            ))
+          )}
+        </div>
+
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+            <p className="text-sm text-muted-foreground">
+              Showing{" "}
+              <span className="font-medium text-foreground">
+                {startIdx + 1}–
+                {Math.min(startIdx + ITEMS_PER_PAGE, filteredGyms.length)}
+              </span>{" "}
+              of{" "}
+              <span className="font-medium text-foreground">
+                {filteredGyms.length}
+              </span>{" "}
+              gyms
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="p-2 border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(
+                  (p) =>
+                    p === 1 ||
+                    p === totalPages ||
+                    Math.abs(p - currentPage) <= 1,
+                )
+                .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && p - (arr[idx - 1] as number) > 1)
+                    acc.push("...");
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((item, idx) =>
+                  item === "..." ? (
+                    <span
+                      key={`ellipsis-${idx}`}
+                      className="px-2 text-muted-foreground"
+                    >
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      onClick={() => goToPage(item as number)}
+                      className={`min-w-[36px] h-9 px-3 border rounded-lg text-sm font-medium transition-colors ${
+                        item === currentPage
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border hover:bg-muted"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ),
+                )}
+
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="p-2 border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {totalPages <= 1 && filteredGyms.length > 0 && (
+          <p className="text-sm text-muted-foreground px-1">
+            {filteredGyms.length} gym{filteredGyms.length !== 1 ? "s" : ""}
+          </p>
+        )}
+      </div>
+    </>
   );
 }

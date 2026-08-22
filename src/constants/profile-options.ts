@@ -1,3 +1,4 @@
+import { type PaymentMethod } from "@/actions/staff.action";
 import {
   Flame,
   HeartPulse,
@@ -190,6 +191,13 @@ const SESSION_TYPES = [
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+const PaymentMethodList: PaymentMethod[] = [
+  "Cash",
+  "UPI",
+  "Card",
+  "Bank Transfer",
+];
+
 export {
   GENDER_OPTIONS,
   BLOOD_GROUP_OPTIONS,
@@ -202,4 +210,5 @@ export {
   LANGUAGES,
   SESSION_TYPES,
   DAYS,
+  PaymentMethodList,
 };

@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { useTrainerStore } from "@/stores/trainer-store";
+import { useMemberStore } from "@/stores/member.store";
 
 // Types
 interface NavItem {
@@ -71,6 +72,11 @@ const navigationConfig: NavConfig = {
       children: [
         { icon: <></>, label: "All Members", href: "/owner/members" },
         { icon: <></>, label: "Add New Member", href: "/owner/members/new" },
+        {
+          icon: <></>,
+          label: "Renew Membership",
+          href: "/owner/members/renew",
+        },
       ],
     },
     {
@@ -99,10 +105,7 @@ const navigationConfig: NavConfig = {
     {
       icon: <CreditCard className="h-5 w-5" />,
       label: "Payments",
-      children: [
-        { icon: <></>, label: "All Payments", href: "/owner/payments" },
-        { icon: <></>, label: "Add New Payment", href: "/owner/payments/new" },
-      ],
+      href: "/owner/payments",
     },
     {
       icon: <QrCode className="h-5 w-5" />,
@@ -429,14 +432,19 @@ export function Sidebar({
   const clearTrainerContext = useTrainerStore(
     (state) => state.clearTrainerContext,
   );
+  const clearMemberContext = useMemberStore((state) => state.clearActiveMember);
+
   const [isPending, setIsPending] = useState(false);
 
   const { signOut } = useClerk();
   const handleSignOut = async () => {
     try {
       setIsPending(true);
-      clearTrainerContext();
+      
       await signOut();
+
+      clearTrainerContext();
+      clearMemberContext();
 
       window.location.replace("/sign-in");
     } catch (error) {

@@ -60,6 +60,9 @@ import type {
   AttendanceReason,
   AttendanceResult,
 } from "@/actions/scan.actions";
+import { useMemberStore } from "@/stores/member.store";
+import { useMemberHomeState } from "@/hooks/queries/scan.query";
+import { useQueryClient } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -1529,24 +1532,13 @@ function TodaySummaryCard({
 // ---------------------------------------------------------------------------
 
 export default function MemberHomeClient({
-  state,
   onScan,
 }: {
-  state: MemberHomeState;
-  /**
-   * Called with just the attendance token once a QR code is detected and
-   * parsed — pass the `processAttendance` server action directly. The
-   * check-in vs. check-out decision is made entirely by the
-   * `check_in_or_out` RPC server-side; the client never sends a mode.
-   * `processAttendance` never throws for expected failures (invalid QR,
-   * expired membership, etc.) — those come back as
-   * `{ success: false, reason }` and are mapped to copy in the dialog. An
-   * actual throw (network/auth failure) is also handled.
-   */
   onScan?: (token: string) => Promise<AttendanceResult>;
 }) {
   const router = useRouter();
   const [scanOpen, setScanOpen] = useState(false);
+  const setActiveGym = useMemberStore((state) => state.setActiveGym);
   // scanMode is UI-only — it drives copy like "Scan to Check In" vs.
   // "Scan to Check Out" based on today's attendance state. It is never
   // sent to processAttendance; the RPC alone decides the actual operation.
@@ -1554,6 +1546,8 @@ export default function MemberHomeClient({
   const [scanStatus, setScanStatus] = useState<ScanStatus>("idle");
   const [scanResult, setScanResult] = useState<AttendanceResult | null>(null);
   const [scanException, setScanException] = useState<string | null>(null);
+
+  const { data: state, isLoading, isError, refetch } = useMemberHomeState();
 
   const openScanner = useCallback((mode: ScanMode) => {
     setScanMode(mode);
@@ -1563,6 +1557,8 @@ export default function MemberHomeClient({
     setScanOpen(true);
   }, []);
 
+  const queryClient = useQueryClient();
+
   const handleDetected = useCallback(
     async (rawValue: string) => {
       setScanStatus("processing");
@@ -1570,11 +1566,13 @@ export default function MemberHomeClient({
       setScanException(null);
 
       const token = extractAttendanceToken(rawValue);
+
       if (!token) {
-        // Non-URL payload, or a URL missing the token param — report it
-        // the same way as any other rejected scan rather than throwing.
         setScanStatus("error");
-        setScanResult({ success: false, reason: "INVALID_QR" });
+        setScanResult({
+          success: false,
+          reason: "INVALID_QR",
+        });
         return;
       }
 
@@ -1585,20 +1583,25 @@ export default function MemberHomeClient({
 
         setScanResult(result);
 
-        if (result.success) {
-          setScanStatus("success");
-          // Let the success state register on screen, then close and pull
-          // fresh membership/attendance data from the server.
-          window.setTimeout(() => {
-            setScanOpen(false);
-            setScanStatus("idle");
-            router.refresh();
-          }, 1400);
-        } else {
+        if (!result.success) {
           setScanStatus("error");
+          return;
         }
+
+        setScanStatus("success");
+
+        // Let the success state register on screen before closing.
+        window.setTimeout(() => {
+          setScanOpen(false);
+          setScanStatus("idle");
+          refetch();
+          // queryClient.invalidateQueries({
+          //   queryKey: ["member-home-state"],
+          // });
+        }, 1400);
       } catch (err) {
         setScanStatus("error");
+
         setScanException(
           err instanceof Error
             ? err.message
@@ -1606,8 +1609,48 @@ export default function MemberHomeClient({
         );
       }
     },
-    [onScan, router],
+    [onScan, queryClient],
   );
+
+  useEffect(() => {
+    if (state?.kind === "active") {
+      setActiveGym(state.membership.gymId);
+    }
+  }, [state, setActiveGym]);
+
+  // Loading state — no data yet, show skeleton placeholders in place of
+  // the cards that will eventually render.
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="mx-auto max-w-[1400px] space-y-6 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+          <div className="h-40 animate-pulse rounded-xl bg-muted" />
+          <div className="h-32 animate-pulse rounded-xl bg-muted" />
+          <div className="h-16 animate-pulse rounded-xl bg-muted" />
+          <div className="h-48 animate-pulse rounded-xl bg-muted" />
+        </div>
+      </div>
+    );
+  }
+
+  // Error state — the fetch failed or came back malformed. Give the
+  // member a way to retry rather than crashing on state.kind below.
+  if (isError || !state) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="mx-auto flex max-w-[1400px] flex-col items-center gap-4 px-4 py-16 text-center sm:px-6 lg:px-8">
+          <h2 className="text-lg font-semibold">
+            We couldn't load your membership
+          </h2>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Something went wrong while fetching your gym and attendance details.
+            Please try again.
+          </p>
+          <Button onClick={() => refetch()}>Try again</Button>
+        </div>
+      </div>
+    );
+  }
 
   if (state.kind === "no-gym" || state.kind === "pending") {
     return (
