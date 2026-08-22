@@ -409,7 +409,9 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
                   <Eye className="w-4 h-4 mr-2" />
                   View Details
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleDownloadReceipt}>
+                <DropdownMenuItem
+                  onClick={() => handleDownloadReceipt(payment.id)}
+                >
                   <FileDown className="w-4 h-4 mr-2" />
                   Download Receipt
                 </DropdownMenuItem>
@@ -434,7 +436,9 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
                   </DropdownMenuItem>
                 )}
 
-                <DropdownMenuItem onClick={handleSendReminder}>
+                <DropdownMenuItem
+                  onClick={() => handleSendReminder(payment.id)}
+                >
                   <Bell className="w-4 h-4 mr-2" />
                   Send Reminder
                 </DropdownMenuItem>
