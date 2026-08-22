@@ -22,9 +22,11 @@ import { recordWalkinPaymentAction } from "@/actions/owner.action";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const METHODS = ["Cash", "UPI", "Card", "Bank Transfer"] as const;
-type Method = (typeof METHODS)[number];
+import { PaymentMethodList } from "@/constants/profile-options";
+import type { PaymentMethod } from "@/actions/staff.action";
 
+const METHODS = PaymentMethodList;
+type Method = PaymentMethod;
 export function RecordPaymentDialog({
   gymId,
   paymentId,
@@ -95,7 +97,10 @@ export function RecordPaymentDialog({
 
         <div className="space-y-3 py-2">
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
+            <label
+              htmlFor="record-payment-method"
+              className="mb-1 block text-xs text-muted-foreground"
+            >
               Payment Method
             </label>
             <Select
@@ -103,6 +108,7 @@ export function RecordPaymentDialog({
               onValueChange={(v) => setMethod(v as Method)}
             >
               <SelectTrigger
+                id="record-payment-method"
                 className={cn(
                   "w-full px-3 py-2 rounded-lg border transition-colors",
                   "focus:outline-none focus:ring-2 focus:ring-primary/20",
@@ -122,12 +128,15 @@ export function RecordPaymentDialog({
               </SelectContent>
             </Select>
           </div>
-
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
+            <label
+              htmlFor="record-payment-ref"
+              className="mb-1 block text-xs text-muted-foreground"
+            >
               Transaction Reference{requiresRef ? "" : " (optional)"}
             </label>
             <input
+              id="record-payment-ref"
               className={cn(
                 "w-full px-3 py-2 rounded-lg border transition-colors",
                 "focus:outline-none focus:ring-2 focus:ring-primary/20",
@@ -139,7 +148,7 @@ export function RecordPaymentDialog({
               onChange={(e) => setTransactionRef(e.target.value)}
               placeholder={"Transaction Ref No"}
             />
-          </div>
+          </div>{" "}
         </div>
 
         <DialogFooter>

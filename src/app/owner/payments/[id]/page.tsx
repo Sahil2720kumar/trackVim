@@ -23,7 +23,7 @@ import { getPaymentById } from "@/services/owner.query";
 import { PaymentHeaderActions } from "@/components/owner/payments/PaymentHeaderActions";
 import { PaymentActionsCard } from "@/components/owner/payments/PaymentActionsCard";
 
-export const STATUS_LABELS: Record<string, string> = {
+const STATUS_LABELS: Record<string, string> = {
   Pending: "Pending",
   PendingVerification: "Pending Verification",
   Rejected: "Rejected",
@@ -34,7 +34,7 @@ export const STATUS_LABELS: Record<string, string> = {
   Overdue: "Overdue",
 };
 
-export function statusBadgeClass(status: string) {
+function statusBadgeClass(status: string) {
   switch (status) {
     case "Verified":
       return "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800";
@@ -154,7 +154,9 @@ export default async function PaymentDetailsPage({
                   </p>
                   <p className="font-semibold text-foreground flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-muted-foreground" />
-                    {formatDateStr(payment.paymentDate || "—")}
+                    {payment.paymentDate
+                      ? formatDateStr(payment.paymentDate)
+                      : "—"}
                   </p>
                 </div>
                 <div>
@@ -187,7 +189,7 @@ export default async function PaymentDetailsPage({
                     Due Date
                   </p>
                   <p className="font-semibold text-foreground">
-                    {formatDateStr(payment.dueDate ?? "—")}
+                    {payment.dueDate ? formatDateStr(payment.dueDate) : "—"}
                   </p>
                 </div>
               </div>
@@ -209,7 +211,7 @@ export default async function PaymentDetailsPage({
                   </p>
                   <p className="font-bold text-2xl text-primary flex items-center gap-1 justify-end">
                     <IndianRupee className="w-5 h-5" />
-                    {payment.amount.toLocaleString()}
+                    {payment.amount.toLocaleString("en-IN")}
                   </p>
                 </div>
               </div>
@@ -424,7 +426,9 @@ export default async function PaymentDetailsPage({
                   Payment Date
                 </span>
                 <span className="font-medium">
-                  {formatDateStr(payment.paymentDate ?? "—")}
+                  {payment.paymentDate
+                    ? formatDateStr(payment.paymentDate)
+                    : "—"}
                 </span>
               </div>
               <Separator />
@@ -442,7 +446,7 @@ export default async function PaymentDetailsPage({
                 <span className="text-sm text-muted-foreground">Amount</span>
                 <div className="flex items-center font-semibold text-primary">
                   <IndianRupee className="mr-0.5 h-4 w-4" />
-                  {payment.amount.toLocaleString()}
+                  {payment.amount.toLocaleString("en-IN")}
                 </div>
               </div>
             </CardContent>
@@ -474,7 +478,7 @@ export default async function PaymentDetailsPage({
                       {event.label}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {formatDateTime(event.date ?? "—")}
+                      {event.date ? formatDateTime(event.date) : "—"}
                     </p>
                     {event.user && (
                       <p className="text-xs text-muted-foreground">

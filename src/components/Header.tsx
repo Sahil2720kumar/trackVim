@@ -170,30 +170,43 @@ function timeAgo(dateString: string) {
 }
 
 const NotificationMenu = () => {
-  const { data: notifications = [], isLoading } = useNotifications();
+  const { data: notifications = [], isLoading, isError } = useNotifications();
   const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const [pendingId, setPendingId] = useState<string | null>(null);
 
-  const rows = notifications as NotificationRow[];
+  const rows = notifications;
   const unreadCount = rows.filter((n) => !n.is_read).length;
 
   const handleMarkRead = (id: string) => {
     setPendingId(id);
     startTransition(async () => {
-      const result = await markNotificationReadAction(id);
-      if (result.success) {
-        await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      try {
+        const result = await markNotificationReadAction(id);
+        if (result.success) {
+          await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        } else {
+          toast.error(result.error || "Failed to mark notification as read");
+        }
+      } catch (err) {
+        toast.error("Failed to mark notification as read");
+      } finally {
+        setPendingId(null);
       }
-      setPendingId(null);
     });
   };
 
   const handleMarkAllRead = () => {
     startTransition(async () => {
-      const result = await markAllNotificationsReadAction();
-      if (result.success) {
-        await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      try {
+        const result = await markAllNotificationsReadAction();
+        if (result.success) {
+          await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        } else {
+          toast.error(result.error || "Failed to mark all notifications as read");
+        }
+      } catch (err) {
+        toast.error("Failed to mark all notifications as read");
       }
     });
   };
@@ -247,6 +260,10 @@ const NotificationMenu = () => {
           {isLoading ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
               Loading…
+            </div>
+          ) : isError ? (
+            <div className="py-6 text-center text-sm text-rose-500">
+              Failed to load notifications
             </div>
           ) : rows.length === 0 ? (
             <div className="py-6 text-center text-sm text-muted-foreground">

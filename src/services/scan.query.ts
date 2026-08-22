@@ -118,7 +118,7 @@ export async function getMemberHomeState(
 ): Promise<MemberHomeState> {
   // query Supabase
 
-  if (!memberId || !activeMembershipId) {
+  if (!memberId || !activeGymId || !activeMembershipId) {
     return {
       kind: "no-gym",
     };

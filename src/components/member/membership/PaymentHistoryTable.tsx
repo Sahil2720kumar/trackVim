@@ -41,24 +41,32 @@ function getPaymentBadge(status: MemberPayment["status"]) {
   }
 }
 
+import { cn, formatDateStr } from "@/lib/utils";
+
 const paymentColumns: ColumnDef<MemberPayment>[] = [
   {
     accessorKey: "date",
     header: "Date",
-    cell: (info) => (
-      <span className="text-xs text-muted-foreground whitespace-nowrap">
-        {info.getValue<string | null>() ?? "—"}
-      </span>
-    ),
+    cell: (info) => {
+      const value = info.getValue<string | null>();
+      return (
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {value ? formatDateStr(value) : "—"}
+        </span>
+      );
+    },
   },
   {
     accessorKey: "amount",
     header: "Amount",
-    cell: (info) => (
-      <span className="text-xs font-semibold whitespace-nowrap">
-        ₹{info.getValue<number>().toLocaleString("en-IN")}
-      </span>
-    ),
+    cell: (info) => {
+      const amount = info.getValue<number | null>();
+      return (
+        <span className="text-xs font-semibold whitespace-nowrap">
+          {amount != null ? `₹${amount.toLocaleString("en-IN")}` : "—"}
+        </span>
+      );
+    },
   },
   {
     accessorKey: "method",

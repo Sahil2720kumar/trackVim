@@ -62,6 +62,7 @@ import type {
 } from "@/actions/scan.actions";
 import { useMemberStore } from "@/stores/member.store";
 import { useMemberHomeState } from "@/hooks/queries/scan.query";
+import { useQueryClient } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -1556,6 +1557,8 @@ export default function MemberHomeClient({
     setScanOpen(true);
   }, []);
 
+  const queryClient = useQueryClient();
+
   const handleDetected = useCallback(
     async (rawValue: string) => {
       setScanStatus("processing");
@@ -1563,11 +1566,13 @@ export default function MemberHomeClient({
       setScanException(null);
 
       const token = extractAttendanceToken(rawValue);
+
       if (!token) {
-        // Non-URL payload, or a URL missing the token param — report it
-        // the same way as any other rejected scan rather than throwing.
         setScanStatus("error");
-        setScanResult({ success: false, reason: "INVALID_QR" });
+        setScanResult({
+          success: false,
+          reason: "INVALID_QR",
+        });
         return;
       }
 
@@ -1578,20 +1583,25 @@ export default function MemberHomeClient({
 
         setScanResult(result);
 
-        if (result.success) {
-          setScanStatus("success");
-          // Let the success state register on screen, then close and pull
-          // fresh membership/attendance data from the server.
-          window.setTimeout(() => {
-            setScanOpen(false);
-            setScanStatus("idle");
-            router.refresh();
-          }, 1400);
-        } else {
+        if (!result.success) {
           setScanStatus("error");
+          return;
         }
+
+        setScanStatus("success");
+
+        // Let the success state register on screen before closing.
+        window.setTimeout(() => {
+          setScanOpen(false);
+          setScanStatus("idle");
+          refetch();
+          // queryClient.invalidateQueries({
+          //   queryKey: ["member-home-state"],
+          // });
+        }, 1400);
       } catch (err) {
         setScanStatus("error");
+
         setScanException(
           err instanceof Error
             ? err.message
@@ -1599,7 +1609,7 @@ export default function MemberHomeClient({
         );
       }
     },
-    [onScan, router],
+    [onScan, queryClient],
   );
 
   useEffect(() => {

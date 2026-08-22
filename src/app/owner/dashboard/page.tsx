@@ -17,6 +17,7 @@ import { ExpiringMembershipsTable } from "@/components/owner/dashboard/ExpiringM
 import { RecentRegistrationsTable } from "@/components/owner/dashboard/RecentRegistrationsTable";
 import { RecentPaymentsTable } from "@/components/owner/dashboard/RecentPaymentsTable";
 import { TrainerActivityTable } from "@/components/owner/dashboard/TrainerActivityTable";
+import Link from "next/link";
 
 const PLAN_FALLBACK_COLORS = [
   "#f59e0b",
@@ -30,7 +31,7 @@ function getGreeting() {
   const hour = Number(
     new Intl.DateTimeFormat("en-IN", {
       hour: "numeric",
-      hour12: false,
+      hourCycle: "h23",
       timeZone: "Asia/Kolkata",
     }).format(new Date()),
   );
@@ -163,12 +164,12 @@ export default async function OwnerDashboard() {
               <h3 className="text-sm font-semibold text-foreground">
                 Upcoming Expiry
               </h3>
-              <a
-                href="/dashboard/members?filter=expiring"
+              <Link
+                href="/owner/members?filter=expiring"
                 className="text-xs font-semibold text-primary hover:underline shrink-0"
               >
                 View all
-              </a>
+              </Link>
             </div>
             <div className="-mx-4 sm:mx-0 overflow-x-auto">
               <ExpiringMembershipsTable data={expiringMemberships} />
@@ -180,12 +181,12 @@ export default async function OwnerDashboard() {
               <h3 className="text-sm font-semibold text-foreground">
                 Recent Registrations
               </h3>
-              <a
-                href="/dashboard/members"
+              <Link
+                href="/owner/members"
                 className="text-xs font-semibold text-primary hover:underline shrink-0"
               >
                 View all
-              </a>
+              </Link>
             </div>
             <div className="-mx-4 sm:mx-0 overflow-x-auto">
               <RecentRegistrationsTable data={recentRegistrations} />
@@ -198,12 +199,12 @@ export default async function OwnerDashboard() {
             <h3 className="text-sm font-semibold text-foreground">
               Recent Payments
             </h3>
-            <a
-              href="/dashboard/payments"
+            <Link
+              href="/owner/payments"
               className="text-xs font-semibold text-primary hover:underline shrink-0"
             >
               View all
-            </a>
+            </Link>
           </div>
           <div className="-mx-4 sm:mx-0 overflow-x-auto">
             <RecentPaymentsTable data={recentPayments} />

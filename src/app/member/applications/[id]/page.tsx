@@ -121,10 +121,10 @@ export default async function ApplicationDetailsPage({
 
   const application = {
     id: data.id,
-    applicationDate: formatDateStr(data.created_at),
-    applicationTime: formatDateTime(data.created_at),
-    approvedDate: formatDateStr(data.reviewed_at ?? ""),
-    approvedTime: formatDateTime(data.reviewed_at ?? ""),
+    applicationDate: formatDateStr(data.created_at) ?? "—",
+    applicationTime: formatDateTime(data.created_at) ?? "—",
+    approvedDate: data.reviewed_at ? formatDateStr(data.reviewed_at) : "—",
+    approvedTime: data.reviewed_at ? formatDateTime(data.reviewed_at) : "—",
     reviewedBy: data.reviewer?.full_name
       ? `${data.reviewer.full_name} (Owner)`
       : "—",

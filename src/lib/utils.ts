@@ -87,8 +87,15 @@ export function daysBetween(endDate: string) {
   return Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export function formatDateStr(value: Date | string) {
+export function formatDateStr(value: Date | string | null | undefined): string {
+  if (!value) return "—";
+
   const date = typeof value === "string" ? new Date(value) : value;
+
+  if (Number.isNaN(date.getTime())) {
+    console.error("Invalid date:", value);
+    return "—";
+  }
 
   return date.toLocaleDateString("en-IN", {
     timeZone: "Asia/Kolkata",

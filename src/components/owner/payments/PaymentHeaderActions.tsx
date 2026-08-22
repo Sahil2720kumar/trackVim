@@ -13,6 +13,7 @@ import type { PaymentDetailData } from "@/services/owner.query";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDateStr } from "@/lib/utils";
+import { toast } from "sonner";
 
 export function PaymentHeaderActions({
   payment,
@@ -72,7 +73,7 @@ export function PaymentHeaderActions({
       doc.setTextColor(60, 60, 60);
       const metaLines = [
         `Receipt No: ${payment.receiptId ?? payment.id.slice(0, 8)}`,
-        `Payment Date: ${formatDateStr(payment.paymentDate)}`,
+        `Payment Date: ${payment.paymentDate ? formatDateStr(payment.paymentDate) : "—"}`,
         `Status: ${payment.status}`,
       ];
       let metaY = 70;
@@ -177,6 +178,9 @@ export function PaymentHeaderActions({
       );
 
       doc.save(`${payment.receiptId ?? payment.id.slice(0, 8)}.pdf`);
+    } catch (error) {
+      console.error("Failed to generate receipt PDF", error);
+      toast.error("Couldn't generate the receipt PDF");
     } finally {
       setIsDownloading(false);
     }

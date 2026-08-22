@@ -11,11 +11,15 @@ export function StatusBadge({ status }: { status: string }) {
     Offline: "bg-muted text-muted-foreground",
     "On Leave": "bg-muted text-muted-foreground",
   };
+  const LABELS: Record<string, string> = {
+    PendingVerification: "Pending Verification",
+  };
+
   return (
     <span
       className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${map[status] ?? "bg-muted text-muted-foreground"}`}
     >
-      {status}
+      {LABELS[status] ?? status}
     </span>
   );
 }

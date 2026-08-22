@@ -165,6 +165,23 @@ export const useMemberStore = create<MemberStore>()(
     }),
     {
       name: "member-store",
+      version: 1,
+      migrate: (persistedState: any, version: number) => {
+        if (version === 0) {
+          // Moving from unversioned (0) to version 1.
+          // MemberMembership and MemberGym shapes changed, so we safely
+          // reset the lists and active identifiers to avoid crashes.
+          return {
+            ...persistedState,
+            memberships: [],
+            gyms: [],
+            activeMemberId: null,
+            activeGymId: null,
+            activeMembershipId: null,
+          };
+        }
+        return persistedState;
+      },
     },
   ),
 );

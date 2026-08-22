@@ -445,7 +445,11 @@ export function SessionsPanel() {
     (sum, s) => sum + (s.session_exercises?.length ?? 0),
     0,
   );
-  const nextSession = upcoming[0];
+  const nextSession = [...upcoming].sort((a, b) =>
+    `${a.session_date}T${a.start_time}`.localeCompare(
+      `${b.session_date}T${b.start_time}`,
+    ),
+  )[0];
 
   const trainers = useMemo(
     () =>

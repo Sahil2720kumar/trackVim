@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { CheckCircle, Loader2, Wallet } from "lucide-react";
 import { verifyPaymentAction } from "@/actions/owner.action";
 import { RecordPaymentDialog } from "@/components/owner/payments/RecordPaymentDialog";
@@ -42,6 +41,12 @@ export function PaymentActionsCard({
     setRecordDialogOpen(false);
     router.refresh();
   };
+
+  const hasActions = status === "Pending" || status === "PendingVerification";
+
+  if (!hasActions) {
+    return null;
+  }
 
   return (
     <>
@@ -81,10 +86,6 @@ export function PaymentActionsCard({
             <p className="text-xs text-muted-foreground rounded-lg border border-dashed p-3">
               Awaiting owner verification.
             </p>
-          )}
-
-          {(status === "Pending" || status === "PendingVerification") && (
-            <Separator className="my-1" />
           )}
         </CardContent>
       </Card>

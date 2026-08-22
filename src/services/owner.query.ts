@@ -187,6 +187,17 @@ export async function getOwnerDashboardData(gymId: string) {
   if (trainerError)
     throw new Error(`get_trainer_activity failed: ${trainerError.message}`);
 
+  if (expiringError)
+    throw new Error(
+      `expiring memberships fetch failed: ${expiringError.message}`,
+    );
+  if (registrationsError)
+    throw new Error(
+      `recent registrations fetch failed: ${registrationsError.message}`,
+    );
+  if (paymentsError)
+    throw new Error(`recent payments fetch failed: ${paymentsError.message}`);
+
   const stats = statsRows?.[0] as DashboardStats | undefined;
 
   const daysToToday = (endDate: string) =>
@@ -925,7 +936,7 @@ export async function getMembersWithAttendance(gymId: string) {
       photo_url,
       member_code,
       profile_id,
-      gym_memberships:gym_memberships!gym_memberships_member_id_members_id_fk (
+      gym_memberships:gym_memberships!gym_memberships_member_id_members_id_fk!inner (
         id,
         status,
         plan_id,

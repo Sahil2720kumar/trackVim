@@ -1,4 +1,4 @@
-import { PaymentMethod } from "@/actions/staff.action";
+import { type PaymentMethod } from "@/actions/staff.action";
 import {
   Flame,
   HeartPulse,

@@ -704,7 +704,7 @@ export function GymDiscoveryList() {
         <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-4 py-2.5 flex-shrink-0 self-start">
           <Building2 className="w-4 h-4 text-primary" />
           <span className="text-sm font-bold text-foreground">
-            {gyms.length}
+            {filteredGyms.length}
           </span>
           <span className="text-sm text-muted-foreground">Gyms Found</span>
         </div>

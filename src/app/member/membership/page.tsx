@@ -279,9 +279,7 @@ export default function MembershipPage() {
                   <h2 className="text-xl sm:text-2xl font-bold text-white">
                     {membership.plan?.plan_name ?? "—"}
                   </h2>
-                  <Badge className="bg-green-500 text-white border-0 hover:bg-green-500 text-xs px-2.5 py-0.5">
-                    {membership.status}
-                  </Badge>
+                  {getStatusBadge(membership.status)}
                 </div>
                 <div className="flex flex-wrap gap-x-6 gap-y-2 mt-2 text-white/70 text-sm">
                   <div>
@@ -370,7 +368,13 @@ export default function MembershipPage() {
             iconClass="text-green-600"
             label="Membership Status"
             value={membership.status}
-            valueClass="text-green-600"
+            valueClass={
+              membership.status === "Active"
+                ? "text-green-600"
+                : membership.status === "Expired"
+                  ? "text-red-600"
+                  : "text-yellow-600"
+            }
           />
           <StatCard
             icon={CalendarDays}

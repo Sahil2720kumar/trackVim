@@ -1,4 +1,3 @@
-// app/(owner)/owner/payments/create/page.tsx
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -7,6 +6,7 @@ import { getMembersAndPlans } from "@/services/owner.query";
 import RenewMembershipForm, {
   RENEW_MEMBERSHIP_FORM_ID,
 } from "@/components/owner/Recordpaymentform";
+import Link from "next/link";
 
 export default async function CreateRenewMembershipPage() {
   const user = await currentUser();
@@ -24,7 +24,7 @@ export default async function CreateRenewMembershipPage() {
     return (
       <div className="px-4 py-8 max-w-[1400px] mx-auto">
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-          Couldn't load members and plans: {result.error}
+          Couldn&apos;t load members and plans: {result.error}
         </div>
       </div>
     );
@@ -46,8 +46,8 @@ export default async function CreateRenewMembershipPage() {
             </div>
           </div>
           <div className="flex flex-row gap-3">
-            <Button variant="outline" className={bigSquareButton}>
-              Cancel
+            <Button variant="outline" className={bigSquareButton} asChild>
+              <Link href="/owner/members">Cancel</Link>
             </Button>
             <Button
               type="submit"

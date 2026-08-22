@@ -63,7 +63,10 @@ function membershipProgress(startDate: string | null, endDate: string | null) {
 
 function waLink(phone: string | null) {
   if (!phone) return null;
-  return `https://wa.me/${phone.replace(/[^\d]/g, "")}`;
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return null;
+  const e164 = phone.trim().startsWith("+") ? digits : `91${digits.slice(-10)}`;
+  return `https://wa.me/${e164}`;
 }
 
 export default async function MemberProfilePage({
@@ -603,7 +606,7 @@ export default async function MemberProfilePage({
                   className="h-auto p-0 text-indigo-600"
                   asChild
                 >
-                  <Link href={`/dashboard/members/${member.id}/payments`}>
+                  <Link href={`/owner/members/${member.id}/payments`}>
                     View All
                   </Link>
                 </Button>
@@ -783,54 +786,68 @@ export default async function MemberProfilePage({
               <CardTitle className="text-base">Quick Contact</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-3 gap-2">
+              {/* Call */}
               <Button
                 variant="outline"
                 className="flex h-16 flex-col gap-1.5 border-green-100 bg-green-50 text-green-700 hover:bg-green-100"
-                asChild
+                asChild={Boolean(member.contact_phone)}
                 disabled={!member.contact_phone}
               >
-                <a
-                  href={
-                    member.contact_phone
-                      ? `tel:${member.contact_phone}`
-                      : undefined
-                  }
-                >
-                  <Phone className="h-5 w-5" />
-                  <span className="text-xs">Call</span>
-                </a>
+                {member.contact_phone ? (
+                  <a href={`tel:${member.contact_phone}`}>
+                    <Phone className="h-5 w-5" />
+                    <span className="text-xs">Call</span>
+                  </a>
+                ) : (
+                  <>
+                    <Phone className="h-5 w-5" />
+                    <span className="text-xs">Call</span>
+                  </>
+                )}
               </Button>
+
+              {/* WhatsApp */}
               <Button
                 variant="outline"
                 className="flex h-16 flex-col gap-1.5 border-green-100 bg-green-50 text-green-700 hover:bg-green-100"
-                asChild
+                asChild={Boolean(member.contact_phone)}
                 disabled={!member.contact_phone}
               >
-                <a
-                  href={waLink(member.contact_phone) ?? undefined}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <MessageCircle className="h-5 w-5" />
-                  <span className="text-xs">WhatsApp</span>
-                </a>
+                {member.contact_phone ? (
+                  <a
+                    href={waLink(member.contact_phone)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <MessageCircle className="h-5 w-5" />
+                    <span className="text-xs">WhatsApp</span>
+                  </a>
+                ) : (
+                  <>
+                    <MessageCircle className="h-5 w-5" />
+                    <span className="text-xs">WhatsApp</span>
+                  </>
+                )}
               </Button>
+
+              {/* Email */}
               <Button
                 variant="outline"
                 className="flex h-16 flex-col gap-1.5 border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-                asChild
+                asChild={Boolean(member.contact_email)}
                 disabled={!member.contact_email}
               >
-                <a
-                  href={
-                    member.contact_email
-                      ? `mailto:${member.contact_email}`
-                      : undefined
-                  }
-                >
-                  <Mail className="h-5 w-5" />
-                  <span className="text-xs">Email</span>
-                </a>
+                {member.contact_email ? (
+                  <a href={`mailto:${member.contact_email}`}>
+                    <Mail className="h-5 w-5" />
+                    <span className="text-xs">Email</span>
+                  </a>
+                ) : (
+                  <>
+                    <Mail className="h-5 w-5" />
+                    <span className="text-xs">Email</span>
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>

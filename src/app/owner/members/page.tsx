@@ -32,7 +32,7 @@ function resolveStatus(member: MemberWithAttendance): MemberRow["status"] {
   }
 }
 
-export function toMemberRow(member: MemberWithAttendance): MemberRow {
+function toMemberRow(member: MemberWithAttendance): MemberRow {
   const membership = member.membership;
 
   return {

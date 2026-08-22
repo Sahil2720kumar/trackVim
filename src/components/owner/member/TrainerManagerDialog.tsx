@@ -11,12 +11,12 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Search, Star, X, UserPlus, Users2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getInitials } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   addTrainerAssignment,
   removeTrainerAssignment,
@@ -46,7 +46,7 @@ export function TrainerManagerDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [pending, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const assignedIds = new Set(assignedTrainers.map((t) => t.id));
@@ -65,13 +65,77 @@ export function TrainerManagerDialog({
     );
   }, [availableTrainers, assignedIds, query]);
 
-  function run(id: string, action: () => Promise<unknown>) {
-    setPendingId(id);
+  const handleAdd = (trainerId: string) => {
+    if (isPending) return;
+    setPendingId(trainerId);
     startTransition(async () => {
-      await action();
-      setPendingId(null);
+      try {
+        const result = await addTrainerAssignment({
+          memberId,
+          gymId,
+          trainerId,
+          isPrimary: assignedTrainers.length === 0,
+        });
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success("Trainer assigned");
+      } catch (error) {
+        console.error("Error assigning trainer:", error);
+        toast.error("Error assigning trainer. Please try again.");
+      } finally {
+        setPendingId(null);
+      }
     });
-  }
+  };
+
+  const handleRemove = (assignmentId: string) => {
+    if (isPending) return;
+    setPendingId(assignmentId);
+    startTransition(async () => {
+      try {
+        const result = await removeTrainerAssignment({
+          assignmentId,
+          gymId,
+        });
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success("Trainer removed");
+      } catch (error) {
+        console.error("Error removing trainer:", error);
+        toast.error("Error removing trainer. Please try again.");
+      } finally {
+        setPendingId(null);
+      }
+    });
+  };
+
+  const handleSetPrimary = (assignmentId: string) => {
+    if (isPending) return;
+    setPendingId(assignmentId);
+    startTransition(async () => {
+      try {
+        const result = await setPrimaryTrainerAssignment({
+          assignmentId,
+          memberId,
+          gymId,
+        });
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success("Primary trainer updated");
+      } catch (error) {
+        console.error("Error setting primary trainer:", error);
+        toast.error("Error setting primary trainer. Please try again.");
+      } finally {
+        setPendingId(null);
+      }
+    });
+  };
 
   return (
     <Dialog
@@ -126,7 +190,7 @@ export function TrainerManagerDialog({
           ) : (
             <div className="space-y-2">
               {assignedTrainers.map((t) => {
-                const isPendingRow = pending && pendingId === t.assignmentId;
+                const isPendingRow = isPending && pendingId === t.assignmentId;
                 return (
                   <div
                     key={t.assignmentId}
@@ -170,16 +234,8 @@ export function TrainerManagerDialog({
                               variant="ghost"
                               size="sm"
                               className="h-7 px-2 text-xs text-indigo-600 opacity-0 transition-opacity hover:bg-indigo-50 hover:text-indigo-700 group-hover:opacity-100"
-                              disabled={pending}
-                              onClick={() =>
-                                run(t.assignmentId, () =>
-                                  setPrimaryTrainerAssignment({
-                                    assignmentId: t.assignmentId,
-                                    memberId,
-                                    gymId,
-                                  }),
-                                )
-                              }
+                              disabled={isPending}
+                              onClick={() => handleSetPrimary(t.assignmentId)}
                             >
                               Make primary
                             </Button>
@@ -188,15 +244,8 @@ export function TrainerManagerDialog({
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                            disabled={pending}
-                            onClick={() =>
-                              run(t.assignmentId, () =>
-                                removeTrainerAssignment({
-                                  assignmentId: t.assignmentId,
-                                  gymId,
-                                }),
-                              )
-                            }
+                            disabled={isPending}
+                            onClick={() => handleRemove(t.assignmentId)}
                           >
                             <X className="h-3.5 w-3.5" />
                           </Button>
@@ -248,7 +297,7 @@ export function TrainerManagerDialog({
             ) : (
               <div className="space-y-2">
                 {availableToAdd.map((t) => {
-                  const isPendingRow = pending && pendingId === t.id;
+                  const isPendingRow = isPending && pendingId === t.id;
                   return (
                     <div
                       key={t.id}
@@ -285,17 +334,8 @@ export function TrainerManagerDialog({
                         variant="outline"
                         size="sm"
                         className="h-7 flex-shrink-0 px-2.5 text-xs"
-                        disabled={pending}
-                        onClick={() =>
-                          run(t.id, () =>
-                            addTrainerAssignment({
-                              memberId,
-                              gymId,
-                              trainerId: t.id,
-                              isPrimary: assignedTrainers.length === 0,
-                            }),
-                          )
-                        }
+                        disabled={isPending}
+                        onClick={() => handleAdd(t.id)}
                       >
                         {isPendingRow ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />

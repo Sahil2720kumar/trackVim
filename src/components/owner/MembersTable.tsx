@@ -90,7 +90,7 @@ export function MembersTable({
   availableTrainers,
 }: MembersTableProps) {
   const router = useRouter();
-  const [members] = useState<MemberRow[]>(initialMembers);
+  const members = initialMembers;
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -108,6 +108,7 @@ export function MembersTable({
 
   const handleViewMember = (id: string) => router.push(`/owner/members/${id}`);
 
+  //confirmation dialog implementation pending
   const handleEditMember = () =>
     toast.error("Edit function is not implemented yet");
 

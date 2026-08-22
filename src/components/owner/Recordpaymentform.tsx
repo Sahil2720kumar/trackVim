@@ -108,8 +108,8 @@ export default function RenewMembershipForm({
       gymMembershipId: "",
       planId: "",
       paymentDate: new Date().toISOString().slice(0, 10),
-      paymentMethod: "upi",
-      paymentStatus: "paid",
+      paymentMethod: "UPI",
+      paymentStatus: "pending",
       transactionRef: "",
       collectedBy: ownerName ?? "",
       notes: "",
@@ -365,8 +365,8 @@ export default function RenewMembershipForm({
           {/* 2. Membership Plan */}
           <SectionCard title="Membership Plan" icon={Package}>
             <p className="text-sm text-muted-foreground -mt-2">
-              Defaults to the member's current plan. Change it here to renew
-              onto a different plan.
+              Defaults to the member&apos;s current plan. Change it here to
+              renew onto a different plan.
             </p>
 
             <div className="relative">

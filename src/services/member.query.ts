@@ -11,7 +11,6 @@ import {
 } from "@/types";
 
 type TypedSupabaseClient = SupabaseClient<Database>;
-type TypedSupabaseServer = SupabaseSer;
 
 // ============================================================================
 // Gym Discovery
@@ -701,6 +700,9 @@ export async function getMyAttendance(
   supabase: TypedSupabaseClient,
   gymId?: string,
 ) {
+  if (!gymId) {
+    return { success: false as const, error: "Gym ID is required." };
+  }
   let query = supabase
     .from("attendance")
     .select(
@@ -950,6 +952,7 @@ export async function getMyMembershipDetails(
       .eq("gym_id", gymId)
       .eq("member_id", memberId)
       .eq("is_active", true)
+      .eq("is_primary", true)
       .maybeSingle(),
 
     /*

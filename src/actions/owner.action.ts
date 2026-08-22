@@ -1136,48 +1136,107 @@ export async function addTrainerAssignment(input: {
   gymId: string;
   trainerId: string;
   isPrimary: boolean;
-}) {
+}): Promise<ActionResult> {
   const supabase = await createServerClient();
-  await supabase.from("trainer_assignments").insert({
+
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== input.gymId) {
+    return {
+      success: false,
+      error: "Not authorized to add trainer assignment.",
+    };
+  }
+  const { error } = await supabase.from("trainer_assignments").insert({
     gym_id: input.gymId,
     member_id: input.memberId,
     trainer_id: input.trainerId,
     is_primary: input.isPrimary,
   });
-  revalidatePath(`/owner/members/${input.memberId}`);
+  if (error) {
+    return {
+      success: false,
+      error: "Failed to add trainer assignment",
+    };
+  }
+  revalidatePath(`/owner/members`);
+  revalidatePath(`/owner/members/[id]`, "page");
+  return { success: true, data: undefined };
 }
 
 export async function removeTrainerAssignment(input: {
   assignmentId: string;
   gymId: string;
-}) {
+}): Promise<ActionResult> {
   const supabase = await createServerClient();
-  await supabase
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== input.gymId) {
+    return {
+      success: false,
+      error: "Not authorized to remove trainer assignment.",
+    };
+  }
+  const { error } = await supabase
     .from("trainer_assignments")
     .update({ is_active: false, unassigned_at: new Date().toISOString() })
     .eq("id", input.assignmentId);
-  revalidatePath(`/owner/members`); // or pass memberId through for a tighter revalidate
+
+  if (error) {
+    return {
+      success: false,
+      error: "Failed to remove trainer assignment",
+    };
+  }
+
+  revalidatePath(`/owner/members`);
+  revalidatePath(`/owner/members/[id]`, "page");
+  return { success: true, data: undefined };
 }
 
 export async function setPrimaryTrainerAssignment(input: {
   assignmentId: string;
   memberId: string;
   gymId: string;
-}) {
+}): Promise<ActionResult> {
   const supabase = await createServerClient();
-  // clear any existing primary for this member first, then set the new one —
-  // the unique partial index is your backstop against a race leaving two primaries
-  await supabase
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== input.gymId) {
+    return {
+      success: false,
+      error: "Not authorized to set primary trainer assignment.",
+    };
+  }
+  const { error } = await supabase
     .from("trainer_assignments")
     .update({ is_primary: false })
     .eq("member_id", input.memberId)
     .eq("gym_id", input.gymId)
     .eq("is_active", true);
-  await supabase
+
+  const { error: primaryError } = await supabase
     .from("trainer_assignments")
     .update({ is_primary: true })
     .eq("id", input.assignmentId);
-  revalidatePath(`/owner/members/${input.memberId}`);
+  if (primaryError || error) {
+    return {
+      success: false,
+      error: "Failed to set primary trainer assignment",
+    };
+  }
+  revalidatePath(`/owner/members`);
+  revalidatePath(`/owner/members/[id]`, "page");
+  return { success: true, data: undefined };
 }
 
 // ============================================================================
@@ -1356,7 +1415,7 @@ export async function recordWalkinPaymentAction(input: {
   if (error) return { success: false as const, error: error.message };
 
   revalidatePath(`/owner/applications/[applicationId]`, "page");
-  revalidatePath(`/owner/applications/`);
+  revalidatePath(`/owner/applications`);
   revalidatePath("/owner/payments");
   return { success: true as const };
 }

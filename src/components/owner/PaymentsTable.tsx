@@ -225,10 +225,14 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
   };
 
   const handleVerify = (id: string) => {
-    const previousStatus = payments.find((p) => p.id === id)?.status;
+    let previousStatus: PaymentRow["status"] | undefined;
     // optimistic update so the row flips immediately
     setPayments((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: "Verified" } : p)),
+      prev.map((p) => {
+        if (p.id !== id) return p;
+        previousStatus = p.status;
+        return { ...p, status: "Verified" };
+      }),
     );
     startVerifying(async () => {
       const result = await verifyPaymentAction({ paymentId: id, gymId });
@@ -239,7 +243,9 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
           ),
         );
         toast.error("Couldn't verify payment — try again");
+        return;
       }
+      router.refresh();
     });
   };
 
@@ -257,11 +263,17 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
     );
   };
 
-  const handleDownloadReceipt = () =>
+  const handleDownloadReceipt = (id: string) => {
+    const payment = payments.find((p) => p.id === id);
+    if (!payment) return;
     toast.error("Download receipt is not implemented yet");
+  };
 
-  const handleSendReminder = () =>
+  const handleSendReminder = (id: string) => {
+    const payment = payments.find((p) => p.id === id);
+    if (!payment) return;
     toast.error("Send reminder is not implemented yet");
+  };
 
   const handleViewDetails = (paymentId: string) =>
     router.push(`/owner/payments/${paymentId}`);
@@ -716,11 +728,15 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem onClick={handleViewDetails}>
+                        <DropdownMenuItem
+                          onClick={() => handleViewDetails(payment.id)}
+                        >
                           <Eye className="w-4 h-4 mr-2" />
                           View Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleDownloadReceipt}>
+                        <DropdownMenuItem
+                          onClick={() => handleDownloadReceipt(payment.id)}
+                        >
                           <FileDown className="w-4 h-4 mr-2" />
                           Download Receipt
                         </DropdownMenuItem>
@@ -745,7 +761,9 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
                           </DropdownMenuItem>
                         )}
 
-                        <DropdownMenuItem onClick={handleSendReminder}>
+                        <DropdownMenuItem
+                          onClick={() => handleSendReminder(payment.id)}
+                        >
                           <Bell className="w-4 h-4 mr-2" />
                           Send Reminder
                         </DropdownMenuItem>
