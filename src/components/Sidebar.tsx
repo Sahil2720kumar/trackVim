@@ -440,9 +440,11 @@ export function Sidebar({
   const handleSignOut = async () => {
     try {
       setIsPending(true);
+      
+      await signOut();
+
       clearTrainerContext();
       clearMemberContext();
-      await signOut();
 
       window.location.replace("/sign-in");
     } catch (error) {

@@ -360,12 +360,12 @@ const UserMenu = ({
     try {
       setIsPending(true);
 
-      clearTrainerContext();
-      clearMemberContext();
-
       await signOut({
         redirectUrl: "/sign-in",
       });
+
+      clearTrainerContext();
+      clearMemberContext();
     } catch (error) {
       console.error("Sign out failed:", error);
       toast.error("Something went wrong signing out");
