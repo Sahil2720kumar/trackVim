@@ -195,9 +195,37 @@ export async function getCurrentOwnerProfile(
 ) {
   const { data, error } = await supabase
     .from("users")
-    .select("id, full_name, email, username, avatar_url, role, account_status")
+    .select(
+      `
+      id,
+      full_name,
+      email,
+      username,
+      phone,
+      avatar_url,
+      role,
+      account_status,
+      gyms (
+        id,
+        name,
+        code,
+        logo_url
+      )
+      `,
+    )
     .eq("clerk_id", clerkId)
+    .eq("role", "owner")
     .single();
-  if (error) return { success: false as const, error: error.message };
-  return { success: true as const, data };
+
+  if (error) {
+    return {
+      success: false as const,
+      error: error.message,
+    };
+  }
+
+  return {
+    success: true as const,
+    data,
+  };
 }

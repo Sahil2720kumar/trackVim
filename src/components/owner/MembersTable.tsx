@@ -22,9 +22,14 @@ import {
   Eye,
   Pencil,
   Trash2,
+  IndianRupee,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatCard } from "@/components/StatCard";
 import {
   Popover,
   PopoverTrigger,
@@ -44,23 +49,19 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import { MemberRow } from "@/services/owner.query";
+import { MemberRow, MemberWithAttendance } from "@/services/owner.query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { daysBetween, formatDateStr } from "@/lib/utils";
+import { getInitials } from "@/lib/application-status";
+import {
+  useMembersWithAttendance,
+  useGymMemberStats,
+  useTrainersAndPlans,
+} from "@/hooks/queries/owner.query";
 
 const statusOptions = ["All", "Active", "Expired", "Expiring Soon", "Pending"];
 const memberTypeOptions = ["All Types", "Normal", "WalkIn"] as const;
-
-type PlanOption = { id: string; plan_name: string };
-type TrainerOption = { id: string; full_name: string };
-
-type MembersTableProps = {
-  initialMembers: MemberRow[];
-  trainerOptions: string[];
-  planOptions: string[];
-  availablePlans: PlanOption[];
-  availableTrainers: TrainerOption[];
-};
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -82,20 +83,136 @@ const getMemberTypeColor = (memberType: MemberRow["memberType"]) =>
     ? "bg-purple-100 text-purple-700"
     : "bg-sky-100 text-sky-700";
 
-export function MembersTable({
-  initialMembers,
-  trainerOptions,
-  planOptions,
-  availablePlans,
-  availableTrainers,
-}: MembersTableProps) {
+// ─── Data transforms (moved from the server page — now run client-side) ───
+
+function resolveStatus(member: MemberWithAttendance): MemberRow["status"] {
+  if (!member.membership) return "Pending";
+
+  switch (member.membershipStatus) {
+    case "PaymentPending":
+    case "PaymentUploaded":
+    case "PaymentRejected":
+    case "Scheduled":
+      return "Pending";
+    case "Expired":
+      return "Expired";
+    case "Active": {
+      const daysLeft = daysBetween(member.membership.end_date);
+      return daysLeft <= 7 ? "Expiring Soon" : "Active";
+    }
+    default:
+      return "Pending";
+  }
+}
+
+function toMemberRow(member: MemberWithAttendance): MemberRow {
+  const membership = member.membership;
+
+  return {
+    id: member.id,
+    name: member.full_name,
+    email: member.contact_email ?? "—",
+    phone: member.contact_phone ?? "—",
+    avatar: getInitials(member.full_name),
+    memberType: member.memberType,
+    plan: membership?.plan?.plan_name ?? "No Plan",
+    planPrice: membership?.final_amount
+      ? `₹${membership.final_amount.toLocaleString("en-IN")}`
+      : "—",
+    trainer: member.trainer?.full_name ?? "Unassigned",
+    joined: membership?.start_date ? formatDateStr(membership.start_date) : "—",
+    expiry: membership?.end_date ? formatDateStr(membership.end_date) : "—",
+    daysLeft: membership?.end_date ? daysBetween(membership.end_date) : 0,
+    attendance: Math.round(member.attendanceRate),
+    status: resolveStatus(member),
+  };
+}
+
+// ─── Loading skeleton — flat blocks, matches DashboardSkeleton style ───────
+
+function MembersTableSkeleton() {
+  return (
+    <>
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-[132px] w-full rounded-2xl" />
+        ))}
+      </section>
+
+      <div className="mt-4 sm:mt-6">
+        <Skeleton className="h-[124px] w-full rounded-lg" />
+      </div>
+
+      <div className="mt-4 sm:mt-6">
+        <Skeleton className="h-[520px] w-full rounded-lg" />
+      </div>
+    </>
+  );
+}
+
+// ─── Error state ────────────────────────────────────────────────────────────
+
+function MembersTableError({
+  message,
+  onRetry,
+  retrying,
+}: {
+  message: string | null;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 sm:p-8 flex flex-col items-center text-center gap-3">
+      <p className="text-sm font-medium text-destructive">
+        Couldn't load members{message ? `: ${message}` : "."}
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onRetry}
+        disabled={retrying}
+        className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10"
+      >
+        {retrying ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : (
+          <RefreshCw className="w-3.5 h-3.5" />
+        )}
+        {retrying ? "Retrying…" : "Try again"}
+      </Button>
+    </div>
+  );
+}
+
+export function MembersTable() {
   const router = useRouter();
-  const members = initialMembers;
+
+  const membersQuery = useMembersWithAttendance();
+  const statsQuery = useGymMemberStats();
+  const trainersPlansQuery = useTrainersAndPlans();
+
+  const isLoading =
+    membersQuery.isLoading ||
+    statsQuery.isLoading ||
+    trainersPlansQuery.isLoading;
+  const isError =
+    membersQuery.isError || statsQuery.isError || trainersPlansQuery.isError;
+  const isFetching =
+    membersQuery.isFetching ||
+    statsQuery.isFetching ||
+    trainersPlansQuery.isFetching;
+
+  const refetchAll = () => {
+    membersQuery.refetch();
+    statsQuery.refetch();
+    trainersPlansQuery.refetch();
+  };
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
-  // Advanced filter popover state
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [planFilter, setPlanFilter] = useState("All Plans");
   const [trainerFilter, setTrainerFilter] = useState("All Trainers");
@@ -105,15 +222,46 @@ export function MembersTable({
   const itemsPerPage = 5;
 
   const handleAddMember = () => router.push("/owner/members/new");
-
   const handleViewMember = (id: string) => router.push(`/owner/members/${id}`);
-
-  //confirmation dialog implementation pending
   const handleEditMember = () =>
     toast.error("Edit function is not implemented yet");
-
   const handleDeleteMember = () =>
     toast.error("Delete function is not implemented yet");
+
+  // Response payloads (service-layer Result wrapper: { success, data, error })
+  const membersResponse = membersQuery.data;
+  const statsResponse = statsQuery.data;
+  const trainersPlansResponse = trainersPlansQuery.data;
+
+  const members: MemberRow[] = useMemo(() => {
+    if (!membersResponse?.success) return [];
+    return membersResponse.data.map(toMemberRow);
+  }, [membersResponse]);
+
+  const stats = statsResponse?.success
+    ? statsResponse.data
+    : {
+        totalMembers: 0,
+        activeMembers: 0,
+        expiringSoon: 0,
+        pendingPayments: 0,
+        pendingAmount: 0,
+      };
+
+  const trainers = trainersPlansResponse?.success
+    ? trainersPlansResponse.data.trainers
+    : [];
+  const plans = trainersPlansResponse?.success
+    ? trainersPlansResponse.data.plans
+    : [];
+
+  const trainerOptions = ["All Trainers", ...trainers.map((t) => t.full_name)];
+  const planOptions = ["All Plans", ...plans.map((p) => p.plan_name)];
+
+  const activePct =
+    stats.totalMembers > 0
+      ? Math.round((stats.activeMembers / stats.totalMembers) * 100)
+      : 0;
 
   // Filter and search logic (runs before the table ever sees the data)
   const filteredMembers = useMemo(() => {
@@ -195,7 +343,6 @@ export function MembersTable({
     URL.revokeObjectURL(url);
   };
 
-  // Column definitions for TanStack Table
   const columns = useMemo<ColumnDef<MemberRow>[]>(
     () => [
       {
@@ -399,12 +546,63 @@ export function MembersTable({
     table.setPageIndex(0);
   };
 
+  if (isLoading) {
+    return <MembersTableSkeleton />;
+  }
+
+  if (isError) {
+    const firstError =
+      membersQuery.error ?? statsQuery.error ?? trainersPlansQuery.error;
+    return (
+      <MembersTableError
+        message={firstError instanceof Error ? firstError.message : null}
+        onRetry={refetchAll}
+        retrying={isFetching}
+      />
+    );
+  }
+
   return (
     <>
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard
+          icon={Users}
+          title="Total Members"
+          value={stats.totalMembers}
+          subtitle="All-time roster"
+          iconBg="bg-violet-100"
+          iconColor="text-violet-600"
+        />
+        <StatCard
+          icon={Users}
+          title="Active Members"
+          value={stats.activeMembers}
+          subtitle={`${activePct}% of total members`}
+          iconBg="bg-blue-100"
+          iconColor="text-blue-600"
+        />
+        <StatCard
+          icon={Filter}
+          title="Expiring Soon"
+          value={stats.expiringSoon}
+          subtitle="Within 7 days"
+          iconBg="bg-red-100"
+          iconColor="text-red-600"
+        />
+        <StatCard
+          icon={IndianRupee}
+          title="Pending Payments"
+          value={stats.pendingPayments}
+          subtitle={`₹${stats.pendingAmount.toLocaleString("en-IN")}`}
+          iconBg="bg-orange-100"
+          iconColor="text-orange-600"
+        />
+      </div>
+
       {/* Search and Filters */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 mt-4 sm:mt-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-card border border-border rounded-lg p-3 sm:p-4">
-          {/* Search Input */}
           <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
             <input
@@ -428,7 +626,6 @@ export function MembersTable({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Filter Button + Popover */}
             <Popover open={showFilterPanel} onOpenChange={setShowFilterPanel}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="relative">
@@ -527,7 +724,6 @@ export function MembersTable({
               </PopoverContent>
             </Popover>
 
-            {/* Export Button */}
             <button
               onClick={handleExport}
               className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted transition-colors cursor-pointer"
@@ -536,7 +732,6 @@ export function MembersTable({
               <span className="hidden sm:inline">Export</span>
             </button>
 
-            {/* Add Member Button */}
             <button
               onClick={handleAddMember}
               className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium cursor-pointer"
@@ -548,7 +743,6 @@ export function MembersTable({
           </div>
         </div>
 
-        {/* Quick Filter Tabs */}
         <div className="flex gap-2 overflow-x-auto pb-2 -mx-3 px-3 sm:mx-0 sm:px-0">
           {statusOptions.map((status) => (
             <button
@@ -571,8 +765,7 @@ export function MembersTable({
       </div>
 
       {/* Members Table (desktop/tablet) + Cards (mobile) */}
-      <div className="bg-card border border-border rounded-lg overflow-hidden">
-        {/* Desktop table — shadcn Table + TanStack Table */}
+      <div className="bg-card border border-border rounded-lg overflow-hidden mt-4 sm:mt-6">
         <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader>
@@ -633,7 +826,6 @@ export function MembersTable({
           </Table>
         </div>
 
-        {/* Mobile card list — same row data from the table instance */}
         <div className="md:hidden divide-y divide-border">
           {rows.length > 0 ? (
             rows.map((row) => {
@@ -774,9 +966,8 @@ export function MembersTable({
         </div>
       </div>
 
-      {/* Pagination */}
       {filteredMembers.length > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-3">
           <p className="text-sm text-muted-foreground">
             Showing {startIdx + 1} to{" "}
             {Math.min(startIdx + pageSize, filteredMembers.length)} of{" "}
@@ -791,7 +982,6 @@ export function MembersTable({
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            {/* Numbered pages: shown from sm breakpoint up */}
             <div className="hidden sm:flex items-center gap-2">
               {Array.from({ length: totalPages }).map((_, i) => {
                 const page = i + 1;
@@ -823,7 +1013,6 @@ export function MembersTable({
               })}
             </div>
 
-            {/* Compact page indicator on mobile */}
             <span className="sm:hidden text-sm font-medium text-foreground px-2 whitespace-nowrap">
               Page {safePage} of {totalPages}
             </span>

@@ -1,22 +1,23 @@
-import { ActionResult } from "@/actions/member.action";
-import { createServerClient } from "@/lib/supabase/server";
+import { Database } from "@/db/database.types";
 import { formatDate, getTodayDateStr } from "@/lib/utils";
-import { MembershipApplication } from "@/types";
-import { auth } from "@clerk/nextjs/server";
-import { meta } from "zod";
+import { SupabaseClient } from "@supabase/supabase-js";
+
+type TypedSupabaseClient = SupabaseClient<Database>;
 
 // ============================================================================
 // Read-only data-fetching functions
 //
-// These are NOT Server Actions (no "use server" directive). They're plain
-// async functions meant to be awaited directly inside Server Components /
-// route handlers (e.g. `const { data } = await getGymMembers(gymId)`).
-// Keeping them out of the actions file avoids turning every read into a
-// Server Action endpoint, which adds pointless serialization/network
-// overhead for data that never mutates anything.
+// These run CLIENT-SIDE — the caller passes in a Supabase client obtained
+// from `useSupabaseClient()` (same pattern as notifications/service.ts).
+// Authorization is enforced entirely by Supabase RLS policies keyed off the
+// signed-in user; there is no separate Clerk `auth()` / sessionClaims check
+// in this file anymore, so any table these functions touch must have RLS
+// that scopes rows to the requesting owner's gym.
 // ============================================================================
-export async function getGymOwnerInfo(gymId: string) {
-  const supabase = await createServerClient();
+export async function getGymOwnerInfo(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("gyms")
     .select(
@@ -83,8 +84,10 @@ function pctChange(current: number, previous: number) {
   return Math.round(((current - previous) / previous) * 100);
 }
 
-export async function getOwnerDashboardData(gymId: string) {
-  const supabase = await createServerClient();
+export async function getOwnerDashboardData(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const asOfDate = getTodayDateStr("Asia/Kolkata");
   const expiryWindowEnd = new Date();
   expiryWindowEnd.setDate(expiryWindowEnd.getDate() + 30);
@@ -262,8 +265,10 @@ export type OwnerDashboardResult = Awaited<
   ReturnType<typeof getOwnerDashboardData>
 >;
 
-export async function getMembershipPlans(gymId: string) {
-  const supabase = await createServerClient();
+export async function getMembershipPlans(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("membership_plans")
     .select(
@@ -279,8 +284,10 @@ export async function getMembershipPlans(gymId: string) {
   return { success: true as const, data };
 }
 
-export async function getGymRevenueMonthly(gymId: string) {
-  const supabase = await createServerClient();
+export async function getGymRevenueMonthly(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
   const { data, error } = await supabase.rpc("get_gym_revenue_monthly", {
@@ -303,8 +310,10 @@ export async function getGymRevenueMonthly(gymId: string) {
   return { success: true as const, data: coerced as RevenueMonthPoint[] };
 }
 
-export async function getTopPerformingPlans(gymId: string) {
-  const supabase = await createServerClient();
+export async function getTopPerformingPlans(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
   const { data, error } = await supabase.rpc("get_plan_performance_monthly", {
@@ -328,9 +337,10 @@ export async function getTopPerformingPlans(gymId: string) {
   return { success: true as const, data: coerced as PlanPerformanceRow[] };
 }
 
-export async function getTrainersAndPlans(gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getTrainersAndPlans(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const [trainersResult, plansResult] = await Promise.all([
     supabase
       .from("trainers")
@@ -370,9 +380,10 @@ export type TrainersAndPlansResult = Extract<
   { success: true }
 >["data"];
 
-export async function getGymWithDetails(gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getGymWithDetails(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("gyms")
     .select(
@@ -393,9 +404,10 @@ export async function getGymWithDetails(gymId: string) {
 }
 
 //Application Quries
-export async function getApplications(gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getApplications(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("membership_applications")
     .select(
@@ -416,22 +428,18 @@ export async function getApplications(gymId: string) {
   };
 }
 
-export async function getApplicationById(id: string) {
-  const supabase = await createServerClient();
-  const { sessionClaims } = await auth();
-  const ownerMeta = (sessionClaims?.publicMetadata ?? {}) as {
-    role?: string;
-    gymId?: string;
-  };
-
-  if (ownerMeta.role !== "owner" || !ownerMeta.gymId) {
-    return {
-      success: false as const,
-      error: "Not authorized to view this application.",
-    };
-  }
-  const gymId = ownerMeta.gymId;
-
+/**
+ * The role/gymId authorization check that used to live here (via Clerk
+ * `auth()` + sessionClaims) is gone — `gymId` is now supplied by the
+ * caller (from the owner store) and RLS on `membership_applications` /
+ * `gyms` is what actually keeps an owner from reading another gym's
+ * application.
+ */
+export async function getApplicationById(
+  supabase: TypedSupabaseClient,
+  id: string,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("membership_applications")
     .select(
@@ -467,9 +475,10 @@ export async function getApplicationById(id: string) {
   return { success: true as const, data: data };
 }
 
-export async function getPendingPayments(gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getPendingPayments(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("payments")
     .select(
@@ -488,9 +497,10 @@ export async function getPendingPayments(gymId: string) {
   return { success: true as const, data };
 }
 
-export async function getGymMembers(gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getGymMembers(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("gym_memberships")
     .select(
@@ -507,9 +517,10 @@ export async function getGymMembers(gymId: string) {
   return { success: true as const, data };
 }
 
-export async function getGymActiveMembers(gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getGymActiveMembers(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("gym_memberships")
     .select(
@@ -526,9 +537,10 @@ export async function getGymActiveMembers(gymId: string) {
   return { success: true as const, data };
 }
 
-export async function getGymSubscriptions(gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getGymSubscriptions(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("gym_subscriptions")
     .select(`*, subscription_payments(*)`)
@@ -539,9 +551,11 @@ export async function getGymSubscriptions(gymId: string) {
   return { success: true as const, data };
 }
 
-export async function getGymAttendance(gymId: string, date?: string) {
-  const supabase = await createServerClient();
-
+export async function getGymAttendance(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+  date?: string,
+) {
   let query = supabase
     .from("attendance")
     .select(
@@ -561,17 +575,15 @@ export async function getGymAttendance(gymId: string, date?: string) {
 }
 
 //Get Trainers
-export async function getAllTrainers(gymId: string) {
-  const supabase = await createServerClient();
-  const { sessionClaims } = await auth();
-  const meta = (sessionClaims?.publicMetadata ?? {}) as {
-    role?: string;
-    gymId?: string;
-  };
-  if (meta.role !== "owner" || meta.gymId !== gymId) {
-    return { success: false as const, error: "Not authorized." };
-  }
-
+/**
+ * The role/gymId authorization check that used to live here (via Clerk
+ * `auth()`) is gone — RLS on `trainers` is what scopes this to the
+ * requesting owner's gym now.
+ */
+export async function getAllTrainers(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("trainers")
     .select(
@@ -594,8 +606,10 @@ export type TrainerList = Extract<
 
 export type TrainerRow = TrainerList[number];
 
-export async function getTrainerStats(gymId: string) {
-  const supabase = await createServerClient();
+export async function getTrainerStats(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const today = getTodayDateStr();
 
   const [
@@ -676,9 +690,11 @@ function progressLabelFor(rate: number): AssignedMember["progressLabel"] {
   return "Needs Attention";
 }
 
-export async function getTrainerById(trainerId: string, gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getTrainerById(
+  supabase: TypedSupabaseClient,
+  trainerId: string,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("trainers")
     .select(
@@ -790,8 +806,10 @@ export type TrainerAssignedMember = Extract<
 // Session stats — kept as-is, separate queries
 // ============================================================================
 
-export async function getTrainerSessionStats(trainerId: string) {
-  const supabase = await createServerClient();
+export async function getTrainerSessionStats(
+  supabase: TypedSupabaseClient,
+  trainerId: string,
+) {
   const now = new Date();
   const monthStart = formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
   const monthEnd = formatDate(
@@ -820,8 +838,10 @@ export async function getTrainerSessionStats(trainerId: string) {
   };
 }
 
-export async function getMonthlySessionsForTrainer(trainerId: string) {
-  const supabase = await createServerClient();
+export async function getMonthlySessionsForTrainer(
+  supabase: TypedSupabaseClient,
+  trainerId: string,
+) {
   const now = new Date();
   const start = formatDate(new Date(now.getFullYear(), now.getMonth() - 11, 1));
   const end = formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
@@ -859,9 +879,10 @@ export async function getMonthlySessionsForTrainer(trainerId: string) {
 
 //Members
 
-export async function getMembersAndPlans(gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getMembersAndPlans(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const [membershipsResult, plansResult] = await Promise.all([
     supabase
       .from("gym_memberships")
@@ -922,9 +943,15 @@ export type GymMembershipStatus =
   | "Expired"
   | "Cancelled";
 
-export async function getMembersWithAttendance(gymId: string) {
-  const supabase = await createServerClient();
-
+/**
+ * The attendance-stats RPC and the trainer-assignment lookup are both
+ * independent of each other once `memberIds` is known, so they now run
+ * concurrently instead of one after the other.
+ */
+export async function getMembersWithAttendance(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("members")
     .select(
@@ -968,53 +995,47 @@ export async function getMembersWithAttendance(gymId: string) {
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
   // ---------------------------------------------------------------------------
-  // Attendance
+  // Attendance + active trainer assignments, run concurrently.
+  //
+  // No FK exists between gym_memberships and trainers — the relationship
+  // is via trainer_assignments (member_id -> trainer_id), so this stays a
+  // separate query from attendance, just no longer a sequential one.
   // ---------------------------------------------------------------------------
 
   const attendanceByMember = new Map<string, number>();
+  const trainerByMember = new Map<string, { id: string; full_name: string }>();
 
   if (memberIds.length > 0) {
-    const { data: stats, error: statsError } = await supabase.rpc(
-      "get_member_attendance_stats",
-      {
+    const [
+      { data: stats, error: statsError },
+      { data: assignments, error: assignmentsError },
+    ] = await Promise.all([
+      supabase.rpc("get_member_attendance_stats", {
         p_member_ids: memberIds,
         p_gym_id: gymId,
         p_as_of: asOfDate,
-      },
-    );
+      }),
+      supabase
+        .from("trainer_assignments")
+        .select(
+          `
+            member_id,
+            trainer:trainers (
+              id,
+              full_name
+            )
+          `,
+        )
+        .eq("gym_id", gymId)
+        .eq("is_active", true)
+        .in("member_id", memberIds),
+    ]);
 
     if (!statsError && stats) {
       for (const stat of stats) {
         attendanceByMember.set(stat.member_id, Number(stat.attendance_rate));
       }
     }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Active trainer assignments
-  //
-  // No FK exists between gym_memberships and trainers — the relationship
-  // is via trainer_assignments (member_id -> trainer_id), so this has to
-  // be a separate query, same pattern as attendance above.
-  // ---------------------------------------------------------------------------
-
-  const trainerByMember = new Map<string, { id: string; full_name: string }>();
-
-  if (memberIds.length > 0) {
-    const { data: assignments, error: assignmentsError } = await supabase
-      .from("trainer_assignments")
-      .select(
-        `
-        member_id,
-        trainer:trainers (
-          id,
-          full_name
-        )
-      `,
-      )
-      .eq("gym_id", gymId)
-      .eq("is_active", true)
-      .in("member_id", memberIds);
 
     if (!assignmentsError && assignments) {
       for (const a of assignments) {
@@ -1138,8 +1159,10 @@ const PENDING_STATUSES = [
   "PaymentRejected",
 ] as const;
 
-export async function getGymMemberStats(gymId: string) {
-  const supabase = await createServerClient();
+export async function getGymMemberStats(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
   const sevenDaysOut = new Date();
@@ -1223,10 +1246,10 @@ export type MemberMonthlyAttendance = {
 };
 
 export async function getMembersByIdWithAttendence(
+  supabase: TypedSupabaseClient,
   memberId: string,
   gymId: string,
 ) {
-  const supabase = await createServerClient();
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
   const { data: member, error: memberError } = await supabase
@@ -1460,9 +1483,11 @@ export type PaymentRow = {
   status: string;
 };
 
-export async function getGymPayments(gymId: string, limit = 200) {
-  const supabase = await createServerClient();
-
+export async function getGymPayments(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+  limit = 200,
+) {
   const { data, error } = await supabase
     .from("payments")
     .select(
@@ -1503,8 +1528,10 @@ export async function getGymPayments(gymId: string, limit = 200) {
   return { success: true as const, data: payments };
 }
 
-export async function getGymPaymentsOverview(gymId: string) {
-  const supabase = await createServerClient();
+export async function getGymPaymentsOverview(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
   const [
@@ -1513,7 +1540,7 @@ export async function getGymPaymentsOverview(gymId: string) {
     monthlyRevenueResult,
     statusCountsResult,
   ] = await Promise.all([
-    getGymPayments(gymId),
+    getGymPayments(supabase, gymId),
     supabase
       .rpc("get_gym_payment_stats", { p_gym_id: gymId, p_as_of: asOfDate })
       .single(),
@@ -1572,7 +1599,7 @@ export async function getGymPaymentsOverview(gymId: string) {
   };
 }
 
-// Get Pyament by Id
+// Get Payment by Id
 
 export type PaymentDetailData = {
   id: string;
@@ -1627,9 +1654,11 @@ export type PaymentDetailData = {
   } | null;
 };
 
-export async function getPaymentById(paymentId: string, gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getPaymentById(
+  supabase: TypedSupabaseClient,
+  paymentId: string,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("payments")
     .select(

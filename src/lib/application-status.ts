@@ -7,10 +7,10 @@ import { DisplayStatus, MembershipApplication } from "@/types";
  * This derives the single status the UI should show.
  */
 export function getDisplayStatus(app: any): DisplayStatus {
-  if (app.status !== "Approved") return app.status; // Pending | Rejected
+  if (app?.status !== "Approved") return app?.status; // Pending | Rejected
 
-  const membership = app.gym_memberships?.[0];
-  return membership ? membership.status : "Approved";
+  const membership = app?.gym_memberships?.[0];
+  return membership ? membership?.status : "Approved";
 }
 
 export const STATUS_CONFIG: Record<

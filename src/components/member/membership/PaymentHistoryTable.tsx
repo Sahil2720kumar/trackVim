@@ -15,8 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 import type { MemberPayment } from "@/services/member.query";
+import { cn, formatDateStr } from "@/lib/utils";
 
 function getPaymentBadge(status: MemberPayment["status"]) {
   switch (status) {
@@ -40,8 +40,6 @@ function getPaymentBadge(status: MemberPayment["status"]) {
       );
   }
 }
-
-import { cn, formatDateStr } from "@/lib/utils";
 
 const paymentColumns: ColumnDef<MemberPayment>[] = [
   {

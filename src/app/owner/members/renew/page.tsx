@@ -7,6 +7,7 @@ import RenewMembershipForm, {
   RENEW_MEMBERSHIP_FORM_ID,
 } from "@/components/owner/Recordpaymentform";
 import Link from "next/link";
+import { createServerClient } from "@/lib/supabase/server";
 
 export default async function CreateRenewMembershipPage() {
   const user = await currentUser();
@@ -18,7 +19,8 @@ export default async function CreateRenewMembershipPage() {
     throw new Error("No gym found for this user.");
   }
 
-  const result = await getMembersAndPlans(gymId);
+  const supabase = await createServerClient();
+  const result = await getMembersAndPlans(supabase, gymId);
 
   if (!result.success) {
     return (
