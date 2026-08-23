@@ -154,7 +154,7 @@ export function ApplicationsList() {
     );
   }
 
-  const applications = response?.success ? response.data : [];
+  const applications = response ? response : [];
   const approveTargetApplication = applications.find(
     (a) => a.id === approveTarget,
   );

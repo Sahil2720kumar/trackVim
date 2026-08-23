@@ -1393,7 +1393,7 @@ export function ApplicationDetails({
     isFetching,
   } = useApplicationById(applicationId);
 
-  const application = response?.success ? response?.data : null;
+  const application = response ? response : null;
   const displayStatus = getDisplayStatus(application);
   const member = application?.members;
   const plan = application?.membership_plans;

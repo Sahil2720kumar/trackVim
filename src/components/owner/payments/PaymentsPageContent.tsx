@@ -84,9 +84,9 @@ function PaymentsError({
 // ─── Main content ───────────────────────────────────────────────────────────
 
 export function PaymentsPageContent() {
-  const activeGymId = useOwnerStore((state) => state.activeGymId);
+  const { activeGymId } = useOwnerStore();
   const {
-    data: result,
+    data: paymentsOverview,
     isLoading,
     isError,
     error,
@@ -98,16 +98,10 @@ export function PaymentsPageContent() {
     return <PaymentsSkeleton />;
   }
 
-  if (isError || !result?.success) {
+  if (isError || !paymentsOverview) {
     return (
       <PaymentsError
-        message={
-          error instanceof Error
-            ? error.message
-            : !result?.success
-              ? (result?.error ?? null)
-              : null
-        }
+        message={error instanceof Error ? error.message : ""}
         onRetry={() => refetch()}
         retrying={isFetching}
       />
@@ -120,7 +114,7 @@ export function PaymentsPageContent() {
     revenueChangePercent,
     monthlyRevenue,
     statusDistribution,
-  } = result.data;
+  } = paymentsOverview;
 
   return (
     <>

@@ -114,16 +114,31 @@ function TrainersError({
 export function TrainersTable() {
   const router = useRouter();
 
-  const trainersQuery = useAllTrainers();
-  const statsQuery = useTrainerStats();
+  const {
+    data: trainersResponse,
+    isLoading: trainersLoading,
+    isError: trainersIsError,
+    isFetching: trainersFetching,
+    error: trainersError,
+    refetch: refetchTrainers,
+  } = useAllTrainers();
 
-  const isLoading = trainersQuery.isLoading || statsQuery.isLoading;
-  const isError = trainersQuery.isError || statsQuery.isError;
-  const isFetching = trainersQuery.isFetching || statsQuery.isFetching;
+  const {
+    data: statsResponse,
+    isLoading: statsLoading,
+    isError: statsIsError,
+    isFetching: statsFetching,
+    error: statsError,
+    refetch: refetchStats,
+  } = useTrainerStats();
+
+  const isLoading = trainersLoading || statsLoading;
+  const isError = trainersIsError || statsIsError;
+  const isFetching = trainersFetching || statsFetching;
 
   const refetchAll = () => {
-    trainersQuery.refetch();
-    statsQuery.refetch();
+    refetchTrainers();
+    refetchStats();
   };
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -140,16 +155,10 @@ export function TrainersTable() {
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const itemsPerPage = 5;
 
-  // NOTE: local delete state removed — see comment at handleDeleteTrainer below.
-  const trainersResponse = trainersQuery.data;
-  const statsResponse = statsQuery.data;
+  const trainers: TrainerRow[] = trainersResponse ? trainersResponse : [];
 
-  const trainers: TrainerRow[] = trainersResponse?.success
-    ? trainersResponse.data
-    : [];
-
-  const stats = statsResponse?.success
-    ? statsResponse.data
+  const stats = statsResponse
+    ? statsResponse
     : {
         totalTrainers: 0,
         activeTrainers: 0,
@@ -277,8 +286,12 @@ export function TrainersTable() {
     return <TrainersSkeleton />;
   }
 
-  if (isError) {
-    const firstError = trainersQuery.error ?? statsQuery.error;
+  const hasResponseError =
+    (trainersResponse && !trainersResponse) ||
+    (statsResponse && !statsResponse);
+
+  if (isError || hasResponseError) {
+    const firstError = trainersError ?? statsError;
     return (
       <TrainersError
         message={firstError instanceof Error ? firstError.message : null}

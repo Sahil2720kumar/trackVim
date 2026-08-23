@@ -88,177 +88,215 @@ export async function getOwnerDashboardData(
   supabase: TypedSupabaseClient,
   gymId: string,
 ) {
-  const asOfDate = getTodayDateStr("Asia/Kolkata");
-  const expiryWindowEnd = new Date();
-  expiryWindowEnd.setDate(expiryWindowEnd.getDate() + 30);
-  const expiryWindowEndStr = expiryWindowEnd.toISOString().slice(0, 10);
+  try {
+    const asOfDate = getTodayDateStr("Asia/Kolkata");
 
-  const [
-    { data: gym },
-    { data: statsRows, error: statsError },
-    { data: growth, error: growthError },
-    { data: distribution, error: distributionError },
-    { data: trainerActivity, error: trainerError },
-    { data: expiringMemberships, error: expiringError },
-    { data: recentRegistrations, error: registrationsError },
-    { data: recentPayments, error: paymentsError },
-  ] = await Promise.all([
-    supabase.from("gyms").select("id, name").eq("id", gymId).single(),
+    const expiryWindowEnd = new Date();
+    expiryWindowEnd.setDate(expiryWindowEnd.getDate() + 30);
+    const expiryWindowEndStr = expiryWindowEnd.toISOString().slice(0, 10);
 
-    supabase.rpc("get_owner_dashboard_stats", {
-      p_gym_id: gymId,
-      p_as_of: asOfDate,
-    }),
+    const [
+      { data: gym, error: gymError },
+      { data: statsRows, error: statsError },
+      { data: growth, error: growthError },
+      { data: distribution, error: distributionError },
+      { data: trainerActivity, error: trainerError },
+      { data: expiringMemberships, error: expiringError },
+      { data: recentRegistrations, error: registrationsError },
+      { data: recentPayments, error: paymentsError },
+    ] = await Promise.all([
+      supabase.from("gyms").select("id, name").eq("id", gymId).single(),
 
-    supabase.rpc("get_membership_growth_monthly", {
-      p_gym_id: gymId,
-      p_months: 12,
-      p_as_of: asOfDate,
-    }),
+      supabase.rpc("get_owner_dashboard_stats", {
+        p_gym_id: gymId,
+        p_as_of: asOfDate,
+      }),
 
-    supabase.rpc("get_membership_plan_distribution", {
-      p_gym_id: gymId,
-      p_as_of: asOfDate,
-    }),
+      supabase.rpc("get_membership_growth_monthly", {
+        p_gym_id: gymId,
+        p_months: 12,
+        p_as_of: asOfDate,
+      }),
 
-    supabase.rpc("get_trainer_activity", {
-      p_gym_id: gymId,
-      p_as_of: asOfDate,
-    }),
+      supabase.rpc("get_membership_plan_distribution", {
+        p_gym_id: gymId,
+        p_as_of: asOfDate,
+      }),
 
-    supabase
-      .from("gym_memberships")
-      .select(
-        `
-        id, end_date, status,
-       member:members!gym_memberships_member_id_members_id_fk (
-          id,
-          full_name,
-          photo_url
+      supabase.rpc("get_trainer_activity", {
+        p_gym_id: gymId,
+        p_as_of: asOfDate,
+      }),
+
+      supabase
+        .from("gym_memberships")
+        .select(
+          `
+          id, end_date, status,
+          member:members!gym_memberships_member_id_members_id_fk (
+            id,
+            full_name,
+            photo_url
+          ),
+          plan:membership_plans ( plan_name )
+        `,
+        )
+        .eq("gym_id", gymId)
+        .eq("status", "Active")
+        .gte("end_date", asOfDate)
+        .lte("end_date", expiryWindowEndStr)
+        .order("end_date", { ascending: true })
+        .limit(5),
+
+      supabase
+        .from("gym_memberships")
+        .select(
+          `
+          id, created_at,
+          member:members!gym_memberships_member_id_members_id_fk (
+            id,
+            full_name,
+            photo_url
+          ),
+          plan:membership_plans ( plan_name )
+        `,
+        )
+        .eq("gym_id", gymId)
+        .order("created_at", { ascending: false })
+        .limit(4),
+
+      supabase
+        .from("payments")
+        .select(
+          `
+          id, amount, status, payment_date,
+          member:members ( id, full_name, photo_url ),
+          gym_membership:gym_memberships (
+            plan:membership_plans ( plan_name )
+          )
+        `,
+        )
+        .eq("gym_id", gymId)
+        .order("created_at", { ascending: false })
+        .limit(5),
+    ]);
+
+    if (gymError) {
+      throw new Error(`Gym fetch failed: ${gymError.message}`);
+    }
+
+    if (statsError) {
+      throw new Error(
+        `get_owner_dashboard_stats failed: ${statsError.message}`,
+      );
+    }
+
+    if (growthError) {
+      throw new Error(
+        `get_membership_growth_monthly failed: ${growthError.message}`,
+      );
+    }
+
+    if (distributionError) {
+      throw new Error(
+        `get_membership_plan_distribution failed: ${distributionError.message}`,
+      );
+    }
+
+    if (trainerError) {
+      throw new Error(`get_trainer_activity failed: ${trainerError.message}`);
+    }
+
+    if (expiringError) {
+      throw new Error(
+        `expiring memberships fetch failed: ${expiringError.message}`,
+      );
+    }
+
+    if (registrationsError) {
+      throw new Error(
+        `recent registrations fetch failed: ${registrationsError.message}`,
+      );
+    }
+
+    if (paymentsError) {
+      throw new Error(`recent payments fetch failed: ${paymentsError.message}`);
+    }
+
+    const stats = statsRows?.[0] as DashboardStats | undefined;
+
+    const daysToToday = (endDate: string) =>
+      Math.max(
+        Math.ceil(
+          (new Date(endDate).getTime() - new Date(asOfDate).getTime()) /
+            (1000 * 60 * 60 * 24),
         ),
-        plan:membership_plans ( plan_name )
-      `,
-      )
-      .eq("gym_id", gymId)
-      .eq("status", "Active")
-      .gte("end_date", asOfDate)
-      .lte("end_date", expiryWindowEndStr)
-      .order("end_date", { ascending: true })
-      .limit(5),
+        0,
+      );
 
-    supabase
-      .from("gym_memberships")
-      .select(
-        `
-        id, created_at,
-       member:members!gym_memberships_member_id_members_id_fk (
-          id,
-          full_name,
-          photo_url
-        ),
-        plan:membership_plans ( plan_name )
-      `,
-      )
-      .eq("gym_id", gymId)
-      .order("created_at", { ascending: false })
-      .limit(4),
+    return {
+      success: true as const,
+      data: {
+        gymName: gym?.name ?? "Your Gym",
 
-    supabase
-      .from("payments")
-      .select(
-        `
-        id, amount, status, payment_date,
-        member:members ( id, full_name,photo_url ),
-        gym_membership:gym_memberships ( plan:membership_plans ( plan_name ) )
-      `,
-      )
-      .eq("gym_id", gymId)
-      .order("created_at", { ascending: false })
-      .limit(5),
-  ]);
+        stats: stats
+          ? {
+              ...stats,
+              memberTrend: pctChange(
+                stats.total_members,
+                stats.total_members_last_month,
+              ),
+              attendanceTrend: pctChange(
+                stats.today_attendance,
+                stats.attendance_yesterday,
+              ),
+              revenueTrend: pctChange(
+                stats.monthly_revenue,
+                stats.monthly_revenue_last_month,
+              ),
+            }
+          : null,
 
-  if (statsError)
-    throw new Error(`get_owner_dashboard_stats failed: ${statsError.message}`);
-  if (growthError)
-    throw new Error(
-      `get_membership_growth_monthly failed: ${growthError.message}`,
-    );
-  if (distributionError)
-    throw new Error(
-      `get_membership_plan_distribution failed: ${distributionError.message}`,
-    );
-  if (trainerError)
-    throw new Error(`get_trainer_activity failed: ${trainerError.message}`);
+        membershipGrowth: (growth ?? []) as MembershipGrowthPoint[],
 
-  if (expiringError)
-    throw new Error(
-      `expiring memberships fetch failed: ${expiringError.message}`,
-    );
-  if (registrationsError)
-    throw new Error(
-      `recent registrations fetch failed: ${registrationsError.message}`,
-    );
-  if (paymentsError)
-    throw new Error(`recent payments fetch failed: ${paymentsError.message}`);
+        planDistribution: (distribution ?? []) as PlanDistributionPoint[],
 
-  const stats = statsRows?.[0] as DashboardStats | undefined;
+        trainerActivity: (trainerActivity ?? []) as TrainerActivityRow[],
 
-  const daysToToday = (endDate: string) =>
-    Math.max(
-      Math.ceil(
-        (new Date(endDate).getTime() - new Date(asOfDate).getTime()) /
-          (1000 * 60 * 60 * 24),
-      ),
-      0,
-    );
+        expiringMemberships: (expiringMemberships ?? []).map((m) => ({
+          id: m.id,
+          name: m.member?.full_name ?? "—",
+          photoUrl: m.member?.photo_url ?? null,
+          plan: m.plan?.plan_name ?? "—",
+          expiry: m.end_date,
+          daysLeft: daysToToday(m.end_date),
+        })),
 
-  return {
-    gymName: gym?.name ?? "Your Gym",
-    stats: stats
-      ? {
-          ...stats,
-          memberTrend: pctChange(
-            stats.total_members,
-            stats.total_members_last_month,
-          ),
-          attendanceTrend: pctChange(
-            stats.today_attendance,
-            stats.attendance_yesterday,
-          ),
-          revenueTrend: pctChange(
-            stats.monthly_revenue,
-            stats.monthly_revenue_last_month,
-          ),
-        }
-      : null,
-    membershipGrowth: (growth ?? []) as MembershipGrowthPoint[],
-    planDistribution: (distribution ?? []) as PlanDistributionPoint[],
-    trainerActivity: (trainerActivity ?? []) as TrainerActivityRow[],
-    expiringMemberships: (expiringMemberships ?? []).map((m) => ({
-      id: m.id,
-      name: m.member?.full_name ?? "—",
-      photoUrl: m.member?.photo_url ?? null,
-      plan: m.plan?.plan_name ?? "—",
-      expiry: m.end_date,
-      daysLeft: daysToToday(m.end_date),
-    })),
-    recentRegistrations: (recentRegistrations ?? []).map((r) => ({
-      id: r.id,
-      name: r.member?.full_name ?? "—",
-      photoUrl: r.member?.photo_url ?? null,
-      joined: r.created_at,
-      plan: r.plan?.plan_name ?? "—",
-    })),
-    recentPayments: (recentPayments ?? []).map((p) => ({
-      id: p.id,
-      member: p.member?.full_name ?? "—",
-      memberPhotoUrl: p.member?.photo_url ?? null,
-      amount: `₹${Number(p.amount).toLocaleString("en-IN")}`,
-      plan: p.gym_membership?.plan?.plan_name ?? "—",
-      status: p.status,
-      date: p.payment_date,
-    })),
-  };
+        recentRegistrations: (recentRegistrations ?? []).map((r) => ({
+          id: r.id,
+          name: r.member?.full_name ?? "—",
+          photoUrl: r.member?.photo_url ?? null,
+          joined: r.created_at,
+          plan: r.plan?.plan_name ?? "—",
+        })),
+
+        recentPayments: (recentPayments ?? []).map((p) => ({
+          id: p.id,
+          member: p.member?.full_name ?? "—",
+          memberPhotoUrl: p.member?.photo_url ?? null,
+          amount: `₹${Number(p.amount).toLocaleString("en-IN")}`,
+          plan: p.gym_membership?.plan?.plan_name ?? "—",
+          status: p.status,
+          date: p.payment_date,
+        })),
+      },
+    };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Something went wrong",
+    };
+  }
 }
 
 export type OwnerDashboardResult = Awaited<

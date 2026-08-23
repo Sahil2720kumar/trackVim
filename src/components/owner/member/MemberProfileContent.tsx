@@ -175,47 +175,54 @@ export function MemberProfileContent({
   memberId: string;
   gymId: string;
 }) {
-  const memberQuery = useMemberByIdWithAttendance(memberId);
-  const trainersQuery = useAllTrainers();
+  const {
+    data: response,
+    isLoading: memberLoading,
+    isError: memberError,
+    isFetching: memberFetching,
+    error: memberErrorObj,
+    refetch: refetchMember,
+  } = useMemberByIdWithAttendance(memberId);
 
-  const isLoading = memberQuery.isLoading || trainersQuery.isLoading;
-  const isError = memberQuery.isError || trainersQuery.isError;
-  const isFetching = memberQuery.isFetching || trainersQuery.isFetching;
+  const {
+    data: allTrainers,
+    isLoading: trainersLoading,
+    isError: trainersError,
+    isFetching: trainersFetching,
+    error: trainersErrorObj,
+    refetch: refetchTrainers,
+  } = useAllTrainers();
+
+  const isLoading = memberLoading || trainersLoading;
+  const isError = memberError || trainersError;
+  const isFetching = memberFetching || trainersFetching;
 
   const refetchAll = () => {
-    memberQuery.refetch();
-    trainersQuery.refetch();
+    refetchMember();
+    refetchTrainers();
   };
 
   if (isLoading) {
     return <MemberProfileSkeleton />;
   }
 
-  const result = memberQuery.data;
+  if (isError || !response) {
+    const firstError = memberErrorObj ?? trainersErrorObj;
 
-  if (isError || !result?.success) {
-    const firstError = memberQuery.error ?? trainersQuery.error;
     return (
       <MemberProfileError
-        message={
-          firstError instanceof Error
-            ? firstError.message
-            : !result?.success
-              ? (result?.error ?? null)
-              : null
-        }
+        message={firstError instanceof Error ? firstError.message : null}
         onRetry={refetchAll}
         retrying={isFetching}
       />
     );
   }
 
-  const allTrainers = trainersQuery.data?.success
-    ? trainersQuery.data.data
-    : [];
+  // No more trainersQuery.data.success / trainersQuery.data.data
+  // allTrainers is already the actual array.
 
   const {
-    member,
+    member: memberDetails,
     membership,
     scheduledMembership,
     trainers,
@@ -227,12 +234,14 @@ export function MemberProfileContent({
     outstanding,
     lastPayment,
     upcomingSessions,
-  } = result.data;
+  } = response;
 
-  const age = getAge(member.date_of_birth);
+  const age = getAge(memberDetails.date_of_birth);
+
   const progress = membership
     ? membershipProgress(membership.start_date, membership.end_date)
     : 0;
+
   const daysLeft = membership ? daysBetween(membership.end_date) : 0;
 
   const chartData = monthlyAttendance.map((m) => ({
@@ -260,16 +269,16 @@ export function MemberProfileContent({
         <div className="flex flex-col items-start gap-4 sm:flex-row">
           <Avatar className="h-20 w-20 flex-shrink-0 border-2 border-indigo-100 sm:h-24 sm:w-24">
             <AvatarImage
-              src={member.photo_url ?? undefined}
-              alt={member.full_name ?? ""}
+              src={memberDetails.photo_url ?? undefined}
+              alt={memberDetails.full_name ?? ""}
             />
             <AvatarFallback className="bg-indigo-50 text-lg font-bold text-indigo-600 sm:text-xl">
-              {getInitials(member.full_name ?? "?")}
+              {getInitials(memberDetails.full_name ?? "?")}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-2xl font-bold text-gray-900 sm:text-3xl">
-              {member.full_name}
+              {memberDetails.full_name}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {membership?.plan?.plan_name && (
@@ -280,26 +289,28 @@ export function MemberProfileContent({
               )}
               <Badge className="gap-1 border-green-200 bg-green-50 text-green-700 hover:bg-green-50">
                 <Check className="h-3 w-3" />
-                {membership?.status ?? member.account_status}
+                {membership?.status ?? memberDetails.account_status}
               </Badge>
               <Badge
                 className={`gap-1 ${
-                  member.member_type === "WalkIn"
+                  memberDetails.member_type === "WalkIn"
                     ? "border-primary/20 bg-primary/5 text-primary"
                     : "border-sky-200 bg-sky-50 text-sky-700"
                 }`}
               >
                 <User className="h-3 w-3" />
-                {member.member_type}
+                {memberDetails.member_type}
               </Badge>
             </div>
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-              <span>ID #{member.member_code}</span>
+              <span>ID #{memberDetails.member_code}</span>
               <span className="hidden sm:inline">&bull;</span>
               <span>
                 Joined{" "}
-                {member.created_at
-                  ? new Date(member.created_at).toLocaleDateString("en-IN")
+                {memberDetails.created_at
+                  ? new Date(memberDetails.created_at).toLocaleDateString(
+                      "en-IN",
+                    )
                   : "—"}
               </span>
             </div>
@@ -310,10 +321,10 @@ export function MemberProfileContent({
                   {age} Years
                 </span>
               )}
-              {member.gender && (
+              {memberDetails.gender && (
                 <span className="flex items-center gap-1.5">
                   <UserRound className="h-3.5 w-3.5" />
-                  {member.gender}
+                  {memberDetails.gender}
                 </span>
               )}
             </div>
@@ -329,7 +340,7 @@ export function MemberProfileContent({
           >
             <Link
               className="flex flex-row gap-1"
-              href={`/owner/members/renew?memberId=${member.id}`}
+              href={`/owner/members/renew?memberId=${memberDetails.id}`}
             >
               <Plus className="mr-2 h-4 w-4" />
               Renew Membership
@@ -352,7 +363,9 @@ export function MemberProfileContent({
                   <Phone className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Phone</p>
-                    <p className="font-medium">{member.contact_phone ?? "—"}</p>
+                    <p className="font-medium">
+                      {memberDetails.contact_phone ?? "—"}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -360,7 +373,7 @@ export function MemberProfileContent({
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Email</p>
                     <p className="truncate font-medium">
-                      {member.contact_email ?? "—"}
+                      {memberDetails.contact_email ?? "—"}
                     </p>
                   </div>
                 </div>
@@ -370,7 +383,11 @@ export function MemberProfileContent({
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Address</p>
                     <p className="font-medium">
-                      {[member.address, member.city, member.state]
+                      {[
+                        memberDetails.address,
+                        memberDetails.city,
+                        memberDetails.state,
+                      ]
                         .filter(Boolean)
                         .join(", ") || "—"}
                     </p>
@@ -380,11 +397,15 @@ export function MemberProfileContent({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Occupation</p>
-                    <p className="font-medium">{member.occupation ?? "—"}</p>
+                    <p className="font-medium">
+                      {memberDetails.occupation ?? "—"}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Blood Group</p>
-                    <p className="font-medium">{member.blood_group ?? "—"}</p>
+                    <p className="font-medium">
+                      {memberDetails.blood_group ?? "—"}
+                    </p>
                   </div>
                 </div>
                 <Separator />
@@ -392,19 +413,23 @@ export function MemberProfileContent({
                   <div>
                     <p className="text-xs text-muted-foreground">Height</p>
                     <p className="font-medium">
-                      {member.height_cm ? `${member.height_cm} cm` : "—"}
+                      {memberDetails.height_cm
+                        ? `${memberDetails.height_cm} cm`
+                        : "—"}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Weight</p>
                     <p className="font-medium">
-                      {member.weight_kg ? `${member.weight_kg} kg` : "—"}
+                      {memberDetails.weight_kg
+                        ? `${memberDetails.weight_kg} kg`
+                        : "—"}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Goal</p>
                     <p className="text-xs font-medium">
-                      {member.fitness_goal ?? "—"}
+                      {memberDetails.fitness_goal ?? "—"}
                     </p>
                   </div>
                 </div>
@@ -414,9 +439,9 @@ export function MemberProfileContent({
                     Emergency Contact
                   </p>
                   <p className="font-medium">
-                    {member.emergency_contact_name ?? "—"}
-                    {member.emergency_contact_phone
-                      ? ` (${member.emergency_contact_phone})`
+                    {memberDetails.emergency_contact_name ?? "—"}
+                    {memberDetails.emergency_contact_phone
+                      ? ` (${memberDetails.emergency_contact_phone})`
                       : ""}
                   </p>
                 </div>
@@ -629,7 +654,7 @@ export function MemberProfileContent({
                 )}
                 <Separator />
                 <TrainerManagerDialog
-                  memberId={member.id}
+                  memberId={memberDetails.id}
                   gymId={gymId}
                   assignedTrainers={trainers}
                   availableTrainers={allTrainers}
@@ -689,7 +714,7 @@ export function MemberProfileContent({
                   className="h-auto p-0 text-indigo-600"
                   asChild
                 >
-                  <Link href={`/owner/members/${member.id}/payments`}>
+                  <Link href={`/owner/members/${memberDetails.id}/payments`}>
                     View All
                   </Link>
                 </Button>
@@ -776,7 +801,7 @@ export function MemberProfileContent({
                     Medical Conditions
                   </p>
                   <p className="mt-1 font-medium">
-                    {member.medical_conditions ?? "None"}
+                    {memberDetails.medical_conditions ?? "None"}
                   </p>
                 </div>
                 <div>
@@ -784,7 +809,7 @@ export function MemberProfileContent({
                     Allergies
                   </p>
                   <p className="mt-1 font-medium">
-                    {member.allergies ?? "None"}
+                    {memberDetails.allergies ?? "None"}
                   </p>
                 </div>
                 <div>
@@ -792,7 +817,7 @@ export function MemberProfileContent({
                     Notes
                   </p>
                   <p className="mt-1 font-medium">
-                    {member.physical_notes ?? "—"}
+                    {memberDetails.physical_notes ?? "—"}
                   </p>
                 </div>
               </div>
@@ -802,12 +827,12 @@ export function MemberProfileContent({
                   Emergency Contact
                 </p>
                 <p className="mt-1 font-medium">
-                  {member.emergency_contact_name ?? "—"}
-                  {member.emergency_contact_relationship
-                    ? ` (${member.emergency_contact_relationship})`
+                  {memberDetails.emergency_contact_name ?? "—"}
+                  {memberDetails.emergency_contact_relationship
+                    ? ` (${memberDetails.emergency_contact_relationship})`
                     : ""}
-                  {member.emergency_contact_phone
-                    ? ` • ${member.emergency_contact_phone}`
+                  {memberDetails.emergency_contact_phone
+                    ? ` • ${memberDetails.emergency_contact_phone}`
                     : ""}
                 </p>
               </div>
@@ -824,7 +849,7 @@ export function MemberProfileContent({
             <CardContent className="space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Check className="h-4 w-4 flex-shrink-0 text-green-600" />
-                {membership?.status ?? member.account_status} Member
+                {membership?.status ?? memberDetails.account_status} Member
               </div>
               {membership?.plan?.plan_name && (
                 <div className="flex items-center gap-2 text-sm font-medium">
@@ -871,11 +896,11 @@ export function MemberProfileContent({
               <Button
                 variant="outline"
                 className="flex h-16 flex-col gap-1.5 border-green-100 bg-green-50 text-green-700 hover:bg-green-100"
-                asChild={Boolean(member.contact_phone)}
-                disabled={!member.contact_phone}
+                asChild={Boolean(memberDetails.contact_phone)}
+                disabled={!memberDetails.contact_phone}
               >
-                {member.contact_phone ? (
-                  <a href={`tel:${member.contact_phone}`}>
+                {memberDetails.contact_phone ? (
+                  <a href={`tel:${memberDetails.contact_phone}`}>
                     <Phone className="h-5 w-5" />
                     <span className="text-xs">Call</span>
                   </a>
@@ -890,12 +915,12 @@ export function MemberProfileContent({
               <Button
                 variant="outline"
                 className="flex h-16 flex-col gap-1.5 border-green-100 bg-green-50 text-green-700 hover:bg-green-100"
-                asChild={Boolean(member.contact_phone)}
-                disabled={!member.contact_phone}
+                asChild={Boolean(memberDetails.contact_phone)}
+                disabled={!memberDetails.contact_phone}
               >
-                {member.contact_phone ? (
+                {memberDetails.contact_phone ? (
                   <a
-                    href={waLink(member.contact_phone)}
+                    href={waLink(memberDetails.contact_phone)}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -913,11 +938,11 @@ export function MemberProfileContent({
               <Button
                 variant="outline"
                 className="flex h-16 flex-col gap-1.5 border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-                asChild={Boolean(member.contact_email)}
-                disabled={!member.contact_email}
+                asChild={Boolean(memberDetails.contact_email)}
+                disabled={!memberDetails.contact_email}
               >
-                {member.contact_email ? (
-                  <a href={`mailto:${member.contact_email}`}>
+                {memberDetails.contact_email ? (
+                  <a href={`mailto:${memberDetails.contact_email}`}>
                     <Mail className="h-5 w-5" />
                     <span className="text-xs">Email</span>
                   </a>

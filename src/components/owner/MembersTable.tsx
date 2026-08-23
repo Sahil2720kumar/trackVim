@@ -116,9 +116,10 @@ function toMemberRow(member: MemberWithAttendance): MemberRow {
     avatar: getInitials(member.full_name),
     memberType: member.memberType,
     plan: membership?.plan?.plan_name ?? "No Plan",
-    planPrice: membership?.final_amount
-      ? `₹${membership.final_amount.toLocaleString("en-IN")}`
-      : "—",
+    planPrice:
+      membership?.final_amount != null
+        ? `₹${membership.final_amount.toLocaleString("en-IN")}`
+        : "—",
     trainer: member.trainer?.full_name ?? "Unassigned",
     joined: membership?.start_date ? formatDateStr(membership.start_date) : "—",
     expiry: membership?.end_date ? formatDateStr(membership.end_date) : "—",
@@ -188,25 +189,41 @@ function MembersTableError({
 export function MembersTable() {
   const router = useRouter();
 
-  const membersQuery = useMembersWithAttendance();
-  const statsQuery = useGymMemberStats();
-  const trainersPlansQuery = useTrainersAndPlans();
+  const {
+    data: membersResponse,
+    isLoading: membersLoading,
+    isError: membersIsError,
+    isFetching: membersFetching,
+    error: membersError,
+    refetch: refetchMembers,
+  } = useMembersWithAttendance();
 
-  const isLoading =
-    membersQuery.isLoading ||
-    statsQuery.isLoading ||
-    trainersPlansQuery.isLoading;
-  const isError =
-    membersQuery.isError || statsQuery.isError || trainersPlansQuery.isError;
-  const isFetching =
-    membersQuery.isFetching ||
-    statsQuery.isFetching ||
-    trainersPlansQuery.isFetching;
+  const {
+    data: statsResponse,
+    isFetching: statsFetching,
+    isError: statsIsError,
+    error: statsErrorObj,
+    refetch: refetchStats,
+  } = useGymMemberStats();
+
+  const {
+    data: trainersPlansResponse,
+    isFetching: trainersPlansFetching,
+    isError: trainersPlansIsError,
+    error: trainersPlansError,
+    refetch: refetchTrainersPlans,
+  } = useTrainersAndPlans();
+
+  // Members is the core dataset the page can't render without. Stats and
+  // trainers/plans degrade gracefully to defaults/empty arrays.
+  const isLoading = membersLoading;
+  const isError = membersIsError || statsIsError || trainersPlansIsError;
+  const isFetching = membersFetching || statsFetching || trainersPlansFetching;
 
   const refetchAll = () => {
-    membersQuery.refetch();
-    statsQuery.refetch();
-    trainersPlansQuery.refetch();
+    refetchMembers();
+    refetchStats();
+    refetchTrainersPlans();
   };
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -228,18 +245,13 @@ export function MembersTable() {
   const handleDeleteMember = () =>
     toast.error("Delete function is not implemented yet");
 
-  // Response payloads (service-layer Result wrapper: { success, data, error })
-  const membersResponse = membersQuery.data;
-  const statsResponse = statsQuery.data;
-  const trainersPlansResponse = trainersPlansQuery.data;
-
   const members: MemberRow[] = useMemo(() => {
-    if (!membersResponse?.success) return [];
-    return membersResponse.data.map(toMemberRow);
+    if (!membersResponse) return [];
+    return membersResponse.map(toMemberRow);
   }, [membersResponse]);
 
-  const stats = statsResponse?.success
-    ? statsResponse.data
+  const stats = statsResponse
+    ? statsResponse
     : {
         totalMembers: 0,
         activeMembers: 0,
@@ -248,15 +260,18 @@ export function MembersTable() {
         pendingAmount: 0,
       };
 
-  const trainers = trainersPlansResponse?.success
-    ? trainersPlansResponse.data.trainers
-    : [];
-  const plans = trainersPlansResponse?.success
-    ? trainersPlansResponse.data.plans
-    : [];
+  const trainers = trainersPlansResponse?.trainers ?? [];
+  const plans = trainersPlansResponse?.plans ?? [];
 
   const trainerOptions = ["All Trainers", ...trainers.map((t) => t.full_name)];
   const planOptions = ["All Plans", ...plans.map((p) => p.plan_name)];
+
+  // Added: was referenced below in the status filter pills but never defined.
+  const statusOptions = useMemo(() => {
+    const all = new Set<string>();
+    members.forEach((m) => all.add(m.status));
+    return ["All", ...Array.from(all)];
+  }, [members]);
 
   const activePct =
     stats.totalMembers > 0
@@ -551,8 +566,7 @@ export function MembersTable() {
   }
 
   if (isError) {
-    const firstError =
-      membersQuery.error ?? statsQuery.error ?? trainersPlansQuery.error;
+    const firstError = membersError ?? statsErrorObj ?? trainersPlansError;
     return (
       <MembersTableError
         message={firstError instanceof Error ? firstError.message : null}

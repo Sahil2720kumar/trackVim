@@ -87,68 +87,69 @@ function MembershipPlansError({
 // ─── Main content ───────────────────────────────────────────────────────────
 
 export function MembershipPlansContent() {
-  const plansQuery = useMembershipPlans();
-  const revenueQuery = useGymRevenueMonthly();
-  const topPlansQuery = useTopPerformingPlans();
+  const {
+    data: plans,
+    isLoading: plansLoading,
+    isError: plansError,
+    isFetching: plansFetching,
+    error: plansErrorObj,
+    refetch: refetchPlans,
+  } = useMembershipPlans();
 
-  // Plans are the core dataset the page can't render without. Revenue and
-  // top-plans degrade gracefully to empty arrays, same fallback behavior
-  // as the original server page's error-logged-but-continue approach.
-  const isLoading = plansQuery.isLoading;
-  const isError = plansQuery.isError;
-  const isFetching =
-    plansQuery.isFetching ||
-    revenueQuery.isFetching ||
-    topPlansQuery.isFetching;
+  const {
+    data: revenueMonthly,
+    isError: revenueError,
+    error: revenueErrorObj,
+    isFetching: revenueFetching,
+    refetch: refetchRevenue,
+  } = useGymRevenueMonthly();
+
+  const {
+    data: topPerformingPlans,
+    isFetching: topPlansFetching,
+    isError: topError,
+    error: topErrorObj,
+    refetch: refetchTopPlans,
+  } = useTopPerformingPlans();
+
+  // Plans are the core dataset.
+  // Revenue and top-plans can degrade gracefully to empty arrays.
+  const isLoading = plansLoading;
+  const isError = plansError || revenueError || topError;
+  const isFetching = plansFetching || revenueFetching || topPlansFetching;
 
   const refetchAll = () => {
-    plansQuery.refetch();
-    revenueQuery.refetch();
-    topPlansQuery.refetch();
+    refetchPlans();
+    refetchRevenue();
+    refetchTopPlans();
   };
 
   if (isLoading) {
     return <MembershipPlansSkeleton />;
   }
 
-  const plansResult = plansQuery.data;
+  if (isError || !plans) {
+    const firstError = plansErrorObj ?? revenueErrorObj ?? topErrorObj;
 
-  if (isError || !plansResult || plansResult.error) {
-    const firstError = plansQuery.error;
     return (
       <MembershipPlansError
-        message={
-          firstError instanceof Error
-            ? firstError.message
-            : (plansResult?.error?.message ?? null)
-        }
+        message={firstError instanceof Error ? firstError.message : null}
         onRetry={refetchAll}
         retrying={isFetching}
       />
     );
   }
 
-  const initialPlans = plansResult.data ?? [];
+  const initialPlans = plans;
 
-  const revenueResult = revenueQuery.data;
-  const topPlansResult = topPlansQuery.data;
-
-  if (revenueResult?.error) {
-    console.error("get_gym_revenue_monthly failed:", revenueResult.error);
-  }
-  if (topPlansResult?.error) {
-    console.error("get_plan_performance_monthly failed:", topPlansResult.error);
-  }
-
-  const revenueMonthly = revenueResult?.data ?? [];
-  const topPerformingPlans = topPlansResult?.data ?? [];
-
-  const revenueData = revenueMonthly.map((r) => ({
+  // Revenue and top-performing plans are allowed to be undefined
+  // because they are non-critical datasets.
+  const revenueData = (revenueMonthly ?? []).map((r) => ({
     month: r.month_label,
     revenue: r.revenue,
   }));
 
-  const topPlans = topPerformingPlans.map((p, i) => ({
+  const topPlans = (topPerformingPlans ?? []).map((p, i) => ({
     rank: i + 1,
     id: p.plan_id,
     name: p.plan_name,
@@ -157,25 +158,26 @@ export function MembershipPlansContent() {
     growth: Number(p.growth_pct),
   }));
 
-  const totalPlans = initialPlans.length || 0;
+  const totalPlans = initialPlans.length;
 
-  const activePlans =
-    initialPlans.filter((p) => p.status === "Active").length || 0;
+  const activePlans = initialPlans.filter((p) => p.status === "Active").length;
 
-  const totalMembers =
-    initialPlans.reduce(
-      (sum, p) => sum + (p.gym_memberships?.[0]?.count ?? 0),
-      0,
-    ) || 0;
+  const totalMembers = initialPlans.reduce(
+    (sum, p) => sum + (p.gym_memberships?.[0]?.count ?? 0),
+    0,
+  );
 
   const monthlyRevenue =
-    revenueMonthly[revenueMonthly.length - 1]?.revenue ?? 0;
+    revenueMonthly?.[revenueMonthly.length - 1]?.revenue ?? 0;
+
   const maxTopPlanRevenue = topPlans[0]?.revenue || 1;
 
   const mostPopularPlan =
     initialPlans.reduce<(typeof initialPlans)[number] | null>((max, plan) => {
       const maxCount = max?.gym_memberships?.[0]?.count ?? 0;
+
       const planCount = plan.gym_memberships?.[0]?.count ?? 0;
+
       return planCount > maxCount ? plan : max;
     }, null) ?? null;
 

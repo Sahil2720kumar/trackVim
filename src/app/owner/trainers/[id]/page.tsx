@@ -1,11 +1,20 @@
+import { Suspense } from "react";
 import { TrainerProfileFetcher } from "@/components/owner/trainer/TrainerProfileFetcher";
 
-export default async function TrainerProfilePage({
+async function TrainerProfile({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
+  return <TrainerProfileFetcher trainerId={id} />;
+}
+
+export default function TrainerProfilePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
-
-  return <TrainerProfileFetcher trainerId={id} />;
+  return (
+    <Suspense fallback={null}>
+      <TrainerProfile params={params} />
+    </Suspense>
+  );
 }

@@ -152,23 +152,17 @@ export function PaymentDetailsContent({
     return <PaymentDetailsSkeleton />;
   }
 
-  if (isError || !result?.success) {
+  if (isError || !result) {
     return (
       <PaymentDetailsError
-        message={
-          error instanceof Error
-            ? error.message
-            : !result?.success
-              ? (result?.error ?? null)
-              : null
-        }
+        message={error instanceof Error ? error.message : null}
         onRetry={() => refetch()}
         retrying={isFetching}
       />
     );
   }
 
-  const payment = result.data;
+  const payment = result;
   const { member, gym, membership } = payment;
 
   const timeline = [
@@ -208,7 +202,9 @@ export function PaymentDetailsContent({
       {/* Page Header */}
       <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Payment Details</h1>
+          <h1 className="text-xl font-bold text-foreground sm:text-2xl">
+            Payment Details
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             View payment details, receipt, and transaction history.
           </p>
@@ -234,23 +230,23 @@ export function PaymentDetailsContent({
         <div className="lg:col-span-2 space-y-6">
           <Card className="border-border">
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <FileText className="w-5 h-5 text-primary" />
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <FileText className="w-4 h-4 text-primary" />
                 Payment Information
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                  <p className="text-sm text-muted-foreground mb-1">
                     Receipt Number
                   </p>
-                  <p className="font-mono font-semibold text-foreground">
+                  <p className="font-semibold text-foreground">
                     {payment.receiptId ?? payment.id.slice(0, 8)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                  <p className="text-sm text-muted-foreground mb-1">
                     Payment Date
                   </p>
                   <p className="font-semibold text-foreground flex items-center gap-2">
@@ -261,7 +257,7 @@ export function PaymentDetailsContent({
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                  <p className="text-sm text-muted-foreground mb-1">
                     Payment Method
                   </p>
                   <p className="font-semibold text-foreground flex items-center gap-2">
@@ -270,15 +266,15 @@ export function PaymentDetailsContent({
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                  <p className="text-sm text-muted-foreground mb-1">
                     Transaction Reference
                   </p>
-                  <p className="font-mono font-semibold text-foreground">
+                  <p className="font-semibold text-foreground">
                     {payment.transactionRef ?? "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                  <p className="text-sm text-muted-foreground mb-1">
                     Collected By
                   </p>
                   <p className="font-semibold text-foreground">
@@ -286,9 +282,7 @@ export function PaymentDetailsContent({
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
-                    Due Date
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-1">Due Date</p>
                   <p className="font-semibold text-foreground">
                     {payment.dueDate ? formatDateStr(payment.dueDate) : "—"}
                   </p>
@@ -299,7 +293,7 @@ export function PaymentDetailsContent({
 
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-muted/50 p-4">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                  <p className="text-sm text-muted-foreground mb-1">
                     Payment Status
                   </p>
                   <Badge className={statusBadgeClass(payment.status)}>
@@ -307,9 +301,7 @@ export function PaymentDetailsContent({
                   </Badge>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
-                    Amount
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-1">Amount</p>
                   <p className="font-bold text-2xl text-primary flex items-center gap-1 justify-end">
                     <IndianRupee className="w-5 h-5" />
                     {payment.amount.toLocaleString("en-IN")}
@@ -332,7 +324,9 @@ export function PaymentDetailsContent({
 
           <Card className="border-border">
             <CardHeader>
-              <CardTitle className="text-lg">Member Information</CardTitle>
+              <CardTitle className="text-base font-semibold">
+                Member Information
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex gap-4 mb-6">
@@ -346,7 +340,7 @@ export function PaymentDetailsContent({
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
-                  <h3 className="font-bold text-lg">
+                  <h3 className="font-semibold text-foreground">
                     {member.fullName ?? "—"}
                   </h3>
                   <p className="text-sm text-muted-foreground mb-2">
@@ -369,25 +363,21 @@ export function PaymentDetailsContent({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
-                    Phone
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-1">Phone</p>
                   <p className="font-semibold text-foreground flex items-center gap-2">
                     <Phone className="w-4 h-4 text-muted-foreground" />
                     {member.contactPhone ?? "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
-                    Email
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-1">Email</p>
                   <p className="font-semibold text-foreground flex items-center gap-2">
                     <Mail className="w-4 h-4 text-muted-foreground" />
                     {member.contactEmail ?? "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                  <p className="text-sm text-muted-foreground mb-1">
                     Member Since
                   </p>
                   <p className="font-semibold text-foreground">
@@ -401,23 +391,23 @@ export function PaymentDetailsContent({
           {membership && (
             <Card className="border-border">
               <CardHeader>
-                <CardTitle className="text-lg">
+                <CardTitle className="text-base font-semibold">
                   Membership Information
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                    <p className="text-sm text-muted-foreground mb-1">
                       Membership Plan
                     </p>
-                    <p className="font-bold text-foreground">
+                    <p className="font-semibold text-foreground">
                       {membership.plan?.planName ?? "—"}
                     </p>
                   </div>
                   {membership.plan?.planCategory && (
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                      <p className="text-sm text-muted-foreground mb-1">
                         Category
                       </p>
                       <Badge
@@ -429,7 +419,7 @@ export function PaymentDetailsContent({
                     </div>
                   )}
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                    <p className="text-sm text-muted-foreground mb-1">
                       Duration
                     </p>
                     <p className="font-semibold text-foreground">
@@ -438,7 +428,7 @@ export function PaymentDetailsContent({
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                    <p className="text-sm text-muted-foreground mb-1">
                       Joining Fee
                     </p>
                     <p className="font-semibold text-foreground flex items-center">
@@ -447,7 +437,7 @@ export function PaymentDetailsContent({
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                    <p className="text-sm text-muted-foreground mb-1">
                       Start Date
                     </p>
                     <p className="font-semibold text-foreground">
@@ -455,7 +445,7 @@ export function PaymentDetailsContent({
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                    <p className="text-sm text-muted-foreground mb-1">
                       Expiry Date
                     </p>
                     <p className="font-semibold text-foreground">
@@ -463,7 +453,7 @@ export function PaymentDetailsContent({
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                    <p className="text-sm text-muted-foreground mb-1">
                       Discount
                     </p>
                     <p className="font-semibold text-emerald-600 dark:text-emerald-400">
@@ -471,7 +461,7 @@ export function PaymentDetailsContent({
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                    <p className="text-sm text-muted-foreground mb-1">
                       Final Amount
                     </p>
                     <p className="font-bold text-lg text-primary flex items-center">
@@ -503,7 +493,7 @@ export function PaymentDetailsContent({
             }
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-lg font-semibold">
+              <CardTitle className="text-base font-semibold">
                 Payment Status
               </CardTitle>
               <Badge
@@ -555,7 +545,9 @@ export function PaymentDetailsContent({
       {/* Timeline */}
       <Card className="border-border">
         <CardHeader>
-          <CardTitle className="text-lg">Payment Timeline</CardTitle>
+          <CardTitle className="text-base font-semibold">
+            Payment Timeline
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-6">

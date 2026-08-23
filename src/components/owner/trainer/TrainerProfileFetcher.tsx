@@ -86,39 +86,51 @@ function TrainerProfileError({
 // ─── Main fetcher ───────────────────────────────────────────────────────────
 
 export function TrainerProfileFetcher({ trainerId }: { trainerId: string }) {
-  const trainerQuery = useTrainerById(trainerId);
-  const statsQuery = useTrainerSessionStats(trainerId);
-  const monthlyQuery = useMonthlySessionsForTrainer(trainerId);
+  const {
+    data: trainerResponse,
+    isLoading: trainerLoading,
+    isError: trainerError,
+    isFetching: trainerFetching,
+    error: trainerErrorObj,
+    refetch: refetchTrainer,
+  } = useTrainerById(trainerId);
 
-  // Stats/monthly sessions degrade gracefully (same fallback behavior as the
-  // original server page), so only the core trainer fetch blocks the view.
-  const isLoading = trainerQuery.isLoading;
-  const isError = trainerQuery.isError;
-  const isFetching =
-    trainerQuery.isFetching || statsQuery.isFetching || monthlyQuery.isFetching;
+  const {
+    data: statsResponse,
+    isFetching: statsFetching,
+    error: statsErrorObj,
+    refetch: refetchStats,
+  } = useTrainerSessionStats(trainerId);
+
+  const {
+    data: monthlySessionsResponse,
+    isFetching: monthlyFetching,
+    error: monthlyErrorObj,
+    refetch: refetchMonthly,
+  } = useMonthlySessionsForTrainer(trainerId);
+
+  // Only the core trainer fetch blocks the view.
+  const isLoading = trainerLoading;
+
+  const isFetching = trainerFetching || statsFetching || monthlyFetching;
 
   const refetchAll = () => {
-    trainerQuery.refetch();
-    statsQuery.refetch();
-    monthlyQuery.refetch();
+    refetchTrainer();
+    refetchStats();
+    refetchMonthly();
   };
 
   if (isLoading) {
     return <TrainerProfileSkeleton />;
   }
 
-  const trainerResult = trainerQuery.data;
+  if (trainerError || !trainerResponse) {
+    const firstError = trainerErrorObj ?? statsErrorObj ?? monthlyErrorObj;
 
-  if (isError || !trainerResult?.success) {
-    const firstError = trainerQuery.error;
     return (
       <TrainerProfileError
         message={
-          firstError instanceof Error
-            ? firstError.message
-            : !trainerResult?.success
-              ? (trainerResult?.error ?? null)
-              : null
+          firstError instanceof Error ? firstError.message : "Unknown error"
         }
         onRetry={refetchAll}
         retrying={isFetching}
@@ -126,20 +138,18 @@ export function TrainerProfileFetcher({ trainerId }: { trainerId: string }) {
     );
   }
 
-  const statsResult = statsQuery.data;
-  const monthlyResult = monthlyQuery.data;
+  const statsResult = statsResponse;
+  const monthlyResult = monthlySessionsResponse;
 
   return (
     <TrainerProfileClient
       trainerId={trainerId}
-      initialTrainer={trainerResult.data.trainer}
-      assignedMembers={trainerResult.data.assignedMembers}
+      initialTrainer={trainerResponse.trainer}
+      assignedMembers={trainerResponse.assignedMembers}
       initialStats={
-        statsResult?.success
-          ? statsResult.data
-          : { sessionsThisMonth: 0, attendanceRate: 0 }
+        statsResult ? statsResult : { sessionsThisMonth: 0, attendanceRate: 0 }
       }
-      monthlySessions={monthlyResult?.success ? monthlyResult.data : []}
+      monthlySessions={monthlyResult}
     />
   );
 }

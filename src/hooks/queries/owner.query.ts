@@ -44,7 +44,13 @@ export function useGymOwnerInfo() {
 
   return useQuery({
     queryKey: ["gym-owner-info", activeGymId],
-    queryFn: () => getGymOwnerInfo(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getGymOwnerInfo(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -56,7 +62,13 @@ export function useOwnerDashboardData() {
 
   return useQuery({
     queryKey: ["owner-dashboard", activeGymId],
-    queryFn: () => getOwnerDashboardData(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getOwnerDashboardData(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -68,7 +80,13 @@ export function useMembershipPlans() {
 
   return useQuery({
     queryKey: ["membership-plans", activeGymId],
-    queryFn: () => getMembershipPlans(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getMembershipPlans(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -80,7 +98,13 @@ export function useGymRevenueMonthly() {
 
   return useQuery({
     queryKey: ["gym-revenue-monthly", activeGymId],
-    queryFn: () => getGymRevenueMonthly(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getGymRevenueMonthly(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -92,7 +116,13 @@ export function useTopPerformingPlans() {
 
   return useQuery({
     queryKey: ["top-performing-plans", activeGymId],
-    queryFn: () => getTopPerformingPlans(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getTopPerformingPlans(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -104,7 +134,13 @@ export function useTrainersAndPlans() {
 
   return useQuery({
     queryKey: ["trainers-and-plans", activeGymId],
-    queryFn: () => getTrainersAndPlans(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getTrainersAndPlans(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -116,7 +152,13 @@ export function useGymWithDetails() {
 
   return useQuery({
     queryKey: ["gym-with-details", activeGymId],
-    queryFn: () => getGymWithDetails(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getGymWithDetails(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -128,7 +170,13 @@ export function useApplications() {
 
   return useQuery({
     queryKey: ["applications", activeGymId],
-    queryFn: () => getApplications(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getApplications(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -140,7 +188,17 @@ export function useApplicationById(applicationId: string) {
 
   return useQuery({
     queryKey: ["application", activeGymId, applicationId],
-    queryFn: () => getApplicationById(supabase, applicationId, activeGymId!),
+    queryFn: async () => {
+      const result = await getApplicationById(
+        supabase,
+        applicationId,
+        activeGymId!,
+      );
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId && !!applicationId,
     staleTime: SLOW,
   });
@@ -152,7 +210,13 @@ export function usePendingPayments() {
 
   return useQuery({
     queryKey: ["pending-payments", activeGymId],
-    queryFn: () => getPendingPayments(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getPendingPayments(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -164,7 +228,13 @@ export function useGymMembers() {
 
   return useQuery({
     queryKey: ["gym-members", activeGymId],
-    queryFn: () => getGymMembers(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getGymMembers(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -176,7 +246,13 @@ export function useGymActiveMembers() {
 
   return useQuery({
     queryKey: ["gym-active-members", activeGymId],
-    queryFn: () => getGymActiveMembers(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getGymActiveMembers(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -188,7 +264,13 @@ export function useGymSubscriptions() {
 
   return useQuery({
     queryKey: ["gym-subscriptions", activeGymId],
-    queryFn: () => getGymSubscriptions(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getGymSubscriptions(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -200,7 +282,13 @@ export function useGymAttendance(date?: string) {
 
   return useQuery({
     queryKey: ["gym-attendance", activeGymId, date],
-    queryFn: () => getGymAttendance(supabase, activeGymId!, date),
+    queryFn: async () => {
+      const result = await getGymAttendance(supabase, activeGymId!, date);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: FAST,
   });
@@ -212,7 +300,13 @@ export function useAllTrainers() {
 
   return useQuery({
     queryKey: ["all-trainers", activeGymId],
-    queryFn: () => getAllTrainers(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getAllTrainers(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -224,7 +318,13 @@ export function useTrainerStats() {
 
   return useQuery({
     queryKey: ["trainer-stats", activeGymId],
-    queryFn: () => getTrainerStats(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getTrainerStats(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: FAST,
   });
@@ -236,7 +336,13 @@ export function useTrainerById(trainerId: string) {
 
   return useQuery({
     queryKey: ["trainer", activeGymId, trainerId],
-    queryFn: () => getTrainerById(supabase, trainerId, activeGymId!),
+    queryFn: async () => {
+      const result = await getTrainerById(supabase, trainerId, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId && !!trainerId,
     staleTime: SLOW,
   });
@@ -248,7 +354,13 @@ export function useMembersAndPlans() {
 
   return useQuery({
     queryKey: ["members-and-plans", activeGymId],
-    queryFn: () => getMembersAndPlans(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getMembersAndPlans(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -260,7 +372,13 @@ export function useMembersWithAttendance() {
 
   return useQuery({
     queryKey: ["members-with-attendance", activeGymId],
-    queryFn: () => getMembersWithAttendance(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getMembersWithAttendance(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -272,7 +390,13 @@ export function useGymMemberStats() {
 
   return useQuery({
     queryKey: ["gym-member-stats", activeGymId],
-    queryFn: () => getGymMemberStats(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getGymMemberStats(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -284,8 +408,17 @@ export function useMemberByIdWithAttendance(memberId: string) {
 
   return useQuery({
     queryKey: ["member-with-attendance", activeGymId, memberId],
-    queryFn: () =>
-      getMembersByIdWithAttendence(supabase, memberId, activeGymId!),
+    queryFn: async () => {
+      const result = await getMembersByIdWithAttendence(
+        supabase,
+        memberId,
+        activeGymId!,
+      );
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId && !!memberId,
     staleTime: SLOW,
   });
@@ -297,7 +430,13 @@ export function useGymPayments(limit = 200) {
 
   return useQuery({
     queryKey: ["gym-payments", activeGymId, limit],
-    queryFn: () => getGymPayments(supabase, activeGymId!, limit),
+    queryFn: async () => {
+      const result = await getGymPayments(supabase, activeGymId!, limit);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -309,7 +448,13 @@ export function useGymPaymentsOverview() {
 
   return useQuery({
     queryKey: ["gym-payments-overview", activeGymId],
-    queryFn: () => getGymPaymentsOverview(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getGymPaymentsOverview(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId,
     staleTime: SLOW,
   });
@@ -321,7 +466,13 @@ export function usePaymentById(paymentId: string) {
 
   return useQuery({
     queryKey: ["payment", activeGymId, paymentId],
-    queryFn: () => getPaymentById(supabase, paymentId, activeGymId!),
+    queryFn: async () => {
+      const result = await getPaymentById(supabase, paymentId, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId && !!paymentId,
     staleTime: SLOW,
   });
@@ -337,7 +488,13 @@ export function useTrainerSessionStats(trainerId: string) {
 
   return useQuery({
     queryKey: ["trainer-session-stats", trainerId],
-    queryFn: () => getTrainerSessionStats(supabase, trainerId),
+    queryFn: async () => {
+      const result = await getTrainerSessionStats(supabase, trainerId);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!trainerId,
     staleTime: FAST,
   });
@@ -348,7 +505,13 @@ export function useMonthlySessionsForTrainer(trainerId: string) {
 
   return useQuery({
     queryKey: ["monthly-sessions-for-trainer", trainerId],
-    queryFn: () => getMonthlySessionsForTrainer(supabase, trainerId),
+    queryFn: async () => {
+      const result = await getMonthlySessionsForTrainer(supabase, trainerId);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!trainerId,
     staleTime: FAST,
   });
