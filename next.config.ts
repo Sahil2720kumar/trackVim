@@ -2,7 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
-  cacheComponents: true,
   allowedDevOrigins: ["b552-117-231-226-17.ngrok-free.app"],
   reactStrictMode: false,
   experimental: {
