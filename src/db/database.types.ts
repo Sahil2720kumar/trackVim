@@ -506,6 +506,7 @@ export type Database = {
           amenities: Json | null
           billing_address: string | null
           billing_start_date: string | null
+          billing_status: Database["public"]["Enums"]["gym_billing_status"]
           business_email: string | null
           business_name: string | null
           business_phone: string | null
@@ -560,6 +561,7 @@ export type Database = {
           amenities?: Json | null
           billing_address?: string | null
           billing_start_date?: string | null
+          billing_status?: Database["public"]["Enums"]["gym_billing_status"]
           business_email?: string | null
           business_name?: string | null
           business_phone?: string | null
@@ -614,6 +616,7 @@ export type Database = {
           amenities?: Json | null
           billing_address?: string | null
           billing_start_date?: string | null
+          billing_status?: Database["public"]["Enums"]["gym_billing_status"]
           business_email?: string | null
           business_name?: string | null
           business_phone?: string | null
@@ -2012,6 +2015,7 @@ export type Database = {
         Args: { p_application_id: string }
         Returns: string
       }
+      cancel_gym_billing: { Args: never; Returns: undefined }
       change_gym_subscription_plan: {
         Args: { p_gym_id: string; p_new_plan_id: string }
         Returns: undefined
@@ -2023,6 +2027,7 @@ export type Database = {
           p_member_count: number
           p_period_end: string
           p_period_start: string
+          p_plan_id?: string
           p_prorated?: boolean
           p_proration_days?: number
           p_proration_total_days?: number
@@ -2137,6 +2142,7 @@ export type Database = {
         Args: { p_period_end: string; p_period_start: string }
         Returns: number
       }
+      get_gym_billing_overview: { Args: never; Returns: Json }
       get_gym_monthly_revenue: {
         Args: { p_as_of?: string; p_gym_id: string; p_months?: number }
         Returns: {
@@ -2340,6 +2346,14 @@ export type Database = {
       }
       mark_overdue_gym_subscriptions: { Args: never; Returns: number }
       my_gym_ids: { Args: never; Returns: string[] }
+      reactivate_gym_subscription: {
+        Args: { p_gym_id: string }
+        Returns: string
+      }
+      recalculate_gym_invoice: {
+        Args: { p_gym_subscription_id: string; p_new_plan_id: string }
+        Returns: undefined
+      }
       record_subscription_payment_captured: {
         Args: {
           p_amount: number
@@ -2463,6 +2477,12 @@ export type Database = {
         | "Refunded"
       gender: "Male" | "Female" | "Other"
       general_status: "Active" | "Inactive" | "Suspended" | "Pending"
+      gym_billing_status:
+        | "Trial"
+        | "Active"
+        | "Pending"
+        | "Suspended"
+        | "Cancelled"
       gym_membership_status:
         | "PaymentPending"
         | "PaymentUploaded"
@@ -2698,6 +2718,13 @@ export const Constants = {
       ],
       gender: ["Male", "Female", "Other"],
       general_status: ["Active", "Inactive", "Suspended", "Pending"],
+      gym_billing_status: [
+        "Trial",
+        "Active",
+        "Pending",
+        "Suspended",
+        "Cancelled",
+      ],
       gym_membership_status: [
         "PaymentPending",
         "PaymentUploaded",

@@ -113,6 +113,11 @@ const navigationConfig: NavConfig = {
       href: "/owner/qr-codes",
     },
     {
+      icon: <CreditCard className="h-5 w-5" />,
+      label: "Billings",
+      href: "/owner/billing",
+    },
+    {
       icon: <Settings className="h-5 w-5" />,
       label: "Settings",
       children: [{ icon: <></>, label: "Settings", href: "/owner/settings" }],
@@ -440,7 +445,7 @@ export function Sidebar({
   const handleSignOut = async () => {
     try {
       setIsPending(true);
-      
+
       await signOut();
 
       clearTrainerContext();

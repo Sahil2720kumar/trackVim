@@ -163,6 +163,13 @@ export const ownerBreadcrumbRoutes: BreadcrumbRoute[] = [
       { label: "Settings", href: "/owner/settings", isActive: true },
     ],
   },
+  {
+    pattern: "/owner/billing",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Billing", href: "/owner/billing", isActive: true },
+    ],
+  },
 ];
 
 export const memberBreadcrumbRoutes: BreadcrumbRoute[] = [
