@@ -1,20 +1,16 @@
 "use client";
 
 import { Eye } from "lucide-react";
-import { useSupabaseClient } from "@/lib/supabase/client";
-import { getMyTrainerProfile } from "@/services/trainer.query";
 import { Button } from "@/components/ui/button";
 import { bigSquareButton } from "@/lib/styles";
 import TrainerSettingsForm, {
   TRAINER_SETTINGS_FORM_ID,
+  TrainerSettingsSkeleton,
 } from "@/components/trainer/TrainerSettingsForm";
-import { useTrainerStore } from "@/stores/trainer-store";
 import { useMyTrainerProfile } from "@/hooks/queries/trainer.query";
 
 export default function TrainerSettingsPage() {
-  const activeTrainerId = useTrainerStore((state) => state.activeTrainerId);
-
-  const profile = useMyTrainerProfile();
+  const { isPending, isError, error, data } = useMyTrainerProfile();
 
   return (
     <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto space-y-6">
@@ -38,6 +34,7 @@ export default function TrainerSettingsPage() {
               type="submit"
               form={TRAINER_SETTINGS_FORM_ID}
               className={bigSquareButton}
+              disabled={isPending || isError || !data}
             >
               Save Changes
             </Button>
@@ -46,10 +43,24 @@ export default function TrainerSettingsPage() {
       </div>
 
       <main className="py-4">
-        <TrainerSettingsForm
-          trainerId={activeTrainerId!}
-          initialData={profile.data as Record<string, unknown>}
-        />
+        {isPending ? (
+          <TrainerSettingsSkeleton />
+        ) : isError || !data ? (
+          <div className="flex flex-col items-center justify-center py-16 border border-border rounded-lg bg-card text-center px-4">
+            <p className="text-sm text-destructive font-medium mb-1">
+              Couldn&apos;t load trainer profile
+            </p>
+            <p className="text-xs text-muted-foreground max-w-sm">
+              {error instanceof Error
+                ? error.message
+                : "Something went wrong. Please try again."}
+            </p>
+          </div>
+        ) : (
+          <TrainerSettingsForm
+            initialData={data as Record<string, unknown>}
+          />
+        )}
       </main>
     </div>
   );

@@ -131,10 +131,11 @@ export default function SettingsForm({
   // defaultValues only apply once, at mount — resync explicitly if
   // initialData shows up or changes after that (e.g. the query resolved
   // after first render).
+  const initialDataKey = initialData ? JSON.stringify(initialData) : null;
   useEffect(() => {
-    if (initialData) reset(toDefaultValues(initialData));
-  }, [initialData, reset]);
-
+    if (initialDataKey) reset(toDefaultValues(JSON.parse(initialDataKey)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDataKey, reset]);
   const {
     fields: equipmentFields,
     append: appendEquipment,

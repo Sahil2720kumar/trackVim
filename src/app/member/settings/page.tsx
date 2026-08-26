@@ -14,8 +14,9 @@ export default async function MemberSettingsPage() {
   const profile = await getMyProfile(supabase);
 
   if (!profile.success) {
-    // Same shape MemberProfileForm's caller uses today — member row can
-    // legitimately not exist yet (fresh signup), so this isn't fatal.
+    if (profile.error !== "Profile not found.") {
+      throw new Error(profile.error);
+    }
     return (
       <div className="min-h-screen bg-background">
         <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">

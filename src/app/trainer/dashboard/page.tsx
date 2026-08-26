@@ -198,6 +198,18 @@ export default function TrainerDashboard() {
     error,
   } = useTrainerDashboardData(gymId, trainerId);
 
+  if (!gymId || !trainerId) {
+    return (
+      <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
+        <div className="flex flex-col items-center justify-center py-16 border border-border rounded-lg bg-card">
+          <p className="text-sm text-muted-foreground">
+            No active trainer context. Please select a gym.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -280,8 +292,6 @@ export default function TrainerDashboard() {
     data.sessionHistory,
     gymId!,
   );
-
-  console.log("assignedMembersForTable", assignedMembersForTable);
 
   const presentCount = data.attendanceTodayCount;
   const absentCount = data.attendanceAbsentCount;

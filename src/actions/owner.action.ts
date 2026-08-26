@@ -353,6 +353,7 @@ export async function updateGymSettingsAction(
     address_line2: gymData.addressLine2 ?? null,
     city: gymData.city ?? null,
     state: gymData.state ?? null,
+    state_code: gymData.stateCode ?? null,
     postal_code: gymData.postalCode ?? null,
     country: gymData.country ?? "India",
     number_of_floors: gymData.numberOfFloors ?? null,
@@ -397,7 +398,6 @@ export async function updateGymSettingsAction(
     ...(logoUrl ? { logo_url: logoUrl } : {}),
     ...(paymentQrUrl ? { payment_qr_url: paymentQrUrl } : {}),
   };
-
   // Drop undefined keys so a partial submission never nulls stored data;
   // null is kept so a cleared field is actually cleared. Same rule
   // updateMemberProfileAction follows.

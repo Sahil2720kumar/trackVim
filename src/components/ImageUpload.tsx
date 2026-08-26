@@ -37,8 +37,10 @@ export function useSingleUpload(
 
   // Sync if the parent swaps out the initial URL (e.g. after data loads)
   useEffect(() => {
-    setPreview(initialPreview ?? null);
-  }, [initialPreview]);
+    if (!file) {
+      setPreview(initialPreview ?? null);
+    }
+  }, [initialPreview, file]);
 
   const clear = useCallback(() => {
     if (urlRef.current) URL.revokeObjectURL(urlRef.current);

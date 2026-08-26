@@ -488,7 +488,7 @@ export default function MembershipPage() {
               />
               <InfoRow
                 label="Membership ID"
-                value={membership.id.slice(0, 8).toUpperCase()}
+                value={membership.id.toUpperCase()}
               />
               {scheduledMembership && (
                 <InfoRow

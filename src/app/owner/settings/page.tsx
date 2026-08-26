@@ -20,9 +20,11 @@ export default async function SettingsPage() {
   // finished — send them to finish it rather than rendering a settings
   // form with nothing to edit.
   if (!gym.success) {
-    redirect("/onboarding/register-gym");
+    if (gym.error === "Gym not found.") {
+      redirect("/onboarding/register-gym");
+    }
+    throw new Error(gym.error);
   }
-
   return (
     <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto">
       <div className="border-b border-border bg-background/95 backdrop-blur-sm">

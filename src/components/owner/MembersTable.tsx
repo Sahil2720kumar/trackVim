@@ -863,9 +863,15 @@ export function MembersTable() {
                         aria-label="Select row"
                         className="shrink-0"
                       />
-                      <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                        {member.avatar}
-                      </div>
+                      <Avatar className="h-10 w-10 shrink-0">
+                        <AvatarImage
+                          src={member.avatar ?? undefined}
+                          alt={member.name}
+                        />
+                        <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                          {getInitials(member.name)}
+                        </AvatarFallback>
+                      </Avatar>
                       <div className="min-w-0">
                         <p className="font-medium text-foreground truncate">
                           {member.name}

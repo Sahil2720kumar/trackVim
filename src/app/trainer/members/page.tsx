@@ -31,10 +31,11 @@ function getCurrentMembership(
   if (active) return active;
 
   return (
-    [...memberships].sort(
-      (a, b) =>
-        new Date(b.start_date).getTime() - new Date(a.start_date).getTime(),
-    )[0] ?? null
+    [...memberships].sort((a, b) => {
+      const aTime = a.start_date ? new Date(a.start_date).getTime() : 0;
+      const bTime = b.start_date ? new Date(b.start_date).getTime() : 0;
+      return bTime - aTime;
+    })[0] ?? null
   );
 }
 
@@ -71,7 +72,7 @@ export function mapAssignedMemberToTableMember(
   return {
     id: member.id,
     memberId: member.member_code ?? member.id,
-    name: member.full_name,
+    name: member.full_name ?? "Unknown",
     avatarUrl: member.photo_url ?? "/avatar-placeholder.png",
     phone: member.contact_phone ?? undefined,
     membershipPlan: planName,
