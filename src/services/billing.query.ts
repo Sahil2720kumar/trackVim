@@ -50,6 +50,11 @@ export async function getGymInvoices(
   };
 }
 
+export type GymInvoicesResult = Extract<
+  Awaited<ReturnType<typeof getGymInvoices>>,
+  { success: true }
+>["data"];
+
 export async function getGymInvoice(
   supabase: TypedSupabaseClient,
   gymId: string,
@@ -110,6 +115,11 @@ export async function getGymInvoice(
   };
 }
 
+export type GymInvoiceResult = Extract<
+  Awaited<ReturnType<typeof getGymInvoice>>,
+  { success: true }
+>["data"];
+
 export async function getSubscriptionPayments(
   supabase: TypedSupabaseClient,
   gymId: string,
@@ -151,6 +161,11 @@ export async function getSubscriptionPayments(
   };
 }
 
+export type SubscriptionPaymentsResult = Extract<
+  Awaited<ReturnType<typeof getSubscriptionPayments>>,
+  { success: true }
+>["data"];
+
 export async function getSubscriptionPlans(supabase: TypedSupabaseClient) {
   const { data, error } = await supabase
     .from("subscription_plans")
@@ -182,6 +197,11 @@ export async function getSubscriptionPlans(supabase: TypedSupabaseClient) {
   };
 }
 
+export type SubscriptionPlansResult = Extract<
+  Awaited<ReturnType<typeof getSubscriptionPlans>>,
+  { success: true }
+>["data"];
+
 export async function getActiveMemberCount(
   supabase: TypedSupabaseClient,
   gymId: string,
@@ -208,6 +228,11 @@ export async function getActiveMemberCount(
   };
 }
 
+export type ActiveMemberCountResult = Extract<
+  Awaited<ReturnType<typeof getActiveMemberCount>>,
+  { success: true }
+>["data"];
+
 export async function getBillingOverview(supabase: TypedSupabaseClient) {
   const { data, error } = await supabase.rpc("get_gym_billing_overview");
 
@@ -223,6 +248,11 @@ export async function getBillingOverview(supabase: TypedSupabaseClient) {
     data,
   };
 }
+
+export type BillingOverviewResult = Extract<
+  Awaited<ReturnType<typeof getBillingOverview>>,
+  { success: true }
+>["data"];
 
 // Billing Overview
 //        │

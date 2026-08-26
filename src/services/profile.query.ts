@@ -188,6 +188,11 @@ export async function getCurrentMemberProfile(
   };
 }
 
+export type CurrentMemberProfileResult = Extract<
+  Awaited<ReturnType<typeof getCurrentMemberProfile>>,
+  { success: true }
+>["data"];
+
 // Owner Part
 export async function getCurrentOwnerProfile(
   supabase: TypedSupabaseClient,
@@ -229,3 +234,8 @@ export async function getCurrentOwnerProfile(
     data,
   };
 }
+
+export type CurrentOwnerProfileResult = Extract<
+  Awaited<ReturnType<typeof getCurrentOwnerProfile>>,
+  { success: true }
+>["data"];

@@ -100,18 +100,18 @@ index("gyms_billing_status_idx")
 | `gyms.billing_status`      | What is the gym's subscription state right now? | Billing system               |
 | `gym_subscriptions.status` | What happened to _this one invoice_?            | Individual invoice lifecycle |
 
-Example — a gym can be billing-`Active` even while one invoice sits `Paid` and the next sits `Pending`, because the current invoice isn't overdue yet:
+Example — when a new monthly invoice is generated, the gym transitions to `Pending` until the invoice is paid:
 
 ```text
 gyms
 ────────────────────────
-billing_status = Active
+billing_status = Pending
 current_plan_id = Pro
 
 gym_subscriptions
 ────────────────────────────────
 August    Paid
-September Pending   ← not yet due, gym stays Active
+September Pending   ← gym transitions to Pending
 ```
 
 ---
@@ -127,6 +127,7 @@ stateDiagram-v2
     Pending --> Suspended: Invoice overdue
     Suspended --> Active: Payment captured
     Active --> Cancelled: cancel_gym_billing()
+    Pending --> Cancelled: cancel_gym_billing()
     Cancelled --> Pending: reactivate_gym_subscription()\n(new prorated invoice)
 ```
 
@@ -138,6 +139,7 @@ stateDiagram-v2
 | `Pending → Suspended` | Daily 04:00 cron finds an overdue invoice                                    |
 | `Suspended → Active`  | Owner pays the overdue invoice                                               |
 | `Active → Cancelled`  | Owner (or admin) calls `cancel_gym_billing()`                                |
+| `Pending → Cancelled` | Owner (or admin) calls `cancel_gym_billing()`                                |
 | `Cancelled → Pending` | Owner returns; `reactivate_gym_subscription()` issues a new prorated invoice |
 
 ---
@@ -472,7 +474,7 @@ flowchart TD
 
 ### `get_gym_billing_overview()` — now returns `billing_status`
 
-This read-only RPC assembles the owner's full billing picture in one call: the gym row (including `billing_status` and `billing_start_date`), the current plan, the current Pending invoice (if any), and the most recent invoice regardless of status.
+This read-only RPC assembles the owner's full billing picture in one call: the gym row (including `billing_status` and `billing_start_date`), the current plan, the current Pending or Overdue invoice (if any), and the most recent invoice regardless of status.
 
 ```mermaid
 flowchart TD
@@ -480,7 +482,7 @@ flowchart TD
     A --> B{Gym found?}
     B -- No --> E1[ERROR]
     B -- Yes --> C[Load current plan, if current_plan_id set]
-    C --> D["Load current invoice\nWHERE status = 'Pending'\nORDER BY billing_period_start DESC LIMIT 1"]
+    C --> D["Load current invoice\nWHERE status IN ('Pending', 'Overdue')\nORDER BY billing_period_start DESC LIMIT 1"]
     D --> E["Load last invoice\nORDER BY billing_period_start DESC LIMIT 1"]
     E --> F["Return jsonb:\ngym (incl. billing_status)\nplan\ncurrent_invoice\nlast_invoice"]
 ```
@@ -491,10 +493,11 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[Admin triggers extend_gym_trial] --> B[Find old billing_start_date]
-    B --> C[Cancel old Pending first invoice, if any]
+    A[Admin triggers extend_gym_trial] --> B{billing_status in Trial or Pending?}
+    B -- No --> REJ[Reject: Gym no longer in trial phase]
+    B -- Yes --> C[Cancel old Pending first invoice, if any]
     C --> D["set_config('app.allow_billing_field_change', true, true)"]
-    D --> E[UPDATE gyms.billing_start_date]
+    D --> E["UPDATE gyms.billing_start_date AND billing_status = 'Trial'"]
     E --> F[gyms_protect_billing_fields trigger → ALLOW]
     F --> G["New billing_start_date, e.g. 23 Sep → 10 Oct"]
     G --> H["Daily first-invoice cron eventually sees\nbilling_status = Trial AND billing_start_date <= today,\ncreates new first invoice"]
@@ -612,7 +615,7 @@ flowchart TD
         Z0 --> Z0b["billing_status → Cancelled\ncurrent_plan_id kept"]
     end
 
-    subgraph PlanChange["Plan Change (owner-initiated, any time)"]
+    subgraph PlanChange["Plan Change (owner-initiated, allowed when Pending invoice exists)"]
         Z1[Owner clicks Change Plan] --> Z2["change_gym_subscription_plan()"]
         Z2 --> Z3[Checks: is_gym_owner, plan active, invoice Pending + locked]
         Z3 --> Z4["set_config bypass"] --> Z5[UPDATE current_plan_id]

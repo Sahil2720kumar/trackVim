@@ -47,6 +47,11 @@ export async function getGymOwnerInfo(
   return { success: true as const, data };
 }
 
+export type GymOwnerInfoResult = Extract<
+  Awaited<ReturnType<typeof getGymOwnerInfo>>,
+  { success: true }
+>["data"];
+
 export type DashboardStats = {
   total_members: number;
   total_members_last_month: number;
@@ -322,6 +327,11 @@ export async function getMembershipPlans(
   return { success: true as const, data };
 }
 
+export type MembershipPlansResult = Extract<
+  Awaited<ReturnType<typeof getMembershipPlans>>,
+  { success: true }
+>["data"];
+
 export async function getGymRevenueMonthly(
   supabase: TypedSupabaseClient,
   gymId: string,
@@ -345,8 +355,13 @@ export async function getGymRevenueMonthly(
     revenue: Number(row.revenue),
   }));
 
-  return { success: true as const, data: coerced as RevenueMonthPoint[] };
+  return { success: true as const, data: coerced };
 }
+
+export type GymRevenueMonthlyResult = Extract<
+  Awaited<ReturnType<typeof getGymRevenueMonthly>>,
+  { success: true }
+>["data"];
 
 export async function getTopPerformingPlans(
   supabase: TypedSupabaseClient,
@@ -372,8 +387,13 @@ export async function getTopPerformingPlans(
     growth_pct: Number(row.growth_pct),
   }));
 
-  return { success: true as const, data: coerced as PlanPerformanceRow[] };
+  return { success: true as const, data: coerced };
 }
+
+export type TopPerformingPlansResult = Extract<
+  Awaited<ReturnType<typeof getTopPerformingPlans>>,
+  { success: true }
+>["data"];
 
 export async function getTrainersAndPlans(
   supabase: TypedSupabaseClient,
@@ -441,6 +461,11 @@ export async function getGymWithDetails(
   return { success: true as const, data };
 }
 
+export type GymWithDetailsResult = Extract<
+  Awaited<ReturnType<typeof getGymWithDetails>>,
+  { success: true }
+>["data"];
+
 //Application Quries
 export async function getApplications(
   supabase: TypedSupabaseClient,
@@ -465,6 +490,11 @@ export async function getApplications(
     data: data,
   };
 }
+
+export type ApplicationsResult = Extract<
+  Awaited<ReturnType<typeof getApplications>>,
+  { success: true }
+>["data"];
 
 /**
  * The role/gymId authorization check that used to live here (via Clerk
@@ -513,6 +543,11 @@ export async function getApplicationById(
   return { success: true as const, data: data };
 }
 
+export type ApplicationByIdResult = Extract<
+  Awaited<ReturnType<typeof getApplicationById>>,
+  { success: true }
+>["data"];
+
 export async function getPendingPayments(
   supabase: TypedSupabaseClient,
   gymId: string,
@@ -535,6 +570,11 @@ export async function getPendingPayments(
   return { success: true as const, data };
 }
 
+export type PendingPaymentsResult = Extract<
+  Awaited<ReturnType<typeof getPendingPayments>>,
+  { success: true }
+>["data"];
+
 export async function getGymMembers(
   supabase: TypedSupabaseClient,
   gymId: string,
@@ -554,6 +594,11 @@ export async function getGymMembers(
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
+
+export type GymMembersResult = Extract<
+  Awaited<ReturnType<typeof getGymMembers>>,
+  { success: true }
+>["data"];
 
 export async function getGymActiveMembers(
   supabase: TypedSupabaseClient,
@@ -575,6 +620,11 @@ export async function getGymActiveMembers(
   return { success: true as const, data };
 }
 
+export type GymActiveMembersResult = Extract<
+  Awaited<ReturnType<typeof getGymActiveMembers>>,
+  { success: true }
+>["data"];
+
 export async function getGymSubscriptions(
   supabase: TypedSupabaseClient,
   gymId: string,
@@ -588,6 +638,11 @@ export async function getGymSubscriptions(
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
+
+export type GymSubscriptionsResult = Extract<
+  Awaited<ReturnType<typeof getGymSubscriptions>>,
+  { success: true }
+>["data"];
 
 export async function getGymAttendance(
   supabase: TypedSupabaseClient,
@@ -611,6 +666,11 @@ export async function getGymAttendance(
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
+
+export type GymAttendanceResult = Extract<
+  Awaited<ReturnType<typeof getGymAttendance>>,
+  { success: true }
+>["data"];
 
 //Get Trainers
 /**
@@ -702,6 +762,11 @@ export async function getTrainerStats(
     },
   };
 }
+
+export type TrainerStatsResult = Extract<
+  Awaited<ReturnType<typeof getTrainerStats>>,
+  { success: true }
+>["data"];
 
 // ============================================================================
 // Trainer + Assigned Members — single query via FK embed
@@ -831,6 +896,11 @@ export async function getTrainerById(
   return { success: true as const, data: { trainer, assignedMembers } };
 }
 
+export type TrainerByIdResult = Extract<
+  Awaited<ReturnType<typeof getTrainerById>>,
+  { success: true }
+>["data"];
+
 export type TrainerDetail = Extract<
   Awaited<ReturnType<typeof getTrainerById>>,
   { success: true }
@@ -876,6 +946,11 @@ export async function getTrainerSessionStats(
   };
 }
 
+export type TrainerSessionStatsResult = Extract<
+  Awaited<ReturnType<typeof getTrainerSessionStats>>,
+  { success: true }
+>["data"];
+
 export async function getMonthlySessionsForTrainer(
   supabase: TypedSupabaseClient,
   trainerId: string,
@@ -914,6 +989,11 @@ export async function getMonthlySessionsForTrainer(
     })),
   };
 }
+
+export type MonthlySessionsForTrainerResult = Extract<
+  Awaited<ReturnType<typeof getMonthlySessionsForTrainer>>,
+  { success: true }
+>["data"];
 
 //Members
 
@@ -1566,6 +1646,11 @@ export async function getGymPayments(
   return { success: true as const, data: payments };
 }
 
+export type GymPaymentsResult = Extract<
+  Awaited<ReturnType<typeof getGymPayments>>,
+  { success: true }
+>["data"];
+
 export async function getGymPaymentsOverview(
   supabase: TypedSupabaseClient,
   gymId: string,
@@ -1636,6 +1721,11 @@ export async function getGymPaymentsOverview(
     },
   };
 }
+
+export type GymPaymentsOverviewResult = Extract<
+  Awaited<ReturnType<typeof getGymPaymentsOverview>>,
+  { success: true }
+>["data"];
 
 // Get Payment by Id
 
@@ -1827,3 +1917,8 @@ export async function getPaymentById(
 
   return { success: true as const, data: payment };
 }
+
+export type PaymentByIdResult = Extract<
+  Awaited<ReturnType<typeof getPaymentById>>,
+  { success: true }
+>["data"];

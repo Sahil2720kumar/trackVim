@@ -433,10 +433,11 @@ export function SessionsPanel() {
     data: response,
     isLoading,
     isError,
+    error,
     refetch,
   } = useMyTrainingSessions();
 
-  const sessions = response?.success ? response.data : [];
+  const sessions = response ? response : [];
 
   const upcoming = sessions.filter((s) => getDisplayStatus(s) === "Upcoming");
   const completed = sessions.filter((s) => getDisplayStatus(s) === "Completed");
@@ -556,16 +557,14 @@ export function SessionsPanel() {
 
   // Error state — covers both a network/query-level failure (isError)
   // and a request that resolved but reported success: false.
-  if (isError || !response?.success) {
+  if (isError || !response) {
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
         <h2 className="text-lg font-semibold">
           We couldn't load your sessions
         </h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          {response && !response.success
-            ? response.error
-            : "Something went wrong. Please try again."}
+          {error ? error.message : "Something went wrong. Please try again."}
         </p>
         <Button onClick={() => refetch()}>Try again</Button>
       </div>

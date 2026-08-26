@@ -22,3 +22,9 @@ export async function getNotifications(
 
   return data;
 }
+
+// Returns the row array directly (and throws on error) rather than a
+// { success, data } envelope, so — same as getActiveQrCode — this is a
+// plain Awaited<ReturnType<...>> alias rather than the Extract<...,
+// { success: true }> pattern used for the envelope-style queries.
+export type NotificationsResult = Awaited<ReturnType<typeof getNotifications>>;

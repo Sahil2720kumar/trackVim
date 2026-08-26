@@ -536,13 +536,19 @@ export function GymDiscoveryList() {
     useState<PriceRangeFilter>("All Prices");
   const [sortBy, setSortBy] = useState<SortOption>("Recommended");
 
-  const { data: response, isLoading, isError, refetch } = useDiscoverGyms();
+  const {
+    data: response,
+    isLoading,
+    error,
+    isError,
+    refetch,
+  } = useDiscoverGyms();
 
   // Unwrap the response envelope once. `gyms` is always a real array here
   // (empty until the fetch succeeds), so every hook below runs
   // unconditionally on every render — hooks must never sit after an early
   // return, since that changes how many hooks React sees between renders.
-  const gyms = response?.success ? response.data : [];
+  const gyms = response || [];
 
   const activeFilterCount =
     (priceFilter !== "All Prices" ? 1 : 0) + (sortBy !== "Recommended" ? 1 : 0);
@@ -670,14 +676,12 @@ export function GymDiscoveryList() {
 
   // Error state — covers both a network/query-level failure (isError)
   // and a request that resolved but reported success: false.
-  if (isError || !response?.success) {
+  if (isError || !response) {
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
         <h2 className="text-lg font-semibold">We couldn't load gyms</h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          {response && !response.success
-            ? response.error
-            : "Something went wrong. Please try again."}
+          {error ? error.message : "Something went wrong. Please try again."}
         </p>
         <Button onClick={() => refetch()}>Try again</Button>
       </div>

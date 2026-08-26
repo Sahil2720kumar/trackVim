@@ -20,6 +20,11 @@ export async function getMyTrainerProfile(
   return { success: true as const, data };
 }
 
+export type MyTrainerProfileResult = Extract<
+  Awaited<ReturnType<typeof getMyTrainerProfile>>,
+  { success: true }
+>["data"];
+
 export async function getMyAssignedMembers(
   supabase: TypedSupabaseClient,
   gymId: string,
@@ -64,6 +69,11 @@ export async function getMyAssignedMembers(
   return { success: true as const, data };
 }
 
+export type MyAssignedMembersResult = Extract<
+  Awaited<ReturnType<typeof getMyAssignedMembers>>,
+  { success: true }
+>["data"];
+
 export async function getUpcomingSessions(
   supabase: TypedSupabaseClient,
   gymId: string,
@@ -97,6 +107,11 @@ export async function getUpcomingSessions(
   return { success: true as const, data };
 }
 
+export type UpcomingSessionsResult = Extract<
+  Awaited<ReturnType<typeof getUpcomingSessions>>,
+  { success: true }
+>["data"];
+
 export async function getAllSessions(
   supabase: TypedSupabaseClient,
   gymId: string,
@@ -118,6 +133,11 @@ export async function getAllSessions(
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
+
+export type AllSessionsResult = Extract<
+  Awaited<ReturnType<typeof getAllSessions>>,
+  { success: true }
+>["data"];
 
 export async function getSessionWithExercises(
   supabase: TypedSupabaseClient,
@@ -148,6 +168,11 @@ export async function getSessionWithExercises(
   return { success: true as const, data };
 }
 
+export type SessionWithExercisesResult = Extract<
+  Awaited<ReturnType<typeof getSessionWithExercises>>,
+  { success: true }
+>["data"];
+
 export async function getTrainerNotifications(supabase: TypedSupabaseClient) {
   const { data, error } = await supabase
     .from("notifications")
@@ -158,6 +183,11 @@ export async function getTrainerNotifications(supabase: TypedSupabaseClient) {
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
+
+export type TrainerNotificationsResult = Extract<
+  Awaited<ReturnType<typeof getTrainerNotifications>>,
+  { success: true }
+>["data"];
 
 // training session, workout template, exercises
 
@@ -175,6 +205,11 @@ export async function getAllExercises(
   return { success: true as const, data };
 }
 
+export type AllExercisesResult = Extract<
+  Awaited<ReturnType<typeof getAllExercises>>,
+  { success: true }
+>["data"];
+
 export async function getTrainerGymId(
   supabase: TypedSupabaseClient,
   trainerId: string,
@@ -188,6 +223,11 @@ export async function getTrainerGymId(
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data: data.gym_id as string };
 }
+
+export type TrainerGymIdResult = Extract<
+  Awaited<ReturnType<typeof getTrainerGymId>>,
+  { success: true }
+>["data"];
 
 export async function getWorkoutTemplates(
   supabase: TypedSupabaseClient,
@@ -222,6 +262,11 @@ export async function getWorkoutTemplates(
   return { success: true as const, data: sorted };
 }
 
+export type WorkoutTemplatesResult = Extract<
+  Awaited<ReturnType<typeof getWorkoutTemplates>>,
+  { success: true }
+>["data"];
+
 export async function getWorkoutTemplateById(
   supabase: TypedSupabaseClient,
   templateId: string,
@@ -252,3 +297,8 @@ export async function getWorkoutTemplateById(
 
   return { success: true as const, data: sorted };
 }
+
+export type WorkoutTemplateByIdResult = Extract<
+  Awaited<ReturnType<typeof getWorkoutTemplateById>>,
+  { success: true }
+>["data"];

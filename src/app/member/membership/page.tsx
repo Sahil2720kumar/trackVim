@@ -188,6 +188,7 @@ export default function MembershipPage() {
   const {
     data: response,
     isLoading,
+    error,
     isError,
     refetch,
   } = useMyMembershipDetails();
@@ -206,16 +207,14 @@ export default function MembershipPage() {
     );
   }
 
-  if (isError || !response?.success) {
+  if (isError || !response) {
     return (
       <div className=" flex  flex-col items-center gap-4 px-4 py-16 text-center">
         <h2 className="text-lg font-semibold">
           We couldn't load your membership
         </h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          {response && !response.success
-            ? response.error
-            : "Something went wrong. Please try again."}
+          {error ? error.message : "Something went wrong. Please try again."}
         </p>
         <Button onClick={() => refetch()}>Try again</Button>
       </div>
@@ -233,7 +232,7 @@ export default function MembershipPage() {
     payments,
     timeline,
     stats,
-  } = response.data;
+  } = response;
 
   const remainingDays = totalDays - usedDays;
   const progressPct =

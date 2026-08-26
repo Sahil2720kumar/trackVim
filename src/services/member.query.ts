@@ -46,6 +46,11 @@ export async function findGymByCode(
   return { success: true as const, data };
 }
 
+export type GymByCodeResult = Extract<
+  Awaited<ReturnType<typeof findGymByCode>>,
+  { success: true }
+>["data"];
+
 /**
  * List active gyms (for discovery / browse screen).
  * member_count / trainer_count are computed via embedded-resource
@@ -85,6 +90,11 @@ export async function listActiveGyms(
 
   return { success: true as const, data: gyms };
 }
+
+export type ActiveGymsResult = Extract<
+  Awaited<ReturnType<typeof listActiveGyms>>,
+  { success: true }
+>["data"];
 
 export type DiscoverGym = {
   id: string;
@@ -219,6 +229,11 @@ export async function getDiscoverGyms(
   return { success: true as const, data };
 }
 
+export type DiscoverGymsResult = Extract<
+  Awaited<ReturnType<typeof getDiscoverGyms>>,
+  { success: true }
+>["data"];
+
 //Member/discover/[id] Queries
 export async function getGymDetail(
   supabase: TypedSupabaseClient,
@@ -282,6 +297,11 @@ export async function getGymDetail(
     data: data,
   };
 }
+
+export type GymDetailResult = Extract<
+  Awaited<ReturnType<typeof getGymDetail>>,
+  { success: true }
+>["data"];
 
 export type MembershipApplicationByPlanIdPageData = {
   gym: {
@@ -353,6 +373,13 @@ export async function MembershipApplicationPageDataByPlanId(
   return data as MembershipApplicationByPlanIdPageData;
 }
 
+// This RPC wrapper returns the page-data shape directly (or null) rather
+// than a { success, data } envelope, so there's no matching Result type
+// via the Extract<..., { success: true }> pattern used elsewhere below.
+export type MembershipApplicationPageDataByPlanIdResult = Awaited<
+  ReturnType<typeof MembershipApplicationPageDataByPlanId>
+>;
+
 // ============================================================================
 // Membership timeline status
 export type MyMembershipStatusResult = {
@@ -422,6 +449,9 @@ export async function getMyMembershipStatusWithPlanDetails(
   };
 }
 
+// Already has an explicit named return shape above (MyMembershipStatusResult),
+// so no separate Extract<...>["data"] alias is added here.
+
 // ============================================================================
 // Dashboard read-only queries
 export async function getMyProfile(supabase: TypedSupabaseClient) {
@@ -443,6 +473,11 @@ export async function getMyProfile(supabase: TypedSupabaseClient) {
   return { success: true as const, data };
 }
 
+export type MyProfileResult = Extract<
+  Awaited<ReturnType<typeof getMyProfile>>,
+  { success: true }
+>["data"];
+
 export async function getMyMemberships(supabase: TypedSupabaseClient) {
   const { data, error } = await supabase
     .from("gym_memberships")
@@ -460,6 +495,11 @@ export async function getMyMemberships(supabase: TypedSupabaseClient) {
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
+
+export type MyMembershipsResult = Extract<
+  Awaited<ReturnType<typeof getMyMemberships>>,
+  { success: true }
+>["data"];
 
 /**
  * `memberId` is resolved by the caller — no `auth()` call here.
@@ -555,6 +595,11 @@ export async function getMyApplications(
 
   return { success: true, data: data };
 }
+
+export type MyApplicationsResult = Extract<
+  Awaited<ReturnType<typeof getMyApplications>>,
+  { success: true }
+>["data"];
 
 /**
  * `memberId` is resolved by the caller — no `auth()` call here.
@@ -655,6 +700,11 @@ export async function getMyApplicationById(
   return { success: true, data };
 }
 
+export type MyApplicationByIdResult = Extract<
+  Awaited<ReturnType<typeof getMyApplicationById>>,
+  { success: true }
+>["data"];
+
 /**
  * Get the active payment for a membership (Pending or Rejected = needs action).
  */
@@ -679,6 +729,11 @@ export async function getPaymentForMembership(
   return { success: true as const, data };
 }
 
+export type PaymentForMembershipResult = Extract<
+  Awaited<ReturnType<typeof getPaymentForMembership>>,
+  { success: true }
+>["data"];
+
 export async function getMyPayments(supabase: TypedSupabaseClient) {
   const { data, error } = await supabase
     .from("payments")
@@ -695,6 +750,11 @@ export async function getMyPayments(supabase: TypedSupabaseClient) {
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
+
+export type MyPaymentsResult = Extract<
+  Awaited<ReturnType<typeof getMyPayments>>,
+  { success: true }
+>["data"];
 
 export async function getMyAttendance(
   supabase: TypedSupabaseClient,
@@ -721,6 +781,11 @@ export async function getMyAttendance(
   return { success: true as const, data };
 }
 
+export type MyAttendanceResult = Extract<
+  Awaited<ReturnType<typeof getMyAttendance>>,
+  { success: true }
+>["data"];
+
 export async function getMyTrainingSessions(
   supabase: TypedSupabaseClient,
   gymId: string,
@@ -745,6 +810,11 @@ export async function getMyTrainingSessions(
   return { success: true as const, data };
 }
 
+export type MyTrainingSessionsResult = Extract<
+  Awaited<ReturnType<typeof getMyTrainingSessions>>,
+  { success: true }
+>["data"];
+
 export async function getTrainingSessionById(
   supabase: TypedSupabaseClient,
   sessionId: string,
@@ -767,6 +837,11 @@ export async function getTrainingSessionById(
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
+
+export type TrainingSessionByIdResult = Extract<
+  Awaited<ReturnType<typeof getTrainingSessionById>>,
+  { success: true }
+>["data"];
 
 /**
  * `gymId` is resolved by the caller. This replaces the old two-hop lookup
@@ -806,6 +881,11 @@ export async function getMyUpcomingSessions(
   return { success: true as const, data };
 }
 
+export type MyUpcomingSessionsResult = Extract<
+  Awaited<ReturnType<typeof getMyUpcomingSessions>>,
+  { success: true }
+>["data"];
+
 /**
  * `gymId` is resolved by the caller and used to scope the query directly,
  * instead of fetching every active assignment across all of the member's
@@ -834,6 +914,11 @@ export async function getMyAssignedTrainers(
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
+
+export type MyAssignedTrainersResult = Extract<
+  Awaited<ReturnType<typeof getMyAssignedTrainers>>,
+  { success: true }
+>["data"];
 
 //Get Membership details
 
@@ -1317,6 +1402,11 @@ export async function getMyMessages(supabase: TypedSupabaseClient) {
   return { success: true as const, data };
 }
 
+export type MyMessagesResult = Extract<
+  Awaited<ReturnType<typeof getMyMessages>>,
+  { success: true }
+>["data"];
+
 export async function getUnreadMessageCount(
   supabase: TypedSupabaseClient,
 ): Promise<ActionResult<{ count: number }>> {
@@ -1337,6 +1427,9 @@ export async function getUnreadMessageCount(
   if (error) return { success: false, error: error.message };
   return { success: true, data: { count: count ?? 0 } };
 }
+
+// Already has an explicit return type annotation (ActionResult<{ count }>),
+// so no separate Extract<...>["data"] alias is added here.
 
 export async function getTodayAttendanceStatus(
   supabase: TypedSupabaseClient,
@@ -1360,6 +1453,11 @@ export async function getTodayAttendanceStatus(
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
+
+export type TodayAttendanceStatusResult = Extract<
+  Awaited<ReturnType<typeof getTodayAttendanceStatus>>,
+  { success: true }
+>["data"];
 
 export type MemberAttendanceStats = {
   daysAttended: number;
@@ -1400,6 +1498,11 @@ export async function getMemberAttendanceStats(
   return { success: true as const, data: stats };
 }
 
+export type MemberAttendanceStatsResult = Extract<
+  Awaited<ReturnType<typeof getMemberAttendanceStats>>,
+  { success: true }
+>["data"];
+
 export type AttendanceHistoryRow = {
   date: string; // yyyy-MM-dd
   checkIn: string | null; // formatted "07:02 AM"
@@ -1427,6 +1530,9 @@ export function mostFrequent(values: (string | null)[]) {
   }
   return top;
 }
+
+// Plain helper (no supabase query, no { success, data } envelope) — no
+// Result type alias applies here.
 
 export async function getMemberAttendanceOverview(
   supabase: TypedSupabaseClient,
