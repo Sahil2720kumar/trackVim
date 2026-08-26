@@ -84,7 +84,7 @@ export default function MemberProfileForm({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const photo = useSingleUpload(undefined, 2 * 1024 * 1024);
+  const photo = useSingleUpload(undefined, undefined, 2 * 1024 * 1024);
   const { session } = useClerk();
 
   const [existingPhotoUrl] = useState<string | null>(

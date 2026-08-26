@@ -13,20 +13,44 @@ import {
   getWorkoutTemplates,
   getAllSessions,
   getWorkoutTemplateById,
+  getTrainerDashboardData,
 } from "@/services/trainer.query";
+import { useTrainerStore } from "@/stores/trainer-store";
 
-export function useMyTrainerProfile(
+export function useMyTrainerProfile() {
+  const activeTrainerId = useTrainerStore((state) => state.activeTrainerId);
+  const activeGymId = useTrainerStore((state) => state.activeGymId);
+  const { supabase } = useSupabaseClient();
+  return useQuery({
+    queryKey: ["trainerProfile", activeGymId, activeTrainerId],
+    queryFn: async () => {
+      if (!activeGymId || !activeTrainerId) {
+        throw new Error("Gym ID and Trainer ID are required");
+      }
+      const result = await getMyTrainerProfile(
+        supabase,
+        activeGymId,
+        activeTrainerId,
+      );
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: !!activeGymId && !!activeTrainerId,
+  });
+}
+
+export function useTrainerDashboardData(
   gymId: string | null,
   trainerId: string | null,
 ) {
   const { supabase } = useSupabaseClient();
   return useQuery({
-    queryKey: ["trainerProfile", gymId, trainerId],
+    queryKey: ["trainerDashboard", gymId, trainerId],
     queryFn: () => {
       if (!gymId || !trainerId) {
         throw new Error("Gym ID and Trainer ID are required");
       }
-      return getMyTrainerProfile(supabase, gymId, trainerId);
+      return getTrainerDashboardData(supabase, gymId, trainerId);
     },
     enabled: !!gymId && !!trainerId,
   });

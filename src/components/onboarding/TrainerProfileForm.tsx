@@ -114,7 +114,7 @@ export default function TrainerProfileForm({
     (initialData?.photo_url as string) || null,
   );
 
-  const photo = useSingleUpload(undefined, 2 * 1024 * 1024);
+  const photo = useSingleUpload(undefined, undefined, 2 * 1024 * 1024);
 
   const {
     register,

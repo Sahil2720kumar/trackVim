@@ -239,3 +239,84 @@ export type CurrentOwnerProfileResult = Extract<
   Awaited<ReturnType<typeof getCurrentOwnerProfile>>,
   { success: true }
 >["data"];
+
+//trainer part
+
+export async function getCurrentTrainerProfile(
+  supabase: TypedSupabaseClient,
+  clerkId: string,
+) {
+  // Get the current user
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select(
+      `
+      id,
+      full_name,
+      email,
+      username,
+      phone,
+      avatar_url,
+      role,
+      account_status
+    `,
+    )
+    .eq("clerk_id", clerkId)
+    .eq("role", "trainer")
+    .single();
+
+  if (userError) {
+    return {
+      success: false as const,
+      error: userError.message,
+    };
+  }
+
+  // Get ALL trainer records for this user.
+  // Each row represents this trainer in one gym.
+  const { data: trainers, error: trainersError } = await supabase
+    .from("trainers")
+    .select(
+      `
+      id,
+      full_name,
+      contact_email,
+      contact_phone,
+      photo_url,
+      trainer_code,
+      profile_id,
+      gym_id,
+      employee_id,
+      status,
+      gyms (
+        id,
+        name,
+        code,
+        logo_url
+      )
+    `,
+    )
+    .eq("profile_id", user.id)
+    .is("deleted_at", null)
+    .eq("status", "Active");
+
+  if (trainersError) {
+    return {
+      success: false as const,
+      error: trainersError.message,
+    };
+  }
+
+  return {
+    success: true as const,
+    data: {
+      ...user,
+      trainers,
+    },
+  };
+}
+
+export type CurrentTrainerProfileResult = Extract<
+  Awaited<ReturnType<typeof getCurrentTrainerProfile>>,
+  { success: true }
+>["data"];

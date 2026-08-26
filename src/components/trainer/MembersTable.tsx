@@ -34,6 +34,8 @@ import {
 } from "@/components/ui/popover";
 import type { Member, MemberStatus } from "@/mock/trainer/members";
 import { useRouter } from "next/navigation";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { getInitials } from "@/lib/utils";
 
 // ============================================================================
 // Constants
@@ -138,13 +140,17 @@ const sortMembers = (members: Member[], sortBy: string): Member[] => {
   const sorted = [...members];
   switch (sortBy) {
     case "name-asc":
-      return sorted.sort((a, b) => a.name.localeCompare(b.name));
+      return sorted.sort((a, b) =>
+        (a?.name ?? "").localeCompare(b?.name ?? ""),
+      );
     case "name-desc":
-      return sorted.sort((a, b) => b.name.localeCompare(a.name));
+      return sorted.sort((a, b) =>
+        (b?.name ?? "").localeCompare(a?.name ?? ""),
+      );
     case "attendance-asc":
-      return sorted.sort((a, b) => a.attendance - b.attendance);
+      return sorted.sort((a, b) => (a?.attendance ?? 0) - (b?.attendance ?? 0));
     case "attendance-desc":
-      return sorted.sort((a, b) => b.attendance - a.attendance);
+      return sorted.sort((a, b) => (b?.attendance ?? 0) - (a?.attendance ?? 0));
     default:
       return sorted;
   }
@@ -156,11 +162,11 @@ const sortMembers = (members: Member[], sortBy: string): Member[] => {
 
 const MemberAvatar: React.FC<{ member: Member }> = ({ member }) => (
   <div className="flex items-center gap-3">
-    <img
-      src={member.avatarUrl}
-      alt={member.name}
-      className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-    />
+    <Avatar className="h-10 w-10 shrink-0">
+      <AvatarImage src={member.avatarUrl ?? undefined} alt={member.name} />
+      <AvatarFallback>{getInitials(member.name)}</AvatarFallback>
+    </Avatar>
+
     <div>
       <p className="text-sm font-medium text-foreground">{member.name}</p>
       <p className="text-xs text-muted-foreground">{member.memberId}</p>
@@ -519,20 +525,20 @@ export const MembersTable: React.FC<MembersTableProps> = ({
         header: "Status",
         cell: ({ row }) => <MemberStatusBadge status={row.original.status} />,
       },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => (
-          <div className="flex justify-end">
-            <ActionMenu
-              member={row.original}
-              onViewProfile={handleViewProfile}
-              onSendMessage={handleSendMessage}
-              onRemoveMember={handleRemoveMember}
-            />
-          </div>
-        ),
-      },
+      // {
+      //   id: "actions",
+      //   header: "",
+      //   cell: ({ row }) => (
+      //     <div className="flex justify-end">
+      //       <ActionMenu
+      //         member={row.original}
+      //         onViewProfile={handleViewProfile}
+      //         onSendMessage={handleSendMessage}
+      //         onRemoveMember={handleRemoveMember}
+      //       />
+      //     </div>
+      //   ),
+      // },
     );
 
     return base;

@@ -26,13 +26,19 @@ function firstRejectionError(rejections: FileRejection[]): string | null {
 // ─────────────────────────────────────────────
 
 export function useSingleUpload(
+  initialPreview?: string,
   accept?: DropzoneOptions["accept"],
   maxSizeBytes: number = MAX_IMAGE_BYTES,
 ) {
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(initialPreview ?? null);
   const [error, setError] = useState<string | null>(null);
   const urlRef = useRef<string | null>(null);
+
+  // Sync if the parent swaps out the initial URL (e.g. after data loads)
+  useEffect(() => {
+    setPreview(initialPreview ?? null);
+  }, [initialPreview]);
 
   const clear = useCallback(() => {
     if (urlRef.current) URL.revokeObjectURL(urlRef.current);

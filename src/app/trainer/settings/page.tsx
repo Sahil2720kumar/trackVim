@@ -1,14 +1,19 @@
-import { Button } from "@/components/ui/button";
+"use client";
+
 import { Eye } from "lucide-react";
-import TrainerProfileForm, {
-  TRAINER_FORM_ID,
-} from "@/components/trainer/TrainerProfileForm";
+import { Button } from "@/components/ui/button";
 import { bigSquareButton } from "@/lib/styles";
+import TrainerSettingsForm, {
+  TRAINER_SETTINGS_FORM_ID,
+  TrainerSettingsSkeleton,
+} from "@/components/trainer/TrainerSettingsForm";
+import { useMyTrainerProfile } from "@/hooks/queries/trainer.query";
 
 export default function TrainerSettingsPage() {
+  const { isPending, isError, error, data } = useMyTrainerProfile();
+
   return (
     <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto space-y-6">
-      {/* Page Header */}
       <div className="border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="min-w-0">
@@ -25,13 +30,11 @@ export default function TrainerSettingsPage() {
               <Eye className="w-4 h-4" />
               Preview Public Profile
             </Button>
-            {/* type="submit" + form="..." lets this button, which lives
-                outside the <form> element, submit the client-side form
-                without this component needing to be a client component. */}
             <Button
               type="submit"
-              form={TRAINER_FORM_ID}
+              form={TRAINER_SETTINGS_FORM_ID}
               className={bigSquareButton}
+              disabled={isPending || isError || !data}
             >
               Save Changes
             </Button>
@@ -39,9 +42,25 @@ export default function TrainerSettingsPage() {
         </div>
       </div>
 
-      {/* Main Content */}
       <main className="py-4">
-        <TrainerProfileForm />
+        {isPending ? (
+          <TrainerSettingsSkeleton />
+        ) : isError || !data ? (
+          <div className="flex flex-col items-center justify-center py-16 border border-border rounded-lg bg-card text-center px-4">
+            <p className="text-sm text-destructive font-medium mb-1">
+              Couldn&apos;t load trainer profile
+            </p>
+            <p className="text-xs text-muted-foreground max-w-sm">
+              {error instanceof Error
+                ? error.message
+                : "Something went wrong. Please try again."}
+            </p>
+          </div>
+        ) : (
+          <TrainerSettingsForm
+            initialData={data as Record<string, unknown>}
+          />
+        )}
       </main>
     </div>
   );

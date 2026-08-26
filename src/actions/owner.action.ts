@@ -245,90 +245,191 @@ export async function createGymAction(
  * Update gym profile. billing_start_date and current_plan_id are protected by
  * the `gyms_protect_billing_fields` trigger and cannot be updated here.
  */
-export async function updateGymAction(
+export async function updateGymSettingsAction(
   gymId: string,
-  payload: Partial<{
-    name: string;
-    gymShortName: string;
-    gymDescription: string;
-    contactEmail: string;
-    contactPhone: string;
-    website: string;
-    logoUrl: string;
-    addressLine1: string;
-    addressLine2: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
-    amenities: string[];
-    equipment: { name: string; quantity: number }[];
-    gstRegistered: boolean;
-    gstin: string;
-    legalBusinessName: string;
-    billingAddress: string;
-    gstState: string;
-    stateCode: string;
-    numberOfFloors: number;
-    numberOfRooms: number;
-    hasWashroom: boolean;
-    hasLockerRoom: boolean;
-    hasSaunaRoom: boolean;
-    hasSteamRoom: boolean;
-    hasShowerRoom: boolean;
-    facilityNotes: string;
-  }>,
-): Promise<ActionResult> {
-  const supabase = await createServerClient();
-
-  const update: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
-  };
-  const fieldMap: Record<string, string> = {
-    name: "name",
-    gymShortName: "gym_short_name",
-    gymDescription: "gym_description",
-    contactEmail: "contact_email",
-    contactPhone: "contact_phone",
-    website: "website",
-    logoUrl: "logo_url",
-    addressLine1: "address_line1",
-    addressLine2: "address_line2",
-    city: "city",
-    state: "state",
-    postalCode: "postal_code",
-    country: "country",
-    amenities: "amenities",
-    equipment: "equipment",
-    gstRegistered: "gst_registered",
-    gstin: "gstin",
-    legalBusinessName: "legal_business_name",
-    billingAddress: "billing_address",
-    gstState: "gst_state",
-    stateCode: "state_code",
-    numberOfFloors: "number_of_floors",
-    numberOfRooms: "number_of_rooms",
-    hasWashroom: "has_washroom",
-    hasLockerRoom: "has_locker_room",
-    hasSaunaRoom: "has_sauna_room",
-    hasSteamRoom: "has_steam_room",
-    hasShowerRoom: "has_shower_room",
-    facilityNotes: "facility_notes",
-  };
-
-  for (const [key, col] of Object.entries(fieldMap)) {
-    const val = (payload as Record<string, unknown>)[key];
-    if (val !== undefined) update[col] = val;
+  data: CreateGymInput,
+  files?: {
+    logo?: File | null;
+    paymentQr?: File | null;
+  },
+): Promise<ActionResult<{ id: string }>> {
+  // 1. Auth
+  const { userId } = await auth();
+  if (!userId) {
+    return {
+      success: false,
+      error: "You must be signed in to update gym settings.",
+    };
   }
 
-  const { error } = await supabase
-    .from("gyms")
-    .update(update as any)
-    .eq("id", gymId);
-  if (error) return { success: false, error: error.message };
+  // 2. Validate — same schema createGymAction uses, since the settings
+  // form is built on the same shape of data.
+  const parsed = createGymSchema.safeParse(data);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid gym data.",
+    };
+  }
+  const gymData = parsed.data;
 
-  revalidatePath("/dashboard/settings");
-  return { success: true, data: undefined };
+  const supabase = await createServerClient();
+
+  // 3. Resolve the caller's internal user row.
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("id, email")
+    .eq("clerk_id", userId)
+    .maybeSingle();
+
+  if (userError) return { success: false, error: userError.message };
+  if (!userData) {
+    return {
+      success: false,
+      error: "Your account is still being set up. Please retry in a moment.",
+    };
+  }
+
+  // 4. Ownership check — gymId comes from the client, don't trust it
+  // blindly. Same spirit as the member/trainer self-update ownership
+  // checks: confirm this gym actually belongs to this owner before
+  // writing anything.
+  const { data: existing, error: existingError } = await supabase
+    .from("gyms")
+    .select("id, owner_id")
+    .eq("id", gymId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (existingError) return { success: false, error: existingError.message };
+  if (!existing || existing.owner_id !== userData.id) {
+    return { success: false, error: "Gym not found." };
+  }
+
+  // 5. Uploads — keyed on gymId so repeated saves overwrite the same
+  // path instead of accumulating, same pattern as member/trainer photo
+  // uploads.
+  const { logo, paymentQr } = files ?? {};
+  let logoUrl: string | undefined;
+  let paymentQrUrl: string | undefined;
+
+  try {
+    const folder = `trackVim/gyms/${gymId}`;
+    const [logoResult, qrResult] = await Promise.all([
+      logo && logo.size > 0
+        ? uploadFile(logo, `${folder}/logo`)
+        : Promise.resolve(undefined),
+      paymentQr && paymentQr.size > 0
+        ? uploadFile(paymentQr, `${folder}/payment-qr`)
+        : Promise.resolve(undefined),
+    ]);
+    logoUrl = logoResult;
+    paymentQrUrl = qrResult;
+  } catch (err) {
+    return {
+      success: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to upload images. Please try again.",
+    };
+  }
+
+  // 6. Same field set createGymAction writes on insert, minus
+  // create-only columns (owner_id, code, timezone/contact_email — the
+  // latter stays derived from the owner's Clerk email, not form input)
+  // and billing fields, which gyms_protect_billing_fields blocks anyway.
+  const gymFields = {
+    name: gymData.name,
+    gym_short_name: gymData.gymShortName ?? null,
+    gym_description: gymData.gymDescription ?? null,
+    contact_phone: gymData.contactPhone ?? null,
+    website: gymData.website ?? null,
+    owner_name: gymData.ownerName ?? null,
+    business_name: gymData.businessName ?? null,
+    business_email: gymData.businessEmail ?? null,
+    business_phone: gymData.businessPhone ?? null,
+    address_line1: gymData.addressLine1 ?? null,
+    address_line2: gymData.addressLine2 ?? null,
+    city: gymData.city ?? null,
+    state: gymData.state ?? null,
+    state_code: gymData.stateCode ?? null,
+    postal_code: gymData.postalCode ?? null,
+    country: gymData.country ?? "India",
+    number_of_floors: gymData.numberOfFloors ?? null,
+    number_of_rooms: gymData.numberOfRooms ?? null,
+    facility_notes: gymData.facilityNotes ?? null,
+    has_washroom: gymData.hasWashroom ?? false,
+    washroom_count: gymData.hasWashroom
+      ? (gymData.washroomCount ?? null)
+      : null,
+    has_sauna_room: gymData.hasSaunaRoom ?? false,
+    sauna_room_count: gymData.hasSaunaRoom
+      ? (gymData.saunaRoomCount ?? null)
+      : null,
+    has_steam_room: gymData.hasSteamRoom ?? false,
+    steam_room_count: gymData.hasSteamRoom
+      ? (gymData.steamRoomCount ?? null)
+      : null,
+    has_shower_room: gymData.hasShowerRoom ?? false,
+    shower_room_count: gymData.hasShowerRoom
+      ? (gymData.showerRoomCount ?? null)
+      : null,
+    has_locker_room: gymData.hasLockerRoom ?? false,
+    locker_room_count: gymData.hasLockerRoom
+      ? (gymData.lockerRoomCount ?? null)
+      : null,
+    amenities: gymData.amenities ?? [],
+    equipment: gymData.equipment ?? [],
+    gst_registered: gymData.gstRegistered ?? false,
+    gstin: gymData.gstRegistered ? (gymData.gstin ?? null) : null,
+    legal_business_name: gymData.gstRegistered
+      ? (gymData.legalBusinessName ?? null)
+      : null,
+    billing_address: gymData.gstRegistered
+      ? (gymData.billingAddress ?? null)
+      : null,
+    gst_state: gymData.gstRegistered ? (gymData.gstState ?? null) : null,
+    place_of_supply: gymData.gstRegistered
+      ? (gymData.placeOfSupply ?? null)
+      : null,
+    sac_code: gymData.gstRegistered ? (gymData.sacCode ?? null) : null,
+    updated_at: new Date().toISOString(),
+    ...(logoUrl ? { logo_url: logoUrl } : {}),
+    ...(paymentQrUrl ? { payment_qr_url: paymentQrUrl } : {}),
+  };
+  // Drop undefined keys so a partial submission never nulls stored data;
+  // null is kept so a cleared field is actually cleared. Same rule
+  // updateMemberProfileAction follows.
+  const definedGymFields = Object.fromEntries(
+    Object.entries(gymFields).filter(([, v]) => v !== undefined),
+  );
+
+  const { error: updateError } = await supabase
+    .from("gyms")
+    .update(definedGymFields)
+    .eq("id", gymId);
+
+  if (updateError) return { success: false, error: updateError.message };
+
+  // 7. Keep the owner's users row in sync — same fields createGymAction
+  // writes at signup. Deliberately does NOT touch avatar_url: the gym
+  // logo is the gym's brand mark, not the owner's personal photo, and
+  // createGymAction never conflates the two either.
+  const { error: userUpdateError } = await supabase
+    .from("users")
+    .update({
+      full_name: gymData.ownerName,
+      phone: gymData.contactPhone ?? gymData.businessPhone,
+    })
+    .eq("id", userData.id);
+
+  if (userUpdateError) {
+    return { success: false, error: userUpdateError.message };
+  }
+
+  revalidatePath("/owner/settings");
+  return { success: true, data: { id: gymId } };
 }
 
 /**

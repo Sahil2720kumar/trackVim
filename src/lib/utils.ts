@@ -76,13 +76,11 @@ export function formatDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function daysBetween(endDate: string) {
-  const todayStr = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-  }).format(new Date());
+export function daysBetween(endDate: string, timezone: string = "Asia/Kolkata") {
+  const todayStr = getTodayDateStr(timezone);
 
-  const today = new Date(`${todayStr}T00:00:00+05:30`);
-  const end = new Date(`${endDate}T00:00:00+05:30`);
+  const today = new Date(`${todayStr}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
 
   return Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }

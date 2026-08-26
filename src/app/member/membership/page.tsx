@@ -286,7 +286,7 @@ export default function MembershipPage() {
                       Membership No.
                     </span>
                     <span className="text-white font-semibold">
-                      {membership.id.slice(0, 8).toUpperCase()}
+                      {membership.id.toUpperCase()}
                     </span>
                   </div>
                 </div>
@@ -488,7 +488,7 @@ export default function MembershipPage() {
               />
               <InfoRow
                 label="Membership ID"
-                value={membership.id.slice(0, 8).toUpperCase()}
+                value={membership.id.toUpperCase()}
               />
               {scheduledMembership && (
                 <InfoRow

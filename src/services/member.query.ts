@@ -3,7 +3,12 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { ActionResult } from "@/actions/owner.action";
 import { Database, Json } from "@/db/database.types";
 import { getDisplayStatus } from "@/lib/application-status";
-import { formatDateTime, formatDuration, getTodayDateStr } from "@/lib/utils";
+import {
+  daysBetween,
+  formatDateTime,
+  formatDuration,
+  getTodayDateStr,
+} from "@/lib/utils";
 import {
   DisplayStatus,
   MembershipApplication,
@@ -454,6 +459,88 @@ export async function getMyMembershipStatusWithPlanDetails(
 
 // ============================================================================
 // Dashboard read-only queries
+
+export type MembershipStatusKind =
+  | "active"
+  | "frozen"
+  | "cancelled"
+  | "payment-rejected"
+  | "payment-pending"
+  | "not-started"
+  | "expired"
+  | "no-gym";
+
+export interface MembershipRow {
+  status: string;
+  start_date: string;
+  end_date: string;
+  is_frozen: boolean;
+  freeze_start_date?: string | null;
+  cancelled_at?: string | null;
+}
+
+export interface MembershipStatusResult {
+  kind: MembershipStatusKind;
+  todayIso: string;
+  daysLeft?: number;
+}
+
+/**
+ * Same classification getMemberHomeState uses to decide which home-screen
+ * state to render — pulled out so any screen that needs "is this
+ * membership currently usable, and how many days are left" gets the exact
+ * same answer without duplicating the branching.
+ */
+export function classifyMembershipStatus(
+  membership: MembershipRow | null | undefined,
+  gymTimezone = "Asia/Kolkata",
+): MembershipStatusResult {
+  const todayIso = getTodayDateStr(gymTimezone);
+
+  if (!membership) {
+    return { kind: "no-gym", todayIso };
+  }
+
+  const isActiveToday =
+    membership.status === "Active" &&
+    membership.start_date <= todayIso &&
+    membership.end_date >= todayIso &&
+    !membership.is_frozen;
+
+  if (isActiveToday) {
+    return {
+      kind: "active",
+      todayIso,
+      daysLeft: daysBetween(membership.end_date, gymTimezone),
+    };
+  }
+
+  if (membership.status === "Frozen" || membership.is_frozen) {
+    return { kind: "frozen", todayIso };
+  }
+
+  if (membership.status === "Cancelled") {
+    return { kind: "cancelled", todayIso };
+  }
+
+  if (membership.status === "PaymentRejected") {
+    return { kind: "payment-rejected", todayIso };
+  }
+
+  if (
+    membership.status === "PaymentPending" ||
+    membership.status === "PaymentUploaded"
+  ) {
+    return { kind: "payment-pending", todayIso };
+  }
+
+  if (membership.status === "Active" && membership.start_date > todayIso) {
+    return { kind: "not-started", todayIso };
+  }
+
+  return { kind: "expired", todayIso };
+}
+
 export async function getMyProfile(supabase: TypedSupabaseClient) {
   const { data, error } = await supabase
     .from("members")
@@ -461,16 +548,41 @@ export async function getMyProfile(supabase: TypedSupabaseClient) {
       `
       *,
       gym_memberships:active_gym_membership_id(
-        id, status, start_date, end_date,
+        id, status, start_date, end_date, duration_months,
+        is_frozen, freeze_start_date, cancelled_at,
         membership_plans(plan_name, plan_color),
-        gyms(id, name, logo_url)
+        gyms(id, name, logo_url, timezone)
       )
     `,
     )
     .maybeSingle();
 
   if (error) return { success: false as const, error: error.message };
-  return { success: true as const, data };
+  if (!data) return { success: false as const, error: "Profile not found." };
+
+  const membership = data.gym_memberships as any;
+  const gymTimezone = membership?.gyms?.timezone ?? "Asia/Kolkata";
+  const { kind, daysLeft } = classifyMembershipStatus(membership, gymTimezone);
+
+  return {
+    success: true as const,
+    data: {
+      member: data,
+      membership: membership
+        ? {
+            kind,
+            daysLeft,
+            planName: membership.membership_plans?.plan_name ?? null,
+            planColor: membership.membership_plans?.plan_color ?? null,
+            gymId: membership.gyms?.id ?? null,
+            gymName: membership.gyms?.name ?? null,
+            gymLogoUrl: membership.gyms?.logo_url ?? null,
+            startDate: membership.start_date,
+            endDate: membership.end_date,
+          }
+        : { kind: "no-gym" as const, daysLeft: undefined },
+    },
+  };
 }
 
 export type MyProfileResult = Extract<

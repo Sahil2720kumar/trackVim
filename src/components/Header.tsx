@@ -47,6 +47,7 @@ import { useTrainerStore } from "@/stores/trainer-store";
 // ── Breadcrumb ──────────────────────────────────────────────────────────────
 import type { BreadcrumbItem } from "@/lib/breadcrumbs-config";
 import { useMemberStore } from "@/stores/member.store";
+import { useOwnerStore } from "@/stores/owner.store";
 
 interface BreadcrumbProps {
   items: BreadcrumbItem[];
@@ -203,7 +204,9 @@ const NotificationMenu = () => {
         if (result.success) {
           await queryClient.invalidateQueries({ queryKey: ["notifications"] });
         } else {
-          toast.error(result.error || "Failed to mark all notifications as read");
+          toast.error(
+            result.error || "Failed to mark all notifications as read",
+          );
         }
       } catch (err) {
         toast.error("Failed to mark all notifications as read");
@@ -352,6 +355,7 @@ const UserMenu = ({
   const clearTrainerContext = useTrainerStore(
     (state) => state.clearTrainerContext,
   );
+  const clearOwnerContext = useOwnerStore((state) => state.clearActiveOwner);
   const clearMemberContext = useMemberStore((state) => state.clearActiveMember);
   const [isPending, setIsPending] = useState(false);
   const { signOut } = useClerk();
@@ -366,6 +370,7 @@ const UserMenu = ({
 
       clearTrainerContext();
       clearMemberContext();
+      clearOwnerContext();
     } catch (error) {
       console.error("Sign out failed:", error);
       toast.error("Something went wrong signing out");
