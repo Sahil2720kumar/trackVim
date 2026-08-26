@@ -698,7 +698,6 @@ export default function SessionDetailsPage({ params }: PageProps) {
   const router = useRouter();
   const sessionId = React.use(params).id;
   const queryClient = useQueryClient();
-  console.log("sessionId", sessionId);
 
   const {
     data: sessionResult,

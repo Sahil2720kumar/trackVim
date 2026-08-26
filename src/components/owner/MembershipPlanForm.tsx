@@ -216,7 +216,7 @@ export default function MembershipPlanForm() {
       try {
         const result = await createMembershipPlanAction(data);
         if (!result.success) {
-          console.log(result.error);
+          console.error(result.error);
           toast.error(result.error ?? "Failed to create membership plan.");
           return;
         }
@@ -233,9 +233,7 @@ export default function MembershipPlanForm() {
   return (
     <form
       id={MEMBERSHIP_PLAN_FORM_ID}
-      onSubmit={handleSubmit(onSubmit, (e) =>
-        console.log("Validation errors:", e),
-      )}
+      onSubmit={handleSubmit(onSubmit)}
       className="flex flex-col lg:flex-row gap-6 lg:gap-8"
     >
       {/* Left Column - Form */}

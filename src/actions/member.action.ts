@@ -197,7 +197,7 @@ export async function createMemberProfileAction(
       },
     });
   } catch (err) {
-    console.log(" error from auth update", err);
+    console.error(" error from auth update", err);
     return {
       success: false,
       error:
@@ -441,7 +441,7 @@ export async function submitMembershipApplicationAction(
 
   if (error) {
     const code = error.message?.trim();
-    console.log(error);
+    console.error(error);
     return {
       success: false,
       error:

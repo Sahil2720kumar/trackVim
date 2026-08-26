@@ -90,7 +90,7 @@ export default function TrainerInviteForm() {
           photo.file ?? undefined,
         );
         if (!result.success) {
-          console.log(result.error);
+          console.error(result.error);
           toast.error(result.error ?? "Failed to invite trainer.");
           return;
         }
@@ -106,9 +106,7 @@ export default function TrainerInviteForm() {
 
   return (
     <form
-      onSubmit={handleSubmit(onSubmit, (e) =>
-        console.log("Validation errors:", e),
-      )}
+      onSubmit={handleSubmit(onSubmit)}
       className="flex flex-col gap-6 py-6 lg:flex-row lg:gap-8"
     >
       <div className="flex-1 min-w-0 space-y-6">

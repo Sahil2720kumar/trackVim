@@ -193,7 +193,7 @@ export default function InviteMemberForm({
           paymentMethod,
         );
         if (!result.success) {
-          console.log(result.error);
+          console.error(result.error);
           toast.error(result.error ?? "Failed to add member.");
           return;
         }
@@ -209,9 +209,7 @@ export default function InviteMemberForm({
 
   return (
     <form
-      onSubmit={handleSubmit(onSubmit, (e) =>
-        console.log("Validation errors:", e),
-      )}
+      onSubmit={handleSubmit(onSubmit)}
       className="flex flex-col lg:flex-row gap-6 lg:gap-8"
     >
       {/* Left Column - Form */}

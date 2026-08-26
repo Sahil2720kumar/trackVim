@@ -190,9 +190,7 @@ export default function TrainerProfileForm({
 
   return (
     <form
-      onSubmit={handleSubmit(onSubmit, (errors) => {
-        console.log(errors);
-      })}
+      onSubmit={handleSubmit(onSubmit)}
       className="flex flex-col gap-6 py-6 pb-32"
     >
       {/* Header */}

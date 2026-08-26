@@ -321,17 +321,12 @@ export default function TrainerSettingsForm({
         toast.error("Something went wrong. Please try again.");
       }
     });
-  const onInvalid = (errs: FieldErrors<CreateTrainerInput>) => {
-    if (process.env.NODE_ENV === "development") {
-      console.log(errs);
-    }
-    toast.error("Please fix the validation errors before saving.");
   };
 
   return (
     <form
       id={TRAINER_SETTINGS_FORM_ID}
-      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      onSubmit={handleSubmit(onSubmit)}
       className="flex flex-col lg:flex-row gap-6 lg:gap-8"
     >
       {/* Left Column - Form */}

@@ -583,7 +583,7 @@ export default function CreateTemplateForm({
   const [isPending, startTransition] = useTransition();
 
   const { activeTrainerId, activeGymId } = useTrainerStore();
-  console.log("activeGymId", activeGymId);
+
   const {
     data: exercisesResult,
     isLoading: exercisesLoading,

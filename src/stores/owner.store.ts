@@ -107,8 +107,6 @@ export const useOwnerStore = create<OwnerStore>()(
       // --------------------------------------------------
 
       setActiveOwnerContext: (ownerId, gymId) => {
-        console.log("owner store value set");
-
         set({
           activeOwnerId: ownerId,
           activeGymId: gymId,
@@ -140,8 +138,6 @@ export const useOwnerStore = create<OwnerStore>()(
       // --------------------------------------------------
 
       clearActiveOwner: () => {
-        console.log("Cleared owner store");
-
         set({
           activeOwnerId: null,
           activeGymId: null,

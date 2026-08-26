@@ -63,9 +63,9 @@ export function mapTemplateRowToEditForm(row: any) {
 export default function EditTemplatePage() {
   const params = useParams<{ id: string }>();
   const templateId = params?.id ?? null;
-  console.log("templateId", templateId);
+
   const { data: result, isLoading, error } = useWorkoutTemplateById(templateId);
-  console.log("result", result);
+
   const loadError = error
     ? "Failed to load template. Please try again."
     : result && !result.success

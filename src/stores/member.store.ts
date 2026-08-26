@@ -96,7 +96,6 @@ export const useMemberStore = create<MemberStore>()(
       // --------------------------------------------------
 
       setActiveMemberContext: (memberId, gymId, membershipId) => {
-        console.log("store value set");
         set({
           activeMemberId: memberId,
           activeGymId: gymId,
@@ -153,7 +152,6 @@ export const useMemberStore = create<MemberStore>()(
       // --------------------------------------------------
 
       clearActiveMember: () => {
-        console.log("Cleared store");
         set({
           activeMemberId: null,
           activeGymId: null,

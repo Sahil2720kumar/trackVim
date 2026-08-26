@@ -21,8 +21,6 @@ export function useSupabaseClient() {
 
           const token = await getToken();
 
-          console.log("CLERK TOKEN:", token ? "TOKEN EXISTS" : "NO TOKEN");
-
           return token ?? null;
         },
       },

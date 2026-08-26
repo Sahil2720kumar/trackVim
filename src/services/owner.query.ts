@@ -785,7 +785,7 @@ export async function getTrainerStats(
   ].find((r) => r.error);
 
   if (errored) {
-    console.log(errored.error);
+    console.error(errored.error);
 
     return { success: false as const, error: errored.error!.message };
   }

@@ -1549,7 +1549,6 @@ export async function verifyPaymentAction(input: {
     p_payment_id: input.paymentId,
   });
 
-  console.log("payment verified error", error);
   if (error) return { success: false as const, error: error.message };
 
   revalidatePath("/owner/payments");
