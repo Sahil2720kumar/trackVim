@@ -1419,6 +1419,9 @@ export function ApplicationDetails({
         queryClient.invalidateQueries({
           queryKey: ["applications", application.gym_id, application.id],
         });
+        queryClient.invalidateQueries({
+          queryKey: ["applications", application.gym_id],
+        });
         toast.success("Application approved.");
       } catch (err) {
         console.error(err);
@@ -1444,6 +1447,9 @@ export function ApplicationDetails({
         toast.success("Application rejected.");
         queryClient.invalidateQueries({
           queryKey: ["applications", application.gym_id, application.id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["applications", application.gym_id],
         });
       } catch (err) {
         console.error(err);
@@ -1473,6 +1479,9 @@ export function ApplicationDetails({
         queryClient.invalidateQueries({
           queryKey: ["applications", application.gym_id, application.id],
         });
+        queryClient.invalidateQueries({
+          queryKey: ["applications", application.gym_id],
+        });
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");
@@ -1497,6 +1506,9 @@ export function ApplicationDetails({
 
         queryClient.invalidateQueries({
           queryKey: ["applications", application.gym_id, application.id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["applications", application.gym_id],
         });
       } catch (err) {
         console.error(err);

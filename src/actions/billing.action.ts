@@ -130,24 +130,19 @@ export async function createSubscriptionPaymentOrderAction(input: {
   );
 
   if (error) {
-    let errorBody = "";
-
-    if (error.context instanceof Response) {
-      errorBody = await error.context.text();
-    }
-
-    console.error("EDGE ERROR:", error);
-    console.error("EDGE ERROR BODY:", errorBody);
+    // Log server-side only, never return raw error details to the client
+    console.error("createSubscriptionPaymentOrderAction failed:", error);
 
     return {
       success: false as const,
-      error: errorBody || error.message,
+      error: "Failed to create payment order. Please try again.",
     };
   }
 
-  console.log("EDGE DATA:", data);
-
-  return data;
+  return {
+    success: true as const,
+    data,
+  };
 }
 
 export async function reactivateGymSubscriptionAction(gymId: string) {

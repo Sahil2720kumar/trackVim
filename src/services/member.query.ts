@@ -590,10 +590,10 @@ export async function getMyApplications(
     .order("created_at", { ascending: false });
 
   if (error || !data) {
-    return { success: false, data: [], error: error?.message };
+    return { success: false as const, data: [], error: error?.message };
   }
 
-  return { success: true, data: data };
+  return { success: true as const, data: data };
 }
 
 export type MyApplicationsResult = Extract<
@@ -691,13 +691,17 @@ export async function getMyApplicationById(
 
   if (error) {
     console.error(error);
-    return { success: false, data: null, error: error.message };
+    return { success: false as const, data: null, error: error.message };
   }
   if (!data) {
-    return { success: false, data: null, error: "Application not found." };
+    return {
+      success: false as const,
+      data: null,
+      error: "Application not found.",
+    };
   }
 
-  return { success: true, data };
+  return { success: true as const, data };
 }
 
 export type MyApplicationByIdResult = Extract<

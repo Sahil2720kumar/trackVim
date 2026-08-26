@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { useOwnerStore } from "@/stores/owner.store";
 import { CheckCircle2, XCircle, Users, Loader2, RefreshCw } from "lucide-react";
 import { ApplicationsPanel } from "@/components/owner/Applicationspanel";
 import { ConfirmDialog } from "@/components/Confirmdialog";
@@ -72,6 +74,8 @@ function ApplicationsError({
 
 export function ApplicationsList() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const activeGymId = useOwnerStore((state) => state.activeGymId);
 
   const {
     data: response,
@@ -107,7 +111,12 @@ export function ApplicationsList() {
 
         setApproveTarget(null);
         toast.success("Application approved.");
-        router.refresh();
+        queryClient.invalidateQueries({
+          queryKey: ["applications", activeGymId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["applications", activeGymId, approveTarget],
+        });
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");
@@ -132,7 +141,12 @@ export function ApplicationsList() {
 
         setRejectTarget(null);
         toast.success("Application rejected.");
-        router.refresh();
+        queryClient.invalidateQueries({
+          queryKey: ["applications", activeGymId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["applications", activeGymId, rejectTarget],
+        });
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");

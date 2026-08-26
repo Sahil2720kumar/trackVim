@@ -8,6 +8,7 @@ import { CheckCircle, Loader2, Wallet } from "lucide-react";
 import { verifyPaymentAction } from "@/actions/owner.action";
 import { RecordPaymentDialog } from "@/components/owner/payments/RecordPaymentDialog";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function PaymentActionsCard({
   paymentId,
@@ -22,6 +23,7 @@ export function PaymentActionsCard({
   amount: number;
   isOwner: boolean;
 }) {
+  const queryClient = useQueryClient();
   const router = useRouter();
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
   const [isVerifying, startVerifying] = useTransition();
@@ -33,7 +35,9 @@ export function PaymentActionsCard({
         toast.error(result.error ?? "Couldn't verify payment");
         return;
       }
-      router.refresh();
+      queryClient.invalidateQueries({
+        queryKey: ["payment", gymId, paymentId],
+      });
     });
   };
 
