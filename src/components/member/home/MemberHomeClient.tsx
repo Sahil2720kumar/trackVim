@@ -124,26 +124,26 @@ const quickLinks: {
     title: "My Sessions",
     description: "View your assigned workouts",
     icon: Dumbbell,
-    href: "/sessions",
+    href: "/member/sessions",
   },
   {
     title: "Attendance History",
     description: "View your check-in history",
     icon: History,
-    href: "/attendance",
+    href: "/member/attendance",
   },
   {
     title: "Membership",
     description: "View your membership details",
     icon: CreditCard,
-    href: "/membership",
+    href: "/member/membership",
   },
-  {
-    title: "Messages",
-    description: "Chat with your trainer or gym",
-    icon: MessageCircle,
-    href: "/messages",
-  },
+  // {
+  //   title: "Messages",
+  //   description: "Chat with your trainer or gym",
+  //   icon: MessageCircle,
+  //   href: "/messages",
+  // },
 ];
 
 // ---------------------------------------------------------------------------
@@ -1441,26 +1441,31 @@ function QuickLinks() {
   return (
     <div className="space-y-4">
       <SectionEyebrow icon={Zap} label="Quick Access" />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+      <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {quickLinks.map((link) => {
           const Icon = link.icon;
+
           return (
-            <Link key={link.title} href={link.href}>
-              <Card className="group cursor-pointer rounded-2xl border-border shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
-                <CardContent className="flex items-start justify-between gap-3 p-5">
+            <Link asChild key={link.title} href={link.href} className="h-full">
+              <Card className="group flex h-full cursor-pointer rounded-2xl border-border shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+                <CardContent className="flex h-full w-full items-start justify-between gap-3 p-5">
                   <div className="space-y-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground">
                       <Icon className="h-5 w-5" />
                     </div>
+
                     <div>
                       <p className="font-medium text-foreground">
                         {link.title}
                       </p>
+
                       <p className="mt-0.5 text-sm text-muted-foreground">
                         {link.description}
                       </p>
                     </div>
                   </div>
+
                   <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
                 </CardContent>
               </Card>

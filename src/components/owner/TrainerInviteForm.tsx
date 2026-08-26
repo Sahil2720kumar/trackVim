@@ -40,7 +40,7 @@ import { toast } from "sonner";
 export default function TrainerInviteForm() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const photo = useSingleUpload(undefined, 2 * 1024 * 1024);
+  const photo = useSingleUpload(undefined, undefined, 2 * 1024 * 1024);
 
   // Not a trainers-table field — invite-flow behavior only, so it stays
   // outside react-hook-form / CreateTrainerInput.

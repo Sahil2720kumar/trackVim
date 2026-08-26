@@ -11,17 +11,60 @@ export async function getMyTrainerProfile(
 ) {
   const { data, error } = await supabase
     .from("trainers")
-    .select("*")
+    .select(
+      `
+      *,
+      gyms(id, name, logo_url, timezone)
+    `,
+    )
     .eq("gym_id", gymId)
     .eq("id", trainerId)
-    .single();
+    .maybeSingle();
 
   if (error) return { success: false as const, error: error.message };
+  if (!data) {
+    return { success: false as const, error: "Trainer profile not found." };
+  }
   return { success: true as const, data };
 }
 
 export type MyTrainerProfileResult = Extract<
   Awaited<ReturnType<typeof getMyTrainerProfile>>,
+  { success: true }
+>["data"];
+
+export async function getTodaysSessions(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+  trainerId: string,
+) {
+  const { data: gym } = await supabase
+    .from("gyms")
+    .select("timezone")
+    .eq("id", gymId)
+    .maybeSingle();
+
+  const today = getTodayDateStr(gym?.timezone ?? "Asia/Kolkata");
+
+  const { data, error } = await supabase
+    .from("training_sessions")
+    .select(
+      `
+      *,
+      members(id, full_name, photo_url)
+    `,
+    )
+    .eq("gym_id", gymId)
+    .eq("trainer_id", trainerId)
+    .eq("session_date", today)
+    .order("start_time", { ascending: true });
+
+  if (error) return { success: false as const, error: error.message };
+  return { success: true as const, data };
+}
+
+export type TodaysSessionsResult = Extract<
+  Awaited<ReturnType<typeof getTodaysSessions>>,
   { success: true }
 >["data"];
 
@@ -66,13 +109,300 @@ export async function getMyAssignedMembers(
     .eq("is_active", true);
 
   if (error) return { success: false as const, error: error.message };
-  return { success: true as const, data };
+
+  const assignments = data ?? [];
+  const memberIds = assignments
+    .map((a) => a.members?.id)
+    .filter((id): id is string => Boolean(id));
+
+  const attendanceByMember = new Map<string, number>();
+
+  if (memberIds.length > 0) {
+    const { data: stats, error: statsError } = await supabase.rpc(
+      "get_member_attendance_stats",
+      {
+        p_member_ids: memberIds,
+        p_gym_id: gymId,
+        p_as_of: getTodayDateStr("Asia/Kolkata"),
+      },
+    );
+
+    if (!statsError && stats) {
+      for (const stat of stats) {
+        attendanceByMember.set(stat.member_id, Number(stat.attendance_rate));
+      }
+    }
+  }
+
+  const result = assignments.map((assignment) => ({
+    ...assignment,
+    members: assignment.members
+      ? {
+          ...assignment.members,
+          attendanceRate: attendanceByMember.get(assignment.members.id) ?? 0,
+        }
+      : assignment.members,
+  }));
+
+  return { success: true as const, data: result };
 }
 
 export type MyAssignedMembersResult = Extract<
   Awaited<ReturnType<typeof getMyAssignedMembers>>,
   { success: true }
 >["data"];
+
+// Unchanged — still needed for lastSession/nextSession labels, since
+// getMyAssignedMembers' RPC only returns an attendance rate, not session dates.
+export async function getMemberSessionHistory(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+  trainerId: string,
+) {
+  const ninetyDaysAgoStr = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 90);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const { data, error } = await supabase
+    .from("training_sessions")
+    .select("member_id, session_date, start_time, status")
+    .eq("gym_id", gymId)
+    .eq("trainer_id", trainerId)
+    .gte("session_date", ninetyDaysAgoStr)
+    .order("session_date", { ascending: true })
+    .order("start_time", { ascending: true });
+
+  if (error) return { success: false as const, error: error.message };
+  return { success: true as const, data };
+}
+
+export type MemberSessionHistoryResult = Extract<
+  Awaited<ReturnType<typeof getMemberSessionHistory>>,
+  { success: true }
+>["data"];
+
+export async function getTrainerDashboardData(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+  trainerId: string,
+) {
+  try {
+    const { data: gym } = await supabase
+      .from("gyms")
+      .select("timezone")
+      .eq("id", gymId)
+      .maybeSingle();
+
+    const asOfDate = getTodayDateStr(gym?.timezone ?? "Asia/Kolkata");
+    const sevenDaysAgoIso = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 7);
+      return d.toISOString();
+    })();
+
+    const [
+      assignedMembersResult,
+      todaysSessionsResult,
+      upcomingResult,
+      attendanceResult,
+      sessionHistoryResult,
+    ] = await Promise.all([
+      getMyAssignedMembers(supabase, gymId, trainerId), // CHANGED
+      getTodaysSessions(supabase, gymId, trainerId),
+      supabase
+        .from("training_sessions")
+        .select("id", { count: "exact", head: true })
+        .eq("gym_id", gymId)
+        .eq("trainer_id", trainerId)
+        .eq("status", "Upcoming")
+        .gt("session_date", asOfDate),
+      supabase.rpc("get_trainer_attendance_summary", {
+        p_gym_id: gymId,
+        p_trainer_id: trainerId,
+        p_as_of: asOfDate,
+      }),
+      getMemberSessionHistory(supabase, gymId, trainerId),
+    ]);
+
+    if (!assignedMembersResult.success) {
+      throw new Error(
+        `assignments fetch failed: ${assignedMembersResult.error}`,
+      );
+    }
+
+    if (!todaysSessionsResult.success) {
+      throw new Error(
+        `today's sessions fetch failed: ${todaysSessionsResult.error}`,
+      );
+    }
+
+    if (!sessionHistoryResult.success) {
+      throw new Error(
+        `session history fetch failed: ${sessionHistoryResult.error}`,
+      );
+    }
+
+    const { count: upcomingSessionsCount, error: upcomingError } =
+      upcomingResult;
+    if (upcomingError) {
+      throw new Error(
+        `upcoming sessions fetch failed: ${upcomingError.message}`,
+      );
+    }
+
+    const { data: attendanceRows, error: attendanceError } = attendanceResult;
+    if (attendanceError) {
+      throw new Error(
+        `get_trainer_attendance_summary failed: ${attendanceError.message}`,
+      );
+    }
+    const attendance = attendanceRows?.[0] as
+      | {
+          attendance_today_count: number;
+          attendance_rate_today: number;
+          attendance_rate_yesterday: number;
+        }
+      | undefined;
+
+    const assignedMembers = assignedMembersResult.data;
+
+    const assignedMembersCount = assignedMembers.length;
+    const newAssignmentsThisWeek = assignedMembers.filter(
+      (a) => a.assigned_at && a.assigned_at >= sevenDaysAgoIso,
+    ).length;
+
+    const todaysSessions = todaysSessionsResult.data;
+    const todaysCompletedCount = todaysSessions.filter(
+      (s) => s.status === "Completed",
+    ).length;
+    const todaysUpcomingCount = todaysSessions.filter(
+      (s) => s.status === "Upcoming",
+    ).length;
+
+    const attendanceTodayCount = attendance?.attendance_today_count ?? 0;
+
+    return {
+      success: true as const,
+      data: {
+        assignedMembersCount,
+        newAssignmentsThisWeek,
+        assignedMembers,
+        sessionHistory: sessionHistoryResult.data,
+        todaysSessions,
+        todaysSessionsCount: todaysSessions.length,
+        todaysCompletedCount,
+        todaysUpcomingCount,
+        attendanceTodayCount,
+        attendanceAbsentCount: Math.max(
+          assignedMembersCount - attendanceTodayCount,
+          0,
+        ),
+        attendanceRateToday: Number(attendance?.attendance_rate_today ?? 0),
+        attendanceRateYesterday: Number(
+          attendance?.attendance_rate_yesterday ?? 0,
+        ),
+        upcomingSessionsCount: upcomingSessionsCount ?? 0,
+      },
+    };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Something went wrong",
+    };
+  }
+}
+
+export type TrainerDashboardResult = Extract<
+  Awaited<ReturnType<typeof getTrainerDashboardData>>,
+  { success: true }
+>["data"];
+
+// export async function getMyAssignedMembers(
+//   supabase: TypedSupabaseClient,
+//   gymId: string,
+//   trainerId: string,
+// ) {
+//   const { data, error } = await supabase
+//     .from("trainer_assignments")
+//     .select(
+//       `
+//     *,
+//     members!inner(
+//       id,
+//       full_name,
+//       contact_email,
+//       contact_phone,
+//       photo_url,
+//       gender,
+//       date_of_birth,
+//       account_status,
+//       member_code,
+//       fitness_goal,
+//       medical_conditions,
+//       gym_memberships:gym_memberships!gym_memberships_member_id_members_id_fk(
+//         id,
+//         gym_id,
+//         status,
+//         start_date,
+//         end_date,
+//         membership_plans(
+//           plan_name,
+//           plan_color
+//         )
+//       )
+//     )
+//   `,
+//     )
+//     .eq("gym_id", gymId)
+//     .eq("trainer_id", trainerId)
+//     .eq("is_active", true);
+
+//   if (error) return { success: false as const, error: error.message };
+
+//   const assignments = data ?? [];
+//   const memberIds = assignments
+//     .map((a) => a.members?.id)
+//     .filter((id): id is string => Boolean(id));
+
+//   const attendanceByMember = new Map<string, number>();
+
+//   if (memberIds.length > 0) {
+//     const { data: stats, error: statsError } = await supabase.rpc(
+//       "get_member_attendance_stats",
+//       {
+//         p_member_ids: memberIds,
+//         p_gym_id: gymId,
+//         p_as_of: getTodayDateStr("Asia/Kolkata"),
+//       },
+//     );
+
+//     if (!statsError && stats) {
+//       for (const stat of stats) {
+//         attendanceByMember.set(stat.member_id, Number(stat.attendance_rate));
+//       }
+//     }
+//   }
+
+//   const result = assignments.map((assignment) => ({
+//     ...assignment,
+//     members: assignment.members
+//       ? {
+//           ...assignment.members,
+//           attendanceRate: attendanceByMember.get(assignment.members.id) ?? 0,
+//         }
+//       : assignment.members,
+//   }));
+
+//   console.log("result", result);
+//   return { success: true as const, data: result };
+// }
+
+// export type MyAssignedMembersResult = Extract<
+//   Awaited<ReturnType<typeof getMyAssignedMembers>>,
+//   { success: true }
+// >["data"];
 
 export async function getUpcomingSessions(
   supabase: TypedSupabaseClient,

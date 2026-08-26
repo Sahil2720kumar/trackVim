@@ -52,6 +52,44 @@ export type GymOwnerInfoResult = Extract<
   { success: true }
 >["data"];
 
+export async function getMyGymSettings(
+  supabase: TypedSupabaseClient,
+  userId: string,
+) {
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("id")
+    .eq("clerk_id", userId)
+    .maybeSingle();
+
+  if (userError) return { success: false as const, error: userError.message };
+  if (!userData) {
+    return {
+      success: false as const,
+      error: "Your account is still being set up. Please retry in a moment.",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("gyms")
+    .select("*")
+    .eq("owner_id", userData.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (error) return { success: false as const, error: error.message };
+  if (!data) {
+    return { success: false as const, error: "Gym not found." };
+  }
+
+  return { success: true as const, data };
+}
+
+export type MyGymSettingsResult = Extract<
+  Awaited<ReturnType<typeof getMyGymSettings>>,
+  { success: true }
+>["data"];
+
 export type DashboardStats = {
   total_members: number;
   total_members_last_month: number;

@@ -215,86 +215,154 @@ export async function createMemberProfileAction(
  * The `members_guard_self_update` trigger blocks changing account_status
  * (owner-only) from this path.
  */
-export async function updateMyProfileAction(
+/**
+ * Update member's own profile.
+ * The `members_guard_self_update` trigger blocks changing account_status
+ * (owner-only) from this path.
+ */
+export async function updateMemberProfileAction(
   memberId: string,
-  payload: Partial<{
-    fullName: string;
-    contactEmail: string;
-    contactPhone: string;
-    dateOfBirth: string;
-    gender: "Male" | "Female" | "Other";
-    occupation: string;
-    bloodGroup: "A+" | "A-" | "B+" | "B-" | "O+" | "O-" | "AB+" | "AB-";
-    photoUrl: string;
-    address: string;
-    city: string;
-    state: string;
-    pinCode: string;
-    heightCm: number;
-    weightKg: number;
-    fitnessGoal: string;
-    medicalConditions: string;
-    allergies: string;
-    physicalNotes: string;
-    emergencyContactName: string;
-    emergencyContactRelationship:
-      | "Mother"
-      | "Father"
-      | "Sister"
-      | "Brother"
-      | "Spouse"
-      | "Sibling"
-      | "Friend"
-      | "Other";
-    emergencyContactPhone: string;
-    emergencyContactAddress: string;
-    additionalNotes: string;
-  }>,
-): Promise<ActionResult> {
-  const supabase = await createServerClient();
-
-  const fieldMap: Record<string, string> = {
-    fullName: "full_name",
-    contactEmail: "contact_email",
-    contactPhone: "contact_phone",
-    dateOfBirth: "date_of_birth",
-    gender: "gender",
-    occupation: "occupation",
-    bloodGroup: "blood_group",
-    photoUrl: "photo_url",
-    address: "address",
-    city: "city",
-    state: "state",
-    pinCode: "pin_code",
-    heightCm: "height_cm",
-    weightKg: "weight_kg",
-    fitnessGoal: "fitness_goal",
-    medicalConditions: "medical_conditions",
-    allergies: "allergies",
-    physicalNotes: "physical_notes",
-    emergencyContactName: "emergency_contact_name",
-    emergencyContactRelationship: "emergency_contact_relationship",
-    emergencyContactPhone: "emergency_contact_phone",
-    emergencyContactAddress: "emergency_contact_address",
-    additionalNotes: "additional_notes",
-  };
-
-  const update: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
-  };
-  for (const [key, col] of Object.entries(fieldMap)) {
-    const val = (payload as Record<string, unknown>)[key];
-    if (val !== undefined) update[col] = val;
+  data: CreateMemberInput,
+  photoFile?: File | null,
+): Promise<ActionResult<{ id: string }>> {
+  // 1. Auth
+  const { userId } = await auth();
+  if (!userId) {
+    return {
+      success: false,
+      error: "You must be signed in to update your profile.",
+    };
   }
 
-  const { error } = await supabase
-    .from("members")
-    .update(update as any)
-    .eq("id", memberId);
-  if (error) return { success: false, error: error.message };
+  // 2. Validate — same schema as create, since it's the same shape of data.
+  const parsed = createMemberSchema.safeParse(data);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid member data.",
+    };
+  }
+  const memberData = parsed.data;
 
-  revalidatePath("/profile");
-  return { success: true, data: undefined };
+  const supabase = await createServerClient();
+
+  // 3. Resolve the caller's internal user row.
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("id, email")
+    .eq("clerk_id", userId)
+    .maybeSingle();
+
+  if (userError) return { success: false, error: userError.message };
+  if (!userData) {
+    return {
+      success: false,
+      error: "Your account is still being set up. Please retry in a moment.",
+    };
+  }
+
+  // 4. Ownership check — memberId comes from the client, so don't trust it
+  // blindly. Confirm it actually belongs to this user before writing
+  // anything (same spirit as create's profile_id lookup, just reversed).
+  const { data: existing, error: existingError } = await supabase
+    .from("members")
+    .select("id, profile_id")
+    .eq("id", memberId)
+    .maybeSingle();
+
+  if (existingError) return { success: false, error: existingError.message };
+  if (!existing || existing.profile_id !== userData.id) {
+    return { success: false, error: "Member profile not found." };
+  }
+
+  // 5. Photo upload — keyed on memberId so repeated saves overwrite the
+  // same path instead of accumulating.
+  let photoUrl: string | undefined;
+  try {
+    if (photoFile && photoFile.size > 0) {
+      photoUrl = await uploadFile(
+        photoFile,
+        `trackVim/members/${memberId}/photo`,
+      );
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to upload photo. Please try again.",
+    };
+  }
+
+  // 6. Keep users row in sync — same fields create touches, minus
+  // role/account_status which only apply at signup.
+  const { error: userUpdateError } = await supabase
+    .from("users")
+    .update({
+      full_name: memberData.fullName,
+      phone: memberData.contactPhone,
+      ...(photoUrl ? { avatar_url: photoUrl } : {}),
+    })
+    .eq("id", userData.id);
+
+  if (userUpdateError)
+    return { success: false, error: userUpdateError.message };
+
+  // 7. Same field set as create, minus the create-only columns
+  // (profile_id, member_code) and account_status.
+  const memberFields = {
+    full_name: memberData.fullName ?? null,
+    contact_email: userData.email ?? null,
+    contact_phone: memberData.contactPhone ?? null,
+    date_of_birth: memberData.dateOfBirth ?? null,
+    gender: (memberData.gender as "Male" | "Female" | "Other") ?? null,
+    occupation: memberData.occupation ?? null,
+    blood_group:
+      (memberData.bloodGroup as
+        | "A+"
+        | "A-"
+        | "B+"
+        | "B-"
+        | "O+"
+        | "O-"
+        | "AB+"
+        | "AB-") ?? null,
+    address: memberData.address ?? null,
+    city: memberData.city ?? null,
+    state: memberData.state ?? null,
+    pin_code: memberData.pinCode ?? null,
+    fitness_goal: memberData.fitnessGoal ?? null,
+    medical_conditions: memberData.medicalConditions ?? null,
+    allergies: memberData.allergies ?? null,
+    physical_notes: memberData.physicalNotes ?? null,
+    height_cm: memberData.heightCm ? Number(memberData.heightCm) : null,
+    weight_kg: memberData.weightKg ? Number(memberData.weightKg) : null,
+    emergency_contact_name: memberData.emergencyContactName ?? null,
+    emergency_contact_relationship:
+      memberData.emergencyContactRelationship ?? null,
+    emergency_contact_phone: memberData.emergencyContactPhone ?? null,
+    emergency_contact_address: memberData.emergencyContactAddress ?? null,
+    additional_notes: memberData.additionalNotes ?? null,
+    updated_at: new Date().toISOString(),
+    ...(photoUrl ? { photo_url: photoUrl } : {}),
+  };
+
+  // Drop undefined keys so a partial submission never nulls stored data.
+  // `null` is kept so a cleared field is actually cleared.
+  const definedMemberFields = Object.fromEntries(
+    Object.entries(memberFields).filter(([, v]) => v !== undefined),
+  );
+
+  const { error: updateError } = await supabase
+    .from("members")
+    .update(definedMemberFields)
+    .eq("id", memberId);
+
+  if (updateError) return { success: false, error: updateError.message };
+
+  revalidatePath("/member/settings");
+  return { success: true, data: { id: memberId } };
 }
 
 /**

@@ -1,14 +1,23 @@
-import { Button } from "@/components/ui/button";
+"use client";
+
 import { Eye } from "lucide-react";
-import TrainerProfileForm, {
-  TRAINER_FORM_ID,
-} from "@/components/trainer/TrainerProfileForm";
+import { useSupabaseClient } from "@/lib/supabase/client";
+import { getMyTrainerProfile } from "@/services/trainer.query";
+import { Button } from "@/components/ui/button";
 import { bigSquareButton } from "@/lib/styles";
+import TrainerSettingsForm, {
+  TRAINER_SETTINGS_FORM_ID,
+} from "@/components/trainer/TrainerSettingsForm";
+import { useTrainerStore } from "@/stores/trainer-store";
+import { useMyTrainerProfile } from "@/hooks/queries/trainer.query";
 
 export default function TrainerSettingsPage() {
+  const activeTrainerId = useTrainerStore((state) => state.activeTrainerId);
+
+  const profile = useMyTrainerProfile();
+
   return (
     <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 max-w-[1400px] mx-auto space-y-6">
-      {/* Page Header */}
       <div className="border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="min-w-0">
@@ -25,12 +34,9 @@ export default function TrainerSettingsPage() {
               <Eye className="w-4 h-4" />
               Preview Public Profile
             </Button>
-            {/* type="submit" + form="..." lets this button, which lives
-                outside the <form> element, submit the client-side form
-                without this component needing to be a client component. */}
             <Button
               type="submit"
-              form={TRAINER_FORM_ID}
+              form={TRAINER_SETTINGS_FORM_ID}
               className={bigSquareButton}
             >
               Save Changes
@@ -39,9 +45,11 @@ export default function TrainerSettingsPage() {
         </div>
       </div>
 
-      {/* Main Content */}
       <main className="py-4">
-        <TrainerProfileForm />
+        <TrainerSettingsForm
+          trainerId={activeTrainerId!}
+          initialData={profile.data as Record<string, unknown>}
+        />
       </main>
     </div>
   );

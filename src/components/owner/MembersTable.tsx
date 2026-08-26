@@ -59,6 +59,7 @@ import {
   useGymMemberStats,
   useTrainersAndPlans,
 } from "@/hooks/queries/owner.query";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 
 const statusOptions = ["All", "Active", "Expired", "Expiring Soon", "Pending"];
 const memberTypeOptions = ["All Types", "Normal", "WalkIn"] as const;
@@ -110,10 +111,10 @@ function toMemberRow(member: MemberWithAttendance): MemberRow {
 
   return {
     id: member.id,
-    name: member.full_name,
+    name: member.full_name ?? "Unknown Member",
     email: member.contact_email ?? "—",
     phone: member.contact_phone ?? "—",
-    avatar: getInitials(member.full_name),
+    avatar: member.photo_url,
     memberType: member.memberType,
     plan: membership?.plan?.plan_name ?? "No Plan",
     planPrice:
@@ -387,11 +388,19 @@ export function MembersTable() {
         header: "Member",
         cell: ({ row }) => {
           const member = row.original;
+
           return (
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                {member.avatar}
-              </div>
+              <Avatar className="h-10 w-10 shrink-0">
+                <AvatarImage
+                  src={member.avatar ?? undefined}
+                  alt={member.name}
+                />
+                <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                  {getInitials(member.name)}
+                </AvatarFallback>
+              </Avatar>
+
               <div className="min-w-0">
                 <p className="font-medium text-foreground truncate">
                   {member.name}

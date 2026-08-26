@@ -87,7 +87,7 @@ export default function InviteMemberForm({
 }: InviteMemberFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const photo = useSingleUpload(undefined, 5 * 1024 * 1024);
+  const photo = useSingleUpload(undefined, undefined, 5 * 1024 * 1024);
 
   // Invite-flow behavior only, not a members-table field.
   const [sendInvitation, setSendInvitation] = useState(true);

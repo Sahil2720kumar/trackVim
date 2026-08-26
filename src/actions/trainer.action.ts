@@ -160,16 +160,19 @@ export async function completeTrainerProfileAction(
  * The `trainers_guard_self_update` trigger BLOCKS attempts to change:
  *   gym_id, salary, employee_id, status, profile_id, max_members
  * Those are owner-only — use owner.updateTrainerOwnerFields for those.
+ * (employment_type is NOT on that blocked list, so it's included here.)
  */
 export async function updateMyTrainerProfile(
-  trainerId: string,
   payload: Partial<{
+    fullName: string;
+    contactPhone: string;
     bio: string;
     professionalTitle: string;
     gender: "Male" | "Female" | "Other";
     dateOfBirth: string;
     qualification: string;
     certification: string;
+    employmentType: string;
     experienceYears: number;
     specializations: string[];
     languages: string[];
@@ -202,25 +205,53 @@ export async function updateMyTrainerProfile(
     state: string;
     country: string;
     postalCode: string;
-    emailNotifications: boolean;
-    smsNotifications: boolean;
-    pushNotifications: boolean;
     additionalNotes: string;
   }>,
+  photoFile?: File | null,
 ): Promise<ActionResult> {
+  // 1. Auth — resolve the caller's OWN trainerId from the session.
+  // Never take an id from the client for a self-service mutation.
+  const { userId, sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as { trainerId?: string };
+  const trainerId = meta.trainerId;
+
+  if (!userId || !trainerId) {
+    return { success: false, error: "Not authorized to update this profile." };
+  }
+
+  // 2. Photo upload (optional), keyed on userId like onboarding.
+  let photoUrl: string | undefined;
+  if (photoFile instanceof File && photoFile.size > 0) {
+    try {
+      photoUrl = await uploadFile(
+        photoFile,
+        `trackVim/trainers/${userId}/photo`,
+      );
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Failed to upload photo.",
+      };
+    }
+  }
+
   const supabase = await createServerClient();
 
   const update: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
+    ...(photoUrl ? { photo_url: photoUrl } : {}),
   };
 
   const fieldMap: Record<string, string> = {
+    fullName: "full_name",
+    contactPhone: "contact_phone",
     bio: "bio",
     professionalTitle: "professional_title",
     gender: "gender",
     dateOfBirth: "date_of_birth",
     qualification: "qualification",
     certification: "certification",
+    employmentType: "employment_type",
     experienceYears: "experience_years",
     specializations: "specializations",
     languages: "languages",
@@ -245,9 +276,6 @@ export async function updateMyTrainerProfile(
     state: "state",
     country: "country",
     postalCode: "postal_code",
-    emailNotifications: "email_notifications",
-    smsNotifications: "sms_notifications",
-    pushNotifications: "push_notifications",
     additionalNotes: "additional_notes",
   };
 
@@ -256,13 +284,32 @@ export async function updateMyTrainerProfile(
     if (val !== undefined) update[col] = val;
   }
 
-  const { error } = await supabase
+  const { data: trainerData, error } = await supabase
     .from("trainers")
     .update(update as any)
-    .eq("id", trainerId);
+    .eq("id", trainerId)
+    .select("id, photo_url, full_name, contact_phone")
+    .single();
+
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/trainer/profile");
+  // Keep users row in sync, same as completeTrainerProfileAction.
+  if (payload.fullName || payload.contactPhone || photoUrl) {
+    const { error: userError } = await supabase
+      .from("users")
+      .update({
+        ...(trainerData.full_name ? { full_name: trainerData.full_name } : {}),
+        ...(trainerData.contact_phone
+          ? { phone: trainerData.contact_phone }
+          : {}),
+        ...(trainerData.photo_url ? { avatar_url: trainerData.photo_url } : {}),
+      })
+      .eq("clerk_id", userId);
+
+    if (userError) return { success: false, error: userError.message };
+  }
+
+  revalidatePath("/trainer/settings");
   return { success: true, data: undefined };
 }
 

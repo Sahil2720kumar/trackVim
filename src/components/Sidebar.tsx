@@ -39,6 +39,7 @@ import {
 import { toast } from "sonner";
 import { useTrainerStore } from "@/stores/trainer-store";
 import { useMemberStore } from "@/stores/member.store";
+import { useOwnerStore } from "@/stores/owner.store";
 
 // Types
 interface NavItem {
@@ -438,7 +439,7 @@ export function Sidebar({
     (state) => state.clearTrainerContext,
   );
   const clearMemberContext = useMemberStore((state) => state.clearActiveMember);
-
+  const clearOwnerContext = useOwnerStore((state) => state.clearActiveOwner);
   const [isPending, setIsPending] = useState(false);
 
   const { signOut } = useClerk();
@@ -450,7 +451,7 @@ export function Sidebar({
 
       clearTrainerContext();
       clearMemberContext();
-
+      clearOwnerContext();
       window.location.replace("/sign-in");
     } catch (error) {
       console.error("Sign out failed:", error);
