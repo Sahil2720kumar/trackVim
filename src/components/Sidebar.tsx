@@ -121,7 +121,7 @@ const navigationConfig: NavConfig = {
     {
       icon: <Settings className="h-5 w-5" />,
       label: "Settings",
-      children: [{ icon: <></>, label: "Settings", href: "/owner/settings" }],
+      href: "/owner/settings",
     },
   ],
   trainer: [
@@ -154,7 +154,7 @@ const navigationConfig: NavConfig = {
     {
       icon: <Settings className="h-5 w-5" />,
       label: "Settings",
-      children: [{ icon: <></>, label: "Settings", href: "/trainer/settings" }],
+      href: "/trainer/settings",
     },
   ],
   member: [
