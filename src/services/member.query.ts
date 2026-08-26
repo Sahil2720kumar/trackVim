@@ -511,7 +511,7 @@ export function classifyMembershipStatus(
     return {
       kind: "active",
       todayIso,
-      daysLeft: daysBetween(membership.end_date),
+      daysLeft: daysBetween(membership.end_date, gymTimezone),
     };
   }
 

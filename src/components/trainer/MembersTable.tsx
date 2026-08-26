@@ -53,7 +53,6 @@ const STATUS_PILL_OPTIONS: (MemberStatus | "All Status")[] = [
   "All Status",
   "Active",
   "On Leave",
-  "Pause",
   "Inactive",
 ];
 

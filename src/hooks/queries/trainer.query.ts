@@ -45,7 +45,7 @@ export function useTrainerDashboardData(
 ) {
   const { supabase } = useSupabaseClient();
   return useQuery({
-    queryKey: ["trainerProfile", gymId, trainerId],
+    queryKey: ["trainerDashboard", gymId, trainerId],
     queryFn: () => {
       if (!gymId || !trainerId) {
         throw new Error("Gym ID and Trainer ID are required");

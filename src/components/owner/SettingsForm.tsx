@@ -171,25 +171,25 @@ export default function SettingsForm({
     paymentQr.clear();
   };
 
-  const onSubmit = (data: CreateGymInput) => {
+  const onSubmit = async (data: CreateGymInput) => {
     if (isSubmitting) return;
-    (async () => {
-      try {
-        const result = await updateGymSettingsAction(gymId, data, {
-          logo: logo.file,
-          paymentQr: paymentQr.file,
-        });
-        if (!result.success) {
-          toast.error(result.error);
-          return;
-        }
-        toast.success("Gym settings updated");
-        reset(data);
-      } catch (error) {
-        console.error("Error saving gym settings:", error);
-        toast.error("Error saving gym settings. Please try again.");
+    try {
+      const result = await updateGymSettingsAction(gymId, data, {
+        logo: logo.file,
+        paymentQr: paymentQr.file,
+      });
+      if (!result.success) {
+        toast.error(result.error);
+        return;
       }
-    })();
+      toast.success("Gym settings updated");
+      reset(data);
+      logo.clear();
+      paymentQr.clear();
+    } catch (error) {
+      console.error("Error saving gym settings:", error);
+      toast.error("Error saving gym settings. Please try again.");
+    }
   };
 
   const initials = (gymShortName || name || "")
