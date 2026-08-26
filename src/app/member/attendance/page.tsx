@@ -303,9 +303,9 @@ export default function AttendancePage() {
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
-  const history = result?.success ? result.data.history : [];
-  const stats = result?.success ? result.data.stats : null;
-  const membership = result?.success ? result.data.membership : null;
+  const history = result ? result.history : [];
+  const stats = result ? result.stats : null;
+  const membership = result ? result.membership : null;
 
   const now = new Date();
   const thisMonthKey = format(now, "yyyy-MM");
@@ -428,12 +428,12 @@ export default function AttendancePage() {
     return <AttendancePageSkeleton />;
   }
 
-  if (isError || !result?.success) {
+  if (isError || !result) {
     const message = isError
       ? error instanceof Error
         ? error.message
         : "Something went wrong."
-      : ((result as { error: string })?.error ?? "Something went wrong.");
+      : "Something went wrong.";
     return <AttendancePageError message={message} onRetry={() => refetch()} />;
   }
 

@@ -278,6 +278,14 @@ export const primaryGoalEnum = pgEnum("primary_goal", [
   "Athletic Performance",
 ]);
 
+export const gymBillingStatusEnum = pgEnum("gym_billing_status", [
+  "Trial",
+  "Active",
+  "Pending",
+  "Suspended",
+  "Cancelled",
+]);
+
 export const subscriptionBillingStatusEnum = pgEnum(
   "subscription_billing_status",
   ["Pending", "Paid", "Overdue", "Cancelled"],
@@ -422,6 +430,9 @@ export const gyms = pgTable(
     currentPlanId: uuid("current_plan_id").references(
       () => subscriptionPlans.id,
     ),
+    billingStatus: gymBillingStatusEnum("billing_status")
+      .notNull()
+      .default("Trial"),
 
     isVerified: boolean("is_verified").notNull().default(false),
     status: generalStatusEnum("status").notNull().default("Active"),
@@ -446,7 +457,7 @@ export const gyms = pgTable(
     // <= <date>. Partial predicate keeps this small regardless of how many
     // pre-billing/trial gyms exist.
     index("gyms_billing_status_idx")
-      .on(t.status, t.billingStartDate)
+      .on(t.billingStatus, t.billingStartDate)
       .where(sql`billing_start_date is not null`),
 
     pgPolicy("Anyone connected to a gym can view it", {

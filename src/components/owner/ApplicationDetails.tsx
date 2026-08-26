@@ -51,6 +51,9 @@ import {
   verifyPaymentAction,
 } from "@/actions/owner.action";
 import { useRouter } from "next/navigation";
+import { useApplicationById } from "@/hooks/queries/owner.query";
+import { Skeleton } from "../ui/skeleton";
+import { useQueryClient } from "@tanstack/react-query";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1308,37 +1311,118 @@ function AuditInformationSection({ data }: { data: ApplicationDetail }) {
 
 // ─── Main Client ──────────────────────────────────────────────────────────────
 
-export function ApplicationDetails({
-  initialData,
+// ─── Loading Skeleton ──────────────────────────────────────────────────────
+
+function ApplicationDetailsSkeleton() {
+  return (
+    <>
+      {/* Hero banner */}
+      <Skeleton className="h-[132px] w-full rounded-3xl mb-6" />
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
+        {/* Left column — content cards */}
+        <div className="space-y-5">
+          <Skeleton className="h-56 w-full rounded-2xl" />
+          <Skeleton className="h-48 w-full rounded-2xl" />
+          <Skeleton className="h-56 w-full rounded-2xl" />
+          <Skeleton className="h-72 w-full rounded-2xl" />
+          <Skeleton className="h-64 w-full rounded-2xl" />
+        </div>
+
+        {/* Right sidebar */}
+        <div className="space-y-4">
+          <Skeleton className="h-64 w-full rounded-2xl" />
+          <Skeleton className="h-48 w-full rounded-2xl" />
+          <Skeleton className="h-56 w-full rounded-2xl" />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Error State ────────────────────────────────────────────────────────────
+
+function ApplicationDetailsError({
+  message,
+  onRetry,
+  retrying,
 }: {
-  initialData: ApplicationDetail;
+  message: string | null;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 sm:p-8 flex flex-col items-center text-center gap-3">
+      <p className="text-sm font-medium text-destructive">
+        Couldn't load this application{message ? `: ${message}` : "."}
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onRetry}
+        disabled={retrying}
+        className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10"
+      >
+        {retrying ? (
+          <LucideIcons.Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <LucideIcons.RefreshCw className="size-3.5" />
+        )}
+        {retrying ? "Retrying…" : "Try again"}
+      </Button>
+    </div>
+  );
+}
+
+// ─── Main Client ──────────────────────────────────────────────────────────────
+
+export function ApplicationDetails({
+  applicationId,
+}: {
+  applicationId: string;
 }) {
   const router = useRouter();
-  const data = initialData;
+  const queryClient = useQueryClient();
+  const {
+    data: response,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useApplicationById(applicationId);
+
+  const application = response ? response : null;
+  const displayStatus = getDisplayStatus(application);
+  const member = application?.members;
+  const plan = application?.membership_plans;
+  const payment = application?.gym_memberships?.[0]?.payments?.[0];
+
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showVerifyDialog, setShowVerifyDialog] = useState(false);
   const [showRejectPaymentDialog, setShowRejectPaymentDialog] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const displayStatus = getDisplayStatus(data as any); // safe: same shape
-  const member = data.members;
-  const plan = data.membership_plans;
-  const payment = data.gym_memberships?.[0]?.payments[0];
 
-  // Optimistic updates — real persistence via server actions (TODO)
   const confirmApprove = () => {
-    if (isPending) return;
+    if (isPending || !application) return;
     startTransition(async () => {
       try {
-        const result = await approveMembershipApplicationAction(data.id);
+        const result = await approveMembershipApplicationAction(application.id);
         if (!result.success) {
           toast.error(result.error ?? "Failed to approve application.");
           return;
         }
 
         setShowApproveDialog(false);
+        queryClient.invalidateQueries({
+          queryKey: ["applications", application.gym_id, application.id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["applications", application.gym_id],
+        });
         toast.success("Application approved.");
-        router.refresh();
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");
@@ -1347,10 +1431,13 @@ export function ApplicationDetails({
   };
 
   const confirmReject = (reason: string) => {
-    if (isPending) return;
+    if (isPending || !application) return;
     startTransition(async () => {
       try {
-        const result = await rejectMembershipApplicationAction(data.id, reason);
+        const result = await rejectMembershipApplicationAction(
+          application.id,
+          reason,
+        );
         if (!result.success) {
           toast.error(result.error ?? "Failed to reject application.");
           return;
@@ -1358,7 +1445,12 @@ export function ApplicationDetails({
 
         setShowRejectDialog(false);
         toast.success("Application rejected.");
-        router.refresh();
+        queryClient.invalidateQueries({
+          queryKey: ["applications", application.gym_id, application.id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["applications", application.gym_id],
+        });
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");
@@ -1367,11 +1459,14 @@ export function ApplicationDetails({
   };
 
   const confirmVerify = () => {
-    if (isPending) return;
+    if (isPending || !payment) return;
 
     startTransition(async () => {
       try {
-        const result = await verifyPaymentAction(payment?.id);
+        const result = await verifyPaymentAction({
+          paymentId: payment.id,
+          gymId: application.gym_id,
+        });
 
         if (!result.success) {
           toast.error(result.error ?? "Failed to verify payment.");
@@ -1381,7 +1476,12 @@ export function ApplicationDetails({
         setShowVerifyDialog(false);
         toast.success("Payment verified successfully.");
 
-        router.refresh();
+        queryClient.invalidateQueries({
+          queryKey: ["applications", application.gym_id, application.id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["applications", application.gym_id],
+        });
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");
@@ -1390,11 +1490,11 @@ export function ApplicationDetails({
   };
 
   const confirmRejectPayment = (reason: string) => {
-    if (isPending) return;
+    if (isPending || !payment) return;
 
     startTransition(async () => {
       try {
-        const result = await rejectPaymentAction(payment?.id, reason);
+        const result = await rejectPaymentAction(payment.id, reason);
 
         if (!result.success) {
           toast.error(result.error ?? "Failed to reject payment.");
@@ -1403,7 +1503,13 @@ export function ApplicationDetails({
 
         setShowRejectPaymentDialog(false);
         toast.success("Payment rejected successfully.");
-        router.refresh();
+
+        queryClient.invalidateQueries({
+          queryKey: ["applications", application.gym_id, application.id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["applications", application.gym_id],
+        });
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");
@@ -1411,36 +1517,56 @@ export function ApplicationDetails({
     });
   };
 
+  if (isLoading) {
+    return <ApplicationDetailsSkeleton />;
+  }
+
+  if (isError || !application) {
+    return (
+      <ApplicationDetailsError
+        message={error instanceof Error ? error.message : null}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+      />
+    );
+  }
+
   return (
     <>
-      <HeroBanner data={data} displayStatus={displayStatus} />
+      <HeroBanner data={application} displayStatus={displayStatus} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
         {/* ════ LEFT ════ */}
         <div className="space-y-5">
-          <ApplicantDetailsSection data={data} />
-          <RequestedMembershipSection data={data} />
-          <FitnessProfileSection data={data} />
-          <ApplicationNoteSection data={data} displayStatus={displayStatus} />
+          <ApplicantDetailsSection data={application} />
+          <RequestedMembershipSection data={application} />
+          <FitnessProfileSection data={application} />
+          <ApplicationNoteSection
+            data={application}
+            displayStatus={displayStatus}
+          />
           <PaymentInformationSection
-            data={data}
+            data={application}
             displayStatus={displayStatus}
           />
         </div>
 
         {/* ════ RIGHT SIDEBAR ════ */}
         <div className="space-y-4 lg:sticky lg:top-6">
-          <StatusOverviewSection data={data} displayStatus={displayStatus} />
+          <StatusOverviewSection
+            data={application}
+            displayStatus={displayStatus}
+          />
           <OwnerActionsSection
             displayStatus={displayStatus}
-            rejectionReason={data.rejection_reason}
+            rejectionReason={application.rejection_reason}
             isPending={isPending}
             onApprove={() => setShowApproveDialog(true)}
             onReject={() => setShowRejectDialog(true)}
             onVerifyPayment={() => setShowVerifyDialog(true)}
             onRejectPayment={() => setShowRejectPaymentDialog(true)}
           />
-          <AuditInformationSection data={data} />
+          <AuditInformationSection data={application} />
         </div>
       </div>
 

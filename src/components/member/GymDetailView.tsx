@@ -404,7 +404,7 @@ export function GymDetailView({
   };
 
   const handleDashboard = () => {
-    router.push("/member/dashboard");
+    router.push("/member/home");
   };
 
   const address = [gym.address_line1, gym.address_line2, gym.city, gym.state]
@@ -412,7 +412,7 @@ export function GymDetailView({
     .join(", ");
 
   // const hasBlockingMembership = status === "Active" || status === "Frozen";
-    const hasBlockingMembership =
+  const hasBlockingMembership =
     status === "Active" ||
     status === "Frozen" ||
     status === "Pending" ||

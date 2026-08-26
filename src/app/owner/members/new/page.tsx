@@ -4,6 +4,7 @@ import { bigSquareButton } from "@/lib/styles";
 import { getTrainersAndPlans } from "@/services/owner.query";
 import { auth } from "@clerk/nextjs/server";
 import InviteMemberForm from "@/components/owner/InviteMemberForm";
+import { createServerClient } from "@/lib/supabase/server";
 
 export default async function AddNewMemberPage() {
   const { sessionClaims } = await auth();
@@ -12,7 +13,11 @@ export default async function AddNewMemberPage() {
 
   if (!gymId) throw new Error("Gym ID not found");
 
-  const { data: trainersAndPlans, error } = await getTrainersAndPlans(gymId);
+  const supabase = await createServerClient();
+  const { data: trainersAndPlans, error } = await getTrainersAndPlans(
+    supabase,
+    gymId,
+  );
   const trainers = trainersAndPlans?.trainers || [];
   const plans = trainersAndPlans?.plans || [];
 

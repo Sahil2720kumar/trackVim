@@ -188,6 +188,11 @@ export async function getCurrentMemberProfile(
   };
 }
 
+export type CurrentMemberProfileResult = Extract<
+  Awaited<ReturnType<typeof getCurrentMemberProfile>>,
+  { success: true }
+>["data"];
+
 // Owner Part
 export async function getCurrentOwnerProfile(
   supabase: TypedSupabaseClient,
@@ -195,9 +200,42 @@ export async function getCurrentOwnerProfile(
 ) {
   const { data, error } = await supabase
     .from("users")
-    .select("id, full_name, email, username, avatar_url, role, account_status")
+    .select(
+      `
+      id,
+      full_name,
+      email,
+      username,
+      phone,
+      avatar_url,
+      role,
+      account_status,
+      gyms (
+        id,
+        name,
+        code,
+        logo_url
+      )
+      `,
+    )
     .eq("clerk_id", clerkId)
+    .eq("role", "owner")
     .single();
-  if (error) return { success: false as const, error: error.message };
-  return { success: true as const, data };
+
+  if (error) {
+    return {
+      success: false as const,
+      error: error.message,
+    };
+  }
+
+  return {
+    success: true as const,
+    data,
+  };
 }
+
+export type CurrentOwnerProfileResult = Extract<
+  Awaited<ReturnType<typeof getCurrentOwnerProfile>>,
+  { success: true }
+>["data"];

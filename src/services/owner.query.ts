@@ -1,22 +1,23 @@
-import { ActionResult } from "@/actions/member.action";
-import { createServerClient } from "@/lib/supabase/server";
+import { Database } from "@/db/database.types";
 import { formatDate, getTodayDateStr } from "@/lib/utils";
-import { MembershipApplication } from "@/types";
-import { auth } from "@clerk/nextjs/server";
-import { meta } from "zod";
+import { SupabaseClient } from "@supabase/supabase-js";
+
+type TypedSupabaseClient = SupabaseClient<Database>;
 
 // ============================================================================
 // Read-only data-fetching functions
 //
-// These are NOT Server Actions (no "use server" directive). They're plain
-// async functions meant to be awaited directly inside Server Components /
-// route handlers (e.g. `const { data } = await getGymMembers(gymId)`).
-// Keeping them out of the actions file avoids turning every read into a
-// Server Action endpoint, which adds pointless serialization/network
-// overhead for data that never mutates anything.
+// These run CLIENT-SIDE — the caller passes in a Supabase client obtained
+// from `useSupabaseClient()` (same pattern as notifications/service.ts).
+// Authorization is enforced entirely by Supabase RLS policies keyed off the
+// signed-in user; there is no separate Clerk `auth()` / sessionClaims check
+// in this file anymore, so any table these functions touch must have RLS
+// that scopes rows to the requesting owner's gym.
 // ============================================================================
-export async function getGymOwnerInfo(gymId: string) {
-  const supabase = await createServerClient();
+export async function getGymOwnerInfo(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("gyms")
     .select(
@@ -45,6 +46,11 @@ export async function getGymOwnerInfo(gymId: string) {
   if (error) return { success: false as const, error: error.message };
   return { success: true as const, data };
 }
+
+export type GymOwnerInfoResult = Extract<
+  Awaited<ReturnType<typeof getGymOwnerInfo>>,
+  { success: true }
+>["data"];
 
 export type DashboardStats = {
   total_members: number;
@@ -83,187 +89,229 @@ function pctChange(current: number, previous: number) {
   return Math.round(((current - previous) / previous) * 100);
 }
 
-export async function getOwnerDashboardData(gymId: string) {
-  const supabase = await createServerClient();
-  const asOfDate = getTodayDateStr("Asia/Kolkata");
-  const expiryWindowEnd = new Date();
-  expiryWindowEnd.setDate(expiryWindowEnd.getDate() + 30);
-  const expiryWindowEndStr = expiryWindowEnd.toISOString().slice(0, 10);
+export async function getOwnerDashboardData(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
+  try {
+    const asOfDate = getTodayDateStr("Asia/Kolkata");
 
-  const [
-    { data: gym },
-    { data: statsRows, error: statsError },
-    { data: growth, error: growthError },
-    { data: distribution, error: distributionError },
-    { data: trainerActivity, error: trainerError },
-    { data: expiringMemberships, error: expiringError },
-    { data: recentRegistrations, error: registrationsError },
-    { data: recentPayments, error: paymentsError },
-  ] = await Promise.all([
-    supabase.from("gyms").select("id, name").eq("id", gymId).single(),
+    const expiryWindowEnd = new Date();
+    expiryWindowEnd.setDate(expiryWindowEnd.getDate() + 30);
+    const expiryWindowEndStr = expiryWindowEnd.toISOString().slice(0, 10);
 
-    supabase.rpc("get_owner_dashboard_stats", {
-      p_gym_id: gymId,
-      p_as_of: asOfDate,
-    }),
+    const [
+      { data: gym, error: gymError },
+      { data: statsRows, error: statsError },
+      { data: growth, error: growthError },
+      { data: distribution, error: distributionError },
+      { data: trainerActivity, error: trainerError },
+      { data: expiringMemberships, error: expiringError },
+      { data: recentRegistrations, error: registrationsError },
+      { data: recentPayments, error: paymentsError },
+    ] = await Promise.all([
+      supabase.from("gyms").select("id, name").eq("id", gymId).single(),
 
-    supabase.rpc("get_membership_growth_monthly", {
-      p_gym_id: gymId,
-      p_months: 12,
-      p_as_of: asOfDate,
-    }),
+      supabase.rpc("get_owner_dashboard_stats", {
+        p_gym_id: gymId,
+        p_as_of: asOfDate,
+      }),
 
-    supabase.rpc("get_membership_plan_distribution", {
-      p_gym_id: gymId,
-      p_as_of: asOfDate,
-    }),
+      supabase.rpc("get_membership_growth_monthly", {
+        p_gym_id: gymId,
+        p_months: 12,
+        p_as_of: asOfDate,
+      }),
 
-    supabase.rpc("get_trainer_activity", {
-      p_gym_id: gymId,
-      p_as_of: asOfDate,
-    }),
+      supabase.rpc("get_membership_plan_distribution", {
+        p_gym_id: gymId,
+        p_as_of: asOfDate,
+      }),
 
-    supabase
-      .from("gym_memberships")
-      .select(
-        `
-        id, end_date, status,
-       member:members!gym_memberships_member_id_members_id_fk (
-          id,
-          full_name,
-          photo_url
+      supabase.rpc("get_trainer_activity", {
+        p_gym_id: gymId,
+        p_as_of: asOfDate,
+      }),
+
+      supabase
+        .from("gym_memberships")
+        .select(
+          `
+          id, end_date, status,
+          member:members!gym_memberships_member_id_members_id_fk (
+            id,
+            full_name,
+            photo_url
+          ),
+          plan:membership_plans ( plan_name )
+        `,
+        )
+        .eq("gym_id", gymId)
+        .eq("status", "Active")
+        .gte("end_date", asOfDate)
+        .lte("end_date", expiryWindowEndStr)
+        .order("end_date", { ascending: true })
+        .limit(5),
+
+      supabase
+        .from("gym_memberships")
+        .select(
+          `
+          id, created_at,
+          member:members!gym_memberships_member_id_members_id_fk (
+            id,
+            full_name,
+            photo_url
+          ),
+          plan:membership_plans ( plan_name )
+        `,
+        )
+        .eq("gym_id", gymId)
+        .order("created_at", { ascending: false })
+        .limit(4),
+
+      supabase
+        .from("payments")
+        .select(
+          `
+          id, amount, status, payment_date,
+          member:members ( id, full_name, photo_url ),
+          gym_membership:gym_memberships (
+            plan:membership_plans ( plan_name )
+          )
+        `,
+        )
+        .eq("gym_id", gymId)
+        .order("created_at", { ascending: false })
+        .limit(5),
+    ]);
+
+    if (gymError) {
+      throw new Error(`Gym fetch failed: ${gymError.message}`);
+    }
+
+    if (statsError) {
+      throw new Error(
+        `get_owner_dashboard_stats failed: ${statsError.message}`,
+      );
+    }
+
+    if (growthError) {
+      throw new Error(
+        `get_membership_growth_monthly failed: ${growthError.message}`,
+      );
+    }
+
+    if (distributionError) {
+      throw new Error(
+        `get_membership_plan_distribution failed: ${distributionError.message}`,
+      );
+    }
+
+    if (trainerError) {
+      throw new Error(`get_trainer_activity failed: ${trainerError.message}`);
+    }
+
+    if (expiringError) {
+      throw new Error(
+        `expiring memberships fetch failed: ${expiringError.message}`,
+      );
+    }
+
+    if (registrationsError) {
+      throw new Error(
+        `recent registrations fetch failed: ${registrationsError.message}`,
+      );
+    }
+
+    if (paymentsError) {
+      throw new Error(`recent payments fetch failed: ${paymentsError.message}`);
+    }
+
+    const stats = statsRows?.[0] as DashboardStats | undefined;
+
+    const daysToToday = (endDate: string) =>
+      Math.max(
+        Math.ceil(
+          (new Date(endDate).getTime() - new Date(asOfDate).getTime()) /
+            (1000 * 60 * 60 * 24),
         ),
-        plan:membership_plans ( plan_name )
-      `,
-      )
-      .eq("gym_id", gymId)
-      .eq("status", "Active")
-      .gte("end_date", asOfDate)
-      .lte("end_date", expiryWindowEndStr)
-      .order("end_date", { ascending: true })
-      .limit(5),
+        0,
+      );
 
-    supabase
-      .from("gym_memberships")
-      .select(
-        `
-        id, created_at,
-       member:members!gym_memberships_member_id_members_id_fk (
-          id,
-          full_name,
-          photo_url
-        ),
-        plan:membership_plans ( plan_name )
-      `,
-      )
-      .eq("gym_id", gymId)
-      .order("created_at", { ascending: false })
-      .limit(4),
+    return {
+      success: true as const,
+      data: {
+        gymName: gym?.name ?? "Your Gym",
 
-    supabase
-      .from("payments")
-      .select(
-        `
-        id, amount, status, payment_date,
-        member:members ( id, full_name,photo_url ),
-        gym_membership:gym_memberships ( plan:membership_plans ( plan_name ) )
-      `,
-      )
-      .eq("gym_id", gymId)
-      .order("created_at", { ascending: false })
-      .limit(5),
-  ]);
+        stats: stats
+          ? {
+              ...stats,
+              memberTrend: pctChange(
+                stats.total_members,
+                stats.total_members_last_month,
+              ),
+              attendanceTrend: pctChange(
+                stats.today_attendance,
+                stats.attendance_yesterday,
+              ),
+              revenueTrend: pctChange(
+                stats.monthly_revenue,
+                stats.monthly_revenue_last_month,
+              ),
+            }
+          : null,
 
-  if (statsError)
-    throw new Error(`get_owner_dashboard_stats failed: ${statsError.message}`);
-  if (growthError)
-    throw new Error(
-      `get_membership_growth_monthly failed: ${growthError.message}`,
-    );
-  if (distributionError)
-    throw new Error(
-      `get_membership_plan_distribution failed: ${distributionError.message}`,
-    );
-  if (trainerError)
-    throw new Error(`get_trainer_activity failed: ${trainerError.message}`);
+        membershipGrowth: (growth ?? []) as MembershipGrowthPoint[],
 
-  if (expiringError)
-    throw new Error(
-      `expiring memberships fetch failed: ${expiringError.message}`,
-    );
-  if (registrationsError)
-    throw new Error(
-      `recent registrations fetch failed: ${registrationsError.message}`,
-    );
-  if (paymentsError)
-    throw new Error(`recent payments fetch failed: ${paymentsError.message}`);
+        planDistribution: (distribution ?? []) as PlanDistributionPoint[],
 
-  const stats = statsRows?.[0] as DashboardStats | undefined;
+        trainerActivity: (trainerActivity ?? []) as TrainerActivityRow[],
 
-  const daysToToday = (endDate: string) =>
-    Math.max(
-      Math.ceil(
-        (new Date(endDate).getTime() - new Date(asOfDate).getTime()) /
-          (1000 * 60 * 60 * 24),
-      ),
-      0,
-    );
+        expiringMemberships: (expiringMemberships ?? []).map((m) => ({
+          id: m.id,
+          name: m.member?.full_name ?? "—",
+          photoUrl: m.member?.photo_url ?? null,
+          plan: m.plan?.plan_name ?? "—",
+          expiry: m.end_date,
+          daysLeft: daysToToday(m.end_date),
+        })),
 
-  return {
-    gymName: gym?.name ?? "Your Gym",
-    stats: stats
-      ? {
-          ...stats,
-          memberTrend: pctChange(
-            stats.total_members,
-            stats.total_members_last_month,
-          ),
-          attendanceTrend: pctChange(
-            stats.today_attendance,
-            stats.attendance_yesterday,
-          ),
-          revenueTrend: pctChange(
-            stats.monthly_revenue,
-            stats.monthly_revenue_last_month,
-          ),
-        }
-      : null,
-    membershipGrowth: (growth ?? []) as MembershipGrowthPoint[],
-    planDistribution: (distribution ?? []) as PlanDistributionPoint[],
-    trainerActivity: (trainerActivity ?? []) as TrainerActivityRow[],
-    expiringMemberships: (expiringMemberships ?? []).map((m) => ({
-      id: m.id,
-      name: m.member?.full_name ?? "—",
-      photoUrl: m.member?.photo_url ?? null,
-      plan: m.plan?.plan_name ?? "—",
-      expiry: m.end_date,
-      daysLeft: daysToToday(m.end_date),
-    })),
-    recentRegistrations: (recentRegistrations ?? []).map((r) => ({
-      id: r.id,
-      name: r.member?.full_name ?? "—",
-      photoUrl: r.member?.photo_url ?? null,
-      joined: r.created_at,
-      plan: r.plan?.plan_name ?? "—",
-    })),
-    recentPayments: (recentPayments ?? []).map((p) => ({
-      id: p.id,
-      member: p.member?.full_name ?? "—",
-      memberPhotoUrl: p.member?.photo_url ?? null,
-      amount: `₹${Number(p.amount).toLocaleString("en-IN")}`,
-      plan: p.gym_membership?.plan?.plan_name ?? "—",
-      status: p.status,
-      date: p.payment_date,
-    })),
-  };
+        recentRegistrations: (recentRegistrations ?? []).map((r) => ({
+          id: r.id,
+          name: r.member?.full_name ?? "—",
+          photoUrl: r.member?.photo_url ?? null,
+          joined: r.created_at,
+          plan: r.plan?.plan_name ?? "—",
+        })),
+
+        recentPayments: (recentPayments ?? []).map((p) => ({
+          id: p.id,
+          member: p.member?.full_name ?? "—",
+          memberPhotoUrl: p.member?.photo_url ?? null,
+          amount: `₹${Number(p.amount).toLocaleString("en-IN")}`,
+          plan: p.gym_membership?.plan?.plan_name ?? "—",
+          status: p.status,
+          date: p.payment_date,
+        })),
+      },
+    };
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Something went wrong",
+    };
+  }
 }
 
 export type OwnerDashboardResult = Awaited<
   ReturnType<typeof getOwnerDashboardData>
 >;
 
-export async function getMembershipPlans(gymId: string) {
-  const supabase = await createServerClient();
+export async function getMembershipPlans(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("membership_plans")
     .select(
@@ -279,8 +327,15 @@ export async function getMembershipPlans(gymId: string) {
   return { success: true as const, data };
 }
 
-export async function getGymRevenueMonthly(gymId: string) {
-  const supabase = await createServerClient();
+export type MembershipPlansResult = Extract<
+  Awaited<ReturnType<typeof getMembershipPlans>>,
+  { success: true }
+>["data"];
+
+export async function getGymRevenueMonthly(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
   const { data, error } = await supabase.rpc("get_gym_revenue_monthly", {
@@ -300,11 +355,18 @@ export async function getGymRevenueMonthly(gymId: string) {
     revenue: Number(row.revenue),
   }));
 
-  return { success: true as const, data: coerced as RevenueMonthPoint[] };
+  return { success: true as const, data: coerced };
 }
 
-export async function getTopPerformingPlans(gymId: string) {
-  const supabase = await createServerClient();
+export type GymRevenueMonthlyResult = Extract<
+  Awaited<ReturnType<typeof getGymRevenueMonthly>>,
+  { success: true }
+>["data"];
+
+export async function getTopPerformingPlans(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
   const { data, error } = await supabase.rpc("get_plan_performance_monthly", {
@@ -325,12 +387,18 @@ export async function getTopPerformingPlans(gymId: string) {
     growth_pct: Number(row.growth_pct),
   }));
 
-  return { success: true as const, data: coerced as PlanPerformanceRow[] };
+  return { success: true as const, data: coerced };
 }
 
-export async function getTrainersAndPlans(gymId: string) {
-  const supabase = await createServerClient();
+export type TopPerformingPlansResult = Extract<
+  Awaited<ReturnType<typeof getTopPerformingPlans>>,
+  { success: true }
+>["data"];
 
+export async function getTrainersAndPlans(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const [trainersResult, plansResult] = await Promise.all([
     supabase
       .from("trainers")
@@ -370,9 +438,10 @@ export type TrainersAndPlansResult = Extract<
   { success: true }
 >["data"];
 
-export async function getGymWithDetails(gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getGymWithDetails(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("gyms")
     .select(
@@ -392,10 +461,16 @@ export async function getGymWithDetails(gymId: string) {
   return { success: true as const, data };
 }
 
-//Application Quries
-export async function getApplications(gymId: string) {
-  const supabase = await createServerClient();
+export type GymWithDetailsResult = Extract<
+  Awaited<ReturnType<typeof getGymWithDetails>>,
+  { success: true }
+>["data"];
 
+//Application Quries
+export async function getApplications(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("membership_applications")
     .select(
@@ -416,22 +491,23 @@ export async function getApplications(gymId: string) {
   };
 }
 
-export async function getApplicationById(id: string) {
-  const supabase = await createServerClient();
-  const { sessionClaims } = await auth();
-  const ownerMeta = (sessionClaims?.publicMetadata ?? {}) as {
-    role?: string;
-    gymId?: string;
-  };
+export type ApplicationsResult = Extract<
+  Awaited<ReturnType<typeof getApplications>>,
+  { success: true }
+>["data"];
 
-  if (ownerMeta.role !== "owner" || !ownerMeta.gymId) {
-    return {
-      success: false as const,
-      error: "Not authorized to view this application.",
-    };
-  }
-  const gymId = ownerMeta.gymId;
-
+/**
+ * The role/gymId authorization check that used to live here (via Clerk
+ * `auth()` + sessionClaims) is gone — `gymId` is now supplied by the
+ * caller (from the owner store) and RLS on `membership_applications` /
+ * `gyms` is what actually keeps an owner from reading another gym's
+ * application.
+ */
+export async function getApplicationById(
+  supabase: TypedSupabaseClient,
+  id: string,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("membership_applications")
     .select(
@@ -467,9 +543,15 @@ export async function getApplicationById(id: string) {
   return { success: true as const, data: data };
 }
 
-export async function getPendingPayments(gymId: string) {
-  const supabase = await createServerClient();
+export type ApplicationByIdResult = Extract<
+  Awaited<ReturnType<typeof getApplicationById>>,
+  { success: true }
+>["data"];
 
+export async function getPendingPayments(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("payments")
     .select(
@@ -488,9 +570,15 @@ export async function getPendingPayments(gymId: string) {
   return { success: true as const, data };
 }
 
-export async function getGymMembers(gymId: string) {
-  const supabase = await createServerClient();
+export type PendingPaymentsResult = Extract<
+  Awaited<ReturnType<typeof getPendingPayments>>,
+  { success: true }
+>["data"];
 
+export async function getGymMembers(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("gym_memberships")
     .select(
@@ -507,9 +595,15 @@ export async function getGymMembers(gymId: string) {
   return { success: true as const, data };
 }
 
-export async function getGymActiveMembers(gymId: string) {
-  const supabase = await createServerClient();
+export type GymMembersResult = Extract<
+  Awaited<ReturnType<typeof getGymMembers>>,
+  { success: true }
+>["data"];
 
+export async function getGymActiveMembers(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("gym_memberships")
     .select(
@@ -526,9 +620,15 @@ export async function getGymActiveMembers(gymId: string) {
   return { success: true as const, data };
 }
 
-export async function getGymSubscriptions(gymId: string) {
-  const supabase = await createServerClient();
+export type GymActiveMembersResult = Extract<
+  Awaited<ReturnType<typeof getGymActiveMembers>>,
+  { success: true }
+>["data"];
 
+export async function getGymSubscriptions(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("gym_subscriptions")
     .select(`*, subscription_payments(*)`)
@@ -539,9 +639,16 @@ export async function getGymSubscriptions(gymId: string) {
   return { success: true as const, data };
 }
 
-export async function getGymAttendance(gymId: string, date?: string) {
-  const supabase = await createServerClient();
+export type GymSubscriptionsResult = Extract<
+  Awaited<ReturnType<typeof getGymSubscriptions>>,
+  { success: true }
+>["data"];
 
+export async function getGymAttendance(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+  date?: string,
+) {
   let query = supabase
     .from("attendance")
     .select(
@@ -560,18 +667,21 @@ export async function getGymAttendance(gymId: string, date?: string) {
   return { success: true as const, data };
 }
 
-//Get Trainers
-export async function getAllTrainers(gymId: string) {
-  const supabase = await createServerClient();
-  const { sessionClaims } = await auth();
-  const meta = (sessionClaims?.publicMetadata ?? {}) as {
-    role?: string;
-    gymId?: string;
-  };
-  if (meta.role !== "owner" || meta.gymId !== gymId) {
-    return { success: false as const, error: "Not authorized." };
-  }
+export type GymAttendanceResult = Extract<
+  Awaited<ReturnType<typeof getGymAttendance>>,
+  { success: true }
+>["data"];
 
+//Get Trainers
+/**
+ * The role/gymId authorization check that used to live here (via Clerk
+ * `auth()`) is gone — RLS on `trainers` is what scopes this to the
+ * requesting owner's gym now.
+ */
+export async function getAllTrainers(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("trainers")
     .select(
@@ -594,8 +704,10 @@ export type TrainerList = Extract<
 
 export type TrainerRow = TrainerList[number];
 
-export async function getTrainerStats(gymId: string) {
-  const supabase = await createServerClient();
+export async function getTrainerStats(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const today = getTodayDateStr();
 
   const [
@@ -651,6 +763,11 @@ export async function getTrainerStats(gymId: string) {
   };
 }
 
+export type TrainerStatsResult = Extract<
+  Awaited<ReturnType<typeof getTrainerStats>>,
+  { success: true }
+>["data"];
+
 // ============================================================================
 // Trainer + Assigned Members — single query via FK embed
 // ============================================================================
@@ -676,9 +793,11 @@ function progressLabelFor(rate: number): AssignedMember["progressLabel"] {
   return "Needs Attention";
 }
 
-export async function getTrainerById(trainerId: string, gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getTrainerById(
+  supabase: TypedSupabaseClient,
+  trainerId: string,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("trainers")
     .select(
@@ -777,6 +896,11 @@ export async function getTrainerById(trainerId: string, gymId: string) {
   return { success: true as const, data: { trainer, assignedMembers } };
 }
 
+export type TrainerByIdResult = Extract<
+  Awaited<ReturnType<typeof getTrainerById>>,
+  { success: true }
+>["data"];
+
 export type TrainerDetail = Extract<
   Awaited<ReturnType<typeof getTrainerById>>,
   { success: true }
@@ -790,8 +914,10 @@ export type TrainerAssignedMember = Extract<
 // Session stats — kept as-is, separate queries
 // ============================================================================
 
-export async function getTrainerSessionStats(trainerId: string) {
-  const supabase = await createServerClient();
+export async function getTrainerSessionStats(
+  supabase: TypedSupabaseClient,
+  trainerId: string,
+) {
   const now = new Date();
   const monthStart = formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
   const monthEnd = formatDate(
@@ -820,8 +946,15 @@ export async function getTrainerSessionStats(trainerId: string) {
   };
 }
 
-export async function getMonthlySessionsForTrainer(trainerId: string) {
-  const supabase = await createServerClient();
+export type TrainerSessionStatsResult = Extract<
+  Awaited<ReturnType<typeof getTrainerSessionStats>>,
+  { success: true }
+>["data"];
+
+export async function getMonthlySessionsForTrainer(
+  supabase: TypedSupabaseClient,
+  trainerId: string,
+) {
   const now = new Date();
   const start = formatDate(new Date(now.getFullYear(), now.getMonth() - 11, 1));
   const end = formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
@@ -857,11 +990,17 @@ export async function getMonthlySessionsForTrainer(trainerId: string) {
   };
 }
 
+export type MonthlySessionsForTrainerResult = Extract<
+  Awaited<ReturnType<typeof getMonthlySessionsForTrainer>>,
+  { success: true }
+>["data"];
+
 //Members
 
-export async function getMembersAndPlans(gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getMembersAndPlans(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const [membershipsResult, plansResult] = await Promise.all([
     supabase
       .from("gym_memberships")
@@ -922,9 +1061,15 @@ export type GymMembershipStatus =
   | "Expired"
   | "Cancelled";
 
-export async function getMembersWithAttendance(gymId: string) {
-  const supabase = await createServerClient();
-
+/**
+ * The attendance-stats RPC and the trainer-assignment lookup are both
+ * independent of each other once `memberIds` is known, so they now run
+ * concurrently instead of one after the other.
+ */
+export async function getMembersWithAttendance(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("members")
     .select(
@@ -968,53 +1113,47 @@ export async function getMembersWithAttendance(gymId: string) {
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
   // ---------------------------------------------------------------------------
-  // Attendance
+  // Attendance + active trainer assignments, run concurrently.
+  //
+  // No FK exists between gym_memberships and trainers — the relationship
+  // is via trainer_assignments (member_id -> trainer_id), so this stays a
+  // separate query from attendance, just no longer a sequential one.
   // ---------------------------------------------------------------------------
 
   const attendanceByMember = new Map<string, number>();
+  const trainerByMember = new Map<string, { id: string; full_name: string }>();
 
   if (memberIds.length > 0) {
-    const { data: stats, error: statsError } = await supabase.rpc(
-      "get_member_attendance_stats",
-      {
+    const [
+      { data: stats, error: statsError },
+      { data: assignments, error: assignmentsError },
+    ] = await Promise.all([
+      supabase.rpc("get_member_attendance_stats", {
         p_member_ids: memberIds,
         p_gym_id: gymId,
         p_as_of: asOfDate,
-      },
-    );
+      }),
+      supabase
+        .from("trainer_assignments")
+        .select(
+          `
+            member_id,
+            trainer:trainers (
+              id,
+              full_name
+            )
+          `,
+        )
+        .eq("gym_id", gymId)
+        .eq("is_active", true)
+        .in("member_id", memberIds),
+    ]);
 
     if (!statsError && stats) {
       for (const stat of stats) {
         attendanceByMember.set(stat.member_id, Number(stat.attendance_rate));
       }
     }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Active trainer assignments
-  //
-  // No FK exists between gym_memberships and trainers — the relationship
-  // is via trainer_assignments (member_id -> trainer_id), so this has to
-  // be a separate query, same pattern as attendance above.
-  // ---------------------------------------------------------------------------
-
-  const trainerByMember = new Map<string, { id: string; full_name: string }>();
-
-  if (memberIds.length > 0) {
-    const { data: assignments, error: assignmentsError } = await supabase
-      .from("trainer_assignments")
-      .select(
-        `
-        member_id,
-        trainer:trainers (
-          id,
-          full_name
-        )
-      `,
-      )
-      .eq("gym_id", gymId)
-      .eq("is_active", true)
-      .in("member_id", memberIds);
 
     if (!assignmentsError && assignments) {
       for (const a of assignments) {
@@ -1138,8 +1277,10 @@ const PENDING_STATUSES = [
   "PaymentRejected",
 ] as const;
 
-export async function getGymMemberStats(gymId: string) {
-  const supabase = await createServerClient();
+export async function getGymMemberStats(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
   const sevenDaysOut = new Date();
@@ -1223,10 +1364,10 @@ export type MemberMonthlyAttendance = {
 };
 
 export async function getMembersByIdWithAttendence(
+  supabase: TypedSupabaseClient,
   memberId: string,
   gymId: string,
 ) {
-  const supabase = await createServerClient();
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
   const { data: member, error: memberError } = await supabase
@@ -1460,9 +1601,11 @@ export type PaymentRow = {
   status: string;
 };
 
-export async function getGymPayments(gymId: string, limit = 200) {
-  const supabase = await createServerClient();
-
+export async function getGymPayments(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+  limit = 200,
+) {
   const { data, error } = await supabase
     .from("payments")
     .select(
@@ -1503,8 +1646,15 @@ export async function getGymPayments(gymId: string, limit = 200) {
   return { success: true as const, data: payments };
 }
 
-export async function getGymPaymentsOverview(gymId: string) {
-  const supabase = await createServerClient();
+export type GymPaymentsResult = Extract<
+  Awaited<ReturnType<typeof getGymPayments>>,
+  { success: true }
+>["data"];
+
+export async function getGymPaymentsOverview(
+  supabase: TypedSupabaseClient,
+  gymId: string,
+) {
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
   const [
@@ -1513,7 +1663,7 @@ export async function getGymPaymentsOverview(gymId: string) {
     monthlyRevenueResult,
     statusCountsResult,
   ] = await Promise.all([
-    getGymPayments(gymId),
+    getGymPayments(supabase, gymId),
     supabase
       .rpc("get_gym_payment_stats", { p_gym_id: gymId, p_as_of: asOfDate })
       .single(),
@@ -1572,7 +1722,12 @@ export async function getGymPaymentsOverview(gymId: string) {
   };
 }
 
-// Get Pyament by Id
+export type GymPaymentsOverviewResult = Extract<
+  Awaited<ReturnType<typeof getGymPaymentsOverview>>,
+  { success: true }
+>["data"];
+
+// Get Payment by Id
 
 export type PaymentDetailData = {
   id: string;
@@ -1627,9 +1782,11 @@ export type PaymentDetailData = {
   } | null;
 };
 
-export async function getPaymentById(paymentId: string, gymId: string) {
-  const supabase = await createServerClient();
-
+export async function getPaymentById(
+  supabase: TypedSupabaseClient,
+  paymentId: string,
+  gymId: string,
+) {
   const { data, error } = await supabase
     .from("payments")
     .select(
@@ -1760,3 +1917,8 @@ export async function getPaymentById(paymentId: string, gymId: string) {
 
   return { success: true as const, data: payment };
 }
+
+export type PaymentByIdResult = Extract<
+  Awaited<ReturnType<typeof getPaymentById>>,
+  { success: true }
+>["data"];

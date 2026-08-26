@@ -395,3 +395,13 @@ export async function getMemberHomeState(
     ],
   };
 }
+
+// Returns the MemberHomeState union directly (and throws on a hard query
+// error) rather than a { success, data } envelope — same shape as
+// getActiveQrCode/getNotifications — so this is a plain
+// Awaited<ReturnType<...>> alias. In practice it's identical to the
+// already-declared MemberHomeState return type, kept here only so every
+// query function in the file has a matching *Result export.
+export type MemberHomeStateResult = Awaited<
+  ReturnType<typeof getMemberHomeState>
+>;

@@ -1,16 +1,12 @@
+import { Suspense } from "react";
 import { ApplicationDetails } from "@/components/owner/ApplicationDetails";
-import { getApplicationById } from "@/services/owner.query";
 
-export default async function ApplicationDetailPage({
+async function ApplicationDetail({
   params,
 }: {
   params: Promise<{ applicationId: string }>;
 }) {
   const { applicationId } = await params;
-  const result = await getApplicationById(applicationId);
-
-  if (!result.success || !result.data)
-    throw new Error("Failed to fetch application details");
 
   return (
     <div className="min-h-screen bg-background">
@@ -19,12 +15,26 @@ export default async function ApplicationDetailPage({
           <h1 className="text-2xl font-bold text-foreground tracking-tight">
             Membership Application
           </h1>
+
           <p className="text-muted-foreground mt-1 text-sm">
             Review member application, verify payment, and activate membership.
           </p>
         </div>
-        <ApplicationDetails initialData={result.data} />
+
+        <ApplicationDetails applicationId={applicationId} />
       </div>
     </div>
+  );
+}
+
+export default function ApplicationDetailPage({
+  params,
+}: {
+  params: Promise<{ applicationId: string }>;
+}) {
+  return (
+    <Suspense fallback={null}>
+      <ApplicationDetail params={params} />
+    </Suspense>
   );
 }

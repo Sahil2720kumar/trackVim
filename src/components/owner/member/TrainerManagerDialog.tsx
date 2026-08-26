@@ -23,6 +23,7 @@ import {
   setPrimaryTrainerAssignment,
 } from "@/actions/owner.action";
 import type { TrainerList } from "@/services/owner.query";
+import { useQueryClient } from "@tanstack/react-query";
 
 type AssignedTrainer = {
   assignmentId: string;
@@ -44,6 +45,7 @@ export function TrainerManagerDialog({
   assignedTrainers: AssignedTrainer[];
   availableTrainers: TrainerList; // fetched server-side, passed down
 }) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -81,6 +83,12 @@ export function TrainerManagerDialog({
           return;
         }
         toast.success("Trainer assigned");
+        queryClient.invalidateQueries({
+          queryKey: ["member-with-attendance"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["all-trainers"],
+        });
       } catch (error) {
         console.error("Error assigning trainer:", error);
         toast.error("Error assigning trainer. Please try again.");
@@ -104,6 +112,12 @@ export function TrainerManagerDialog({
           return;
         }
         toast.success("Trainer removed");
+        queryClient.invalidateQueries({
+          queryKey: ["member-with-attendance"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["all-trainers"],
+        });
       } catch (error) {
         console.error("Error removing trainer:", error);
         toast.error("Error removing trainer. Please try again.");
@@ -128,6 +142,12 @@ export function TrainerManagerDialog({
           return;
         }
         toast.success("Primary trainer updated");
+        queryClient.invalidateQueries({
+          queryKey: ["member-with-attendance"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["all-trainers"],
+        });
       } catch (error) {
         console.error("Error setting primary trainer:", error);
         toast.error("Error setting primary trainer. Please try again.");

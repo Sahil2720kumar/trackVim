@@ -12,8 +12,12 @@ import {
   Eye,
   Pencil,
   Calendar,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatCard } from "@/components/StatCard";
 import {
   Popover,
   PopoverContent,
@@ -26,12 +30,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { TrainerRow } from "@/services/owner.query";
-
 import { useRouter } from "next/navigation";
-
-type TrainersTableProps = {
-  initialTrainers: TrainerRow[];
-};
+import { useAllTrainers, useTrainerStats } from "@/hooks/queries/owner.query";
 
 const STATUS_COLORS: Record<string, string> = {
   Active: "bg-green-100 text-green-700",
@@ -54,8 +54,93 @@ function getInitials(name: string | null) {
     .toUpperCase();
 }
 
-export function TrainersTable({ initialTrainers }: TrainersTableProps) {
-  const [trainers, setTrainers] = useState<TrainerRow[]>(initialTrainers);
+// ─── Loading skeleton — flat blocks, matches DashboardSkeleton style ───────
+
+function TrainersSkeleton() {
+  return (
+    <>
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-[132px] w-full rounded-2xl" />
+        ))}
+      </section>
+
+      <div className="mt-4 sm:mt-6">
+        <Skeleton className="h-[124px] w-full rounded-lg" />
+      </div>
+
+      <div className="mt-4 sm:mt-6">
+        <Skeleton className="h-[520px] w-full rounded-lg" />
+      </div>
+    </>
+  );
+}
+
+// ─── Error state ────────────────────────────────────────────────────────────
+
+function TrainersError({
+  message,
+  onRetry,
+  retrying,
+}: {
+  message: string | null;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 sm:p-8 flex flex-col items-center text-center gap-3">
+      <p className="text-sm font-medium text-destructive">
+        Couldn't load trainers{message ? `: ${message}` : "."}
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onRetry}
+        disabled={retrying}
+        className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10"
+      >
+        {retrying ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : (
+          <RefreshCw className="w-3.5 h-3.5" />
+        )}
+        {retrying ? "Retrying…" : "Try again"}
+      </Button>
+    </div>
+  );
+}
+
+export function TrainersTable() {
+  const router = useRouter();
+
+  const {
+    data: trainersResponse,
+    isLoading: trainersLoading,
+    isError: trainersIsError,
+    isFetching: trainersFetching,
+    error: trainersError,
+    refetch: refetchTrainers,
+  } = useAllTrainers();
+
+  const {
+    data: statsResponse,
+    isLoading: statsLoading,
+    isError: statsIsError,
+    isFetching: statsFetching,
+    error: statsError,
+    refetch: refetchStats,
+  } = useTrainerStats();
+
+  const isLoading = trainersLoading || statsLoading;
+  const isError = trainersIsError || statsIsError;
+  const isFetching = trainersFetching || statsFetching;
+
+  const refetchAll = () => {
+    refetchTrainers();
+    refetchStats();
+  };
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,8 +153,18 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
     "All Specializations",
   );
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
-  const router = useRouter();
   const itemsPerPage = 5;
+
+  const trainers: TrainerRow[] = trainersResponse ? trainersResponse : [];
+
+  const stats = statsResponse
+    ? statsResponse
+    : {
+        totalTrainers: 0,
+        activeTrainers: 0,
+        totalMembers: 0,
+        sessionsToday: 0,
+      };
 
   const specializationOptions = useMemo(() => {
     const all = new Set<string>();
@@ -178,20 +273,73 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
     URL.revokeObjectURL(url);
   };
 
-  // TODO: wire to a server action (deleteTrainer) — currently local-only
-  const handleDeleteTrainer = (id: string) => {
-    setTrainers((prev) => prev.filter((t) => t.id !== id));
-    setSelectedTrainers((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+  // TODO: wire to a real server action (deleteTrainer) + query invalidation.
+  // Local-only mutation removed for now since `trainers` is derived from the
+  // query result and no longer held in component state — deleting from the
+  // UI without a mutation would just be reverted on next refetch. Surface a
+  // "not implemented" toast instead until the server action exists.
+  const handleDeleteTrainer = (_id: string) => {
     setOpenActionMenuId(null);
   };
 
+  if (isLoading) {
+    return <TrainersSkeleton />;
+  }
+
+  const hasResponseError =
+    (trainersResponse && !trainersResponse) ||
+    (statsResponse && !statsResponse);
+
+  if (isError || hasResponseError) {
+    const firstError = trainersError ?? statsError;
+    return (
+      <TrainersError
+        message={firstError instanceof Error ? firstError.message : null}
+        onRetry={refetchAll}
+        retrying={isFetching}
+      />
+    );
+  }
+
   return (
     <>
-      <div className="flex flex-col gap-4">
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard
+          icon={Users}
+          title="Total Trainers"
+          value={stats.totalTrainers}
+          subtitle="At this gym"
+          iconBg="bg-purple-100"
+          iconColor="text-purple-600"
+        />
+        <StatCard
+          icon={Users}
+          title="Active Trainers"
+          value={stats.activeTrainers}
+          subtitle="Currently working"
+          iconBg="bg-green-100"
+          iconColor="text-green-600"
+        />
+        <StatCard
+          icon={Users}
+          title="Members Assigned"
+          value={stats.totalMembers}
+          subtitle="Active memberships"
+          iconBg="bg-blue-100"
+          iconColor="text-blue-600"
+        />
+        <StatCard
+          icon={Filter}
+          title="Sessions Today"
+          value={stats.sessionsToday}
+          subtitle="Scheduled today"
+          iconBg="bg-yellow-100"
+          iconColor="text-yellow-600"
+        />
+      </div>
+
+      <div className="flex flex-col gap-4 mt-4 sm:mt-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-card border border-border rounded-lg p-3 sm:p-4">
           <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
@@ -275,8 +423,6 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
               <span className="hidden sm:inline">Export</span>
             </button>
 
-            {/* "Add Trainer" now likely goes through an invite flow (clerkInvitationId, invitedEmail
-                on the schema) rather than a raw insert — wire this to that action separately. */}
             <Button
               onClick={() => router.push("/owner/trainers/new")}
               className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90 transition-colors font-medium"
@@ -308,7 +454,7 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-lg overflow-hidden">
+      <div className="bg-card border border-border rounded-lg overflow-hidden mt-4 sm:mt-6">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -486,7 +632,7 @@ export function TrainersTable({ initialTrainers }: TrainersTableProps) {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-3">
         <p className="text-sm text-muted-foreground">
           Showing {paginatedTrainers.length > 0 ? startIdx + 1 : 0} to{" "}
           {Math.min(startIdx + itemsPerPage, filteredTrainers.length)} of{" "}

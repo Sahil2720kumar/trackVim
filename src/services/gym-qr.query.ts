@@ -40,3 +40,9 @@ export async function getActiveQrCode(
     updatedAt: data.updated_at,
   };
 }
+
+// This one returns ActiveQrCode | null directly (and throws on error)
+// rather than a { success, data } envelope, so there's no matching branch
+// for the Extract<..., { success: true }> pattern used elsewhere — a plain
+// Awaited<ReturnType<...>> alias is the equivalent here.
+export type ActiveQrCodeResult = Awaited<ReturnType<typeof getActiveQrCode>>;

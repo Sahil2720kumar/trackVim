@@ -38,10 +38,17 @@ const SLOW = 5 * 60_000; // profile, memberships, gym detail, discovery
 /** Manual/on-demand — only fires once a code has been typed in full. */
 export function useFindGymByCode(code: string) {
   const { supabase } = useSupabaseClient();
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+
   return useQuery({
     queryKey: ["gym-by-code", code, activeMemberId],
-    queryFn: () => findGymByCode(supabase, code),
+    queryFn: async () => {
+      const result = await findGymByCode(supabase, code);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId && code.length > 0,
     staleTime: SLOW,
   });
@@ -49,10 +56,17 @@ export function useFindGymByCode(code: string) {
 
 export function useActiveGyms(city?: string) {
   const { supabase } = useSupabaseClient();
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+
   return useQuery({
     queryKey: ["active-gyms", city ?? null, activeMemberId],
-    queryFn: () => listActiveGyms(supabase, { city }),
+    queryFn: async () => {
+      const result = await listActiveGyms(supabase, { city });
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId,
     staleTime: SLOW,
   });
@@ -64,7 +78,13 @@ export function useDiscoverGyms(city?: string) {
 
   return useQuery({
     queryKey: ["discover-gyms", activeMemberId, city ?? null],
-    queryFn: () => getDiscoverGyms(supabase, activeMemberId!, city),
+    queryFn: async () => {
+      const result = await getDiscoverGyms(supabase, activeMemberId!, city);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId,
     staleTime: SLOW,
   });
@@ -73,10 +93,17 @@ export function useDiscoverGyms(city?: string) {
 /** `gymId` is a route param here (browsing a gym pre-membership), not store state. */
 export function useGymDetail(gymId: string) {
   const { supabase } = useSupabaseClient();
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+
   return useQuery({
     queryKey: ["gym-detail", gymId, activeMemberId],
-    queryFn: () => getGymDetail(supabase, gymId),
+    queryFn: async () => {
+      const result = await getGymDetail(supabase, gymId);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!gymId && !!activeMemberId,
     staleTime: SLOW,
   });
@@ -87,12 +114,22 @@ export function useMembershipApplicationPageData(
   gymId: string,
   planId: string,
 ) {
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
   const { supabase } = useSupabaseClient();
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+
   return useQuery({
     queryKey: ["membership-application-page", gymId, planId, activeMemberId],
-    queryFn: () =>
-      MembershipApplicationPageDataByPlanId(supabase, gymId, planId),
+    queryFn: async () => {
+      const result = await MembershipApplicationPageDataByPlanId(
+        supabase,
+        gymId,
+        planId,
+      );
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!gymId && !!planId && !!activeMemberId,
     staleTime: SLOW,
   });
@@ -103,40 +140,63 @@ export function useMembershipApplicationPageData(
 // ============================================================================
 
 export function useMyMembershipStatus() {
+  const { supabase } = useSupabaseClient();
   const activeMemberId = useMemberStore((state) => state.activeMemberId);
   const activeGymId = useMemberStore((state) => state.activeGymId);
-  const { supabase } = useSupabaseClient();
+
   return useQuery({
     queryKey: ["my-membership-status", activeMemberId, activeGymId],
-    queryFn: () =>
-      getMyMembershipStatusWithPlanDetails(
+    queryFn: async () => {
+      const result = await getMyMembershipStatusWithPlanDetails(
         supabase,
         activeMemberId!,
         activeGymId!,
-      ),
+      );
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId && !!activeGymId,
     staleTime: SLOW,
   });
 }
 
 export function useMyApplications() {
-  const activeMemberId = useMemberStore((state) => state.activeMemberId);
   const { supabase } = useSupabaseClient();
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+
   return useQuery({
     queryKey: ["my-applications", activeMemberId],
-    queryFn: () => getMyApplications(supabase, activeMemberId!),
+    queryFn: async () => {
+      const result = await getMyApplications(supabase, activeMemberId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId,
     staleTime: SLOW,
   });
 }
 
 export function useMyApplicationById(applicationId: string) {
-  const activeMemberId = useMemberStore((state) => state.activeMemberId);
   const { supabase } = useSupabaseClient();
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+
   return useQuery({
     queryKey: ["my-application", activeMemberId, applicationId],
-    queryFn: () =>
-      getMyApplicationById(supabase, activeMemberId!, applicationId),
+    queryFn: async () => {
+      const result = await getMyApplicationById(
+        supabase,
+        activeMemberId!,
+        applicationId,
+      );
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId && !!applicationId,
     staleTime: SLOW,
   });
@@ -148,11 +208,17 @@ export function useMyApplicationById(applicationId: string) {
 
 export function useMyProfile() {
   const { supabase } = useSupabaseClient();
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
 
   return useQuery({
     queryKey: ["my-profile", activeMemberId],
-    queryFn: () => getMyProfile(supabase),
+    queryFn: async () => {
+      const result = await getMyProfile(supabase);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId,
     staleTime: SLOW,
   });
@@ -160,11 +226,17 @@ export function useMyProfile() {
 
 export function useMyMemberships() {
   const { supabase } = useSupabaseClient();
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
 
   return useQuery({
     queryKey: ["my-memberships", activeMemberId],
-    queryFn: () => getMyMemberships(supabase),
+    queryFn: async () => {
+      const result = await getMyMemberships(supabase);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId,
     staleTime: SLOW,
   });
@@ -172,11 +244,17 @@ export function useMyMemberships() {
 
 export function useMyPayments() {
   const { supabase } = useSupabaseClient();
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
 
   return useQuery({
     queryKey: ["my-payments", activeMemberId],
-    queryFn: () => getMyPayments(supabase),
+    queryFn: async () => {
+      const result = await getMyPayments(supabase);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId,
     staleTime: SLOW,
   });
@@ -184,26 +262,43 @@ export function useMyPayments() {
 
 /** `activeMembershipId` scopes to the member's current membership's payment. */
 export function usePaymentForMembership() {
+  const { supabase } = useSupabaseClient();
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
   const activeMembershipId = useMemberStore(
     (state) => state.activeMembershipId,
   );
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
-  const { supabase } = useSupabaseClient();
+
   return useQuery({
     queryKey: ["payment-for-membership", activeMembershipId, activeMemberId],
-    queryFn: () => getPaymentForMembership(supabase, activeMembershipId!),
+    queryFn: async () => {
+      const result = await getPaymentForMembership(
+        supabase,
+        activeMembershipId!,
+      );
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMembershipId && !!activeMemberId,
     staleTime: FAST,
   });
 }
 
 export function useMyAttendance() {
-  const activeGymId = useMemberStore((state) => state.activeGymId);
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
   const { supabase } = useSupabaseClient();
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+  const activeGymId = useMemberStore((state) => state.activeGymId);
+
   return useQuery({
     queryKey: ["my-attendance", activeGymId, activeMemberId],
-    queryFn: () => getMyAttendance(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getMyAttendance(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId && !!activeMemberId,
     staleTime: FAST,
   });
@@ -211,38 +306,60 @@ export function useMyAttendance() {
 
 export function useTodayAttendanceStatus() {
   const { supabase } = useSupabaseClient();
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
   const activeGymId = useMemberStore((state) => state.activeGymId);
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
 
   return useQuery({
     queryKey: ["today-attendance-status", activeGymId, activeMemberId],
-    queryFn: () => getTodayAttendanceStatus(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getTodayAttendanceStatus(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId && !!activeMemberId,
     staleTime: FAST,
   });
 }
 
 export function useMemberAttendanceOverview() {
+  const { supabase } = useSupabaseClient();
   const activeMemberId = useMemberStore((state) => state.activeMemberId);
   const activeGymId = useMemberStore((state) => state.activeGymId);
-  const { supabase } = useSupabaseClient();
 
   return useQuery({
     queryKey: ["member-attendance-overview", activeMemberId, activeGymId],
-    queryFn: () =>
-      getMemberAttendanceOverview(supabase, activeMemberId!, activeGymId!),
+    queryFn: async () => {
+      const result = await getMemberAttendanceOverview(
+        supabase,
+        activeMemberId!,
+        activeGymId!,
+      );
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId && !!activeGymId,
     staleTime: FAST,
   });
 }
 
 export function useMyTrainingSessions() {
-  const activeGymId = useMemberStore((state) => state.activeGymId);
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
   const { supabase } = useSupabaseClient();
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+  const activeGymId = useMemberStore((state) => state.activeGymId);
+
   return useQuery({
     queryKey: ["my-training-sessions", activeGymId, activeMemberId],
-    queryFn: () => getMyTrainingSessions(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getMyTrainingSessions(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId && !!activeMemberId,
     staleTime: FAST,
   });
@@ -250,10 +367,17 @@ export function useMyTrainingSessions() {
 
 export function useTrainingSessionById(sessionId: string) {
   const { supabase } = useSupabaseClient();
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+
   return useQuery({
     queryKey: ["training-session", sessionId, activeMemberId],
-    queryFn: () => getTrainingSessionById(supabase, sessionId),
+    queryFn: async () => {
+      const result = await getTrainingSessionById(supabase, sessionId);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!sessionId && !!activeMemberId,
     staleTime: FAST,
   });
@@ -261,38 +385,60 @@ export function useTrainingSessionById(sessionId: string) {
 
 export function useMyUpcomingSessions() {
   const { supabase } = useSupabaseClient();
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
   const activeGymId = useMemberStore((state) => state.activeGymId);
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
 
   return useQuery({
     queryKey: ["my-upcoming-sessions", activeGymId, activeMemberId],
-    queryFn: () => getMyUpcomingSessions(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getMyUpcomingSessions(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId && !!activeMemberId,
     staleTime: FAST,
   });
 }
 
 export function useMyAssignedTrainers() {
-  const activeGymId = useMemberStore((state) => state.activeGymId);
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
   const { supabase } = useSupabaseClient();
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+  const activeGymId = useMemberStore((state) => state.activeGymId);
+
   return useQuery({
     queryKey: ["my-assigned-trainers", activeGymId, activeMemberId],
-    queryFn: () => getMyAssignedTrainers(supabase, activeGymId!),
+    queryFn: async () => {
+      const result = await getMyAssignedTrainers(supabase, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeGymId && !!activeMemberId,
     staleTime: SLOW,
   });
 }
 
 export function useMyMembershipDetails() {
+  const { supabase } = useSupabaseClient();
   const activeMemberId = useMemberStore((state) => state.activeMemberId);
   const activeGymId = useMemberStore((state) => state.activeGymId);
-  const { supabase } = useSupabaseClient();
 
   return useQuery({
     queryKey: ["my-membership-details", activeMemberId, activeGymId],
-    queryFn: () =>
-      getMyMembershipDetails(supabase, activeMemberId!, activeGymId!),
+    queryFn: async () => {
+      const result = await getMyMembershipDetails(
+        supabase,
+        activeMemberId!,
+        activeGymId!,
+      );
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId && !!activeGymId,
     staleTime: FAST,
   });
@@ -300,23 +446,36 @@ export function useMyMembershipDetails() {
 
 export function useMyMessages() {
   const { supabase } = useSupabaseClient();
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
 
   return useQuery({
     queryKey: ["my-messages", activeMemberId],
-    queryFn: () => getMyMessages(supabase),
-    staleTime: FAST,
+    queryFn: async () => {
+      const result = await getMyMessages(supabase);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId,
+    staleTime: FAST,
   });
 }
 
 export function useUnreadMessageCount() {
   const { supabase } = useSupabaseClient();
-  const activeMemberId = useMemberStore((s) => s.activeMemberId);
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+
   return useQuery({
     queryKey: ["unread-message-count", activeMemberId],
-    queryFn: () => getUnreadMessageCount(supabase),
-    staleTime: FAST,
+    queryFn: async () => {
+      const result = await getUnreadMessageCount(supabase);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
     enabled: !!activeMemberId,
+    staleTime: FAST,
   });
 }
