@@ -51,6 +51,8 @@ import { cn } from "@/lib/utils";
 import { useMemberAttendanceOverview } from "@/hooks/queries/member.query";
 import type { AttendanceHistoryRow } from "@/services/member.query";
 import { StatCard } from "@/components/StatCard";
+import { useMemberStore } from "@/stores/member.store";
+import { useRouter } from "next/navigation";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -287,9 +289,13 @@ function AttendancePageError({
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AttendancePage() {
+  const router = useRouter();
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+  const activeGymId = useMemberStore((state) => state.activeGymId);
+
   const {
     data: result,
-    isLoading,
+    isPending,
     isError,
     error,
     refetch,
@@ -424,7 +430,19 @@ export default function AttendancePage() {
   const pageSize = table.getState().pagination.pageSize;
   const pageCount = table.getPageCount();
 
-  if (isLoading) {
+  // No member/gym context yet — this is a disabled query, not a loading
+  // one. Must come before the isPending check or the skeleton spins
+  // forever, since a disabled query never leaves the pending state.
+  if (!activeMemberId || !activeGymId) {
+    return (
+      <AttendancePageError
+        message="You haven't been enrolled in a gym membership yet. Speak to the front desk to get started."
+        onRetry={() => router.push("/member/applications")} // or hide the button entirely
+      />
+    );
+  }
+
+  if (isPending) {
     return <AttendancePageSkeleton />;
   }
 

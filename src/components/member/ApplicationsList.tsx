@@ -688,7 +688,7 @@ export function ApplicationsList() {
   const [tab, setTab] = useState<DisplayStatus | "All">("All");
   const {
     data: response,
-    isLoading,
+    isPending,
     error,
     isError,
     refetch,
@@ -710,7 +710,7 @@ export function ApplicationsList() {
     return applications.filter((app) => getDisplayStatus(app) === tab);
   }, [applications, tab]);
 
-  if (isLoading) {
+  if (isPending) {
     return (
       <div className="space-y-6">
         <div className="border-b border-border">

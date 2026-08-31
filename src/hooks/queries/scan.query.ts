@@ -17,6 +17,12 @@ export function useMemberHomeState() {
     (state) => state.activeMembershipId,
   );
 
+  console.log({
+    activeMemberId,
+    activeGymId,
+    activeMembershipId,
+  });
+
   return useQuery({
     queryKey: [
       "member-home-state",
@@ -33,7 +39,7 @@ export function useMemberHomeState() {
         activeMembershipId!,
       ),
 
-    enabled: !!activeMemberId && !!activeGymId && !!activeMembershipId,
+    enabled: !!activeMemberId,
 
     staleTime: FAST,
   });

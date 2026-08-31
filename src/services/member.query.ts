@@ -1069,305 +1069,59 @@ function mapPaymentStatus(status: string): MemberPayment["status"] {
 export async function getMyMembershipDetails(
   supabase: TypedSupabaseClient,
   memberId: string,
-  gymId: string,
+  gymId?: string,
 ) {
-  const asOfDate = getTodayDateStr("Asia/Kolkata");
-
   /*
    * ------------------------------------------------------------
-   * Fetch all required data in parallel
+   * Single round trip — all the joins, aggregation, and the
+   * attendance RPC call happen inside Postgres now.
    * ------------------------------------------------------------
    */
-  const [
-    { data: memberships, error: membershipError },
-    { data: gym, error: gymError },
-    { data: trainerAssignment, error: trainerAssignmentError },
-    { data: payments, error: paymentsError },
-    { data: attendanceStats, error: attendanceError },
-  ] = await Promise.all([
-    /*
-     * ----------------------------------------------------------
-     * All memberships for this member in the current gym.
-     *
-     * Includes:
-     *   Active
-     *   Scheduled
-     *
-     * Excludes:
-     *   Cancelled
-     * ----------------------------------------------------------
-     */
-    supabase
-      .from("gym_memberships")
-      .select(
-        `
-        id,
-        status,
-        start_date,
-        end_date,
-        duration_months,
-        final_amount,
-        created_at,
-        plan:membership_plans (
-          id,
-          plan_name,
-          plan_category,
-          membership_duration,
-          selected_features,
-          custom_features
-        )
-      `,
-      )
-      .eq("member_id", memberId)
-      .eq("gym_id", gymId)
-      .neq("status", "Cancelled")
-      .order("start_date", { ascending: true }),
+  const { data, error } = await supabase.rpc("get_my_membership_details", {
+    p_member_id: memberId,
+    p_gym_id: gymId,
+  });
 
-    /*
-     * ----------------------------------------------------------
-     * Gym details
-     * ----------------------------------------------------------
-     */
-    supabase
-      .from("gyms")
-      .select("id, name, city, state")
-      .eq("id", gymId)
-      .single(),
-
-    /*
-     * ----------------------------------------------------------
-     * Active trainer assignment
-     * ----------------------------------------------------------
-     */
-    supabase
-      .from("trainer_assignments")
-      .select(
-        `
-        trainer:trainers (
-          id,
-          full_name,
-          photo_url
-        )
-      `,
-      )
-      .eq("gym_id", gymId)
-      .eq("member_id", memberId)
-      .eq("is_active", true)
-      .eq("is_primary", true)
-      .maybeSingle(),
-
-    /*
-     * ----------------------------------------------------------
-     * Latest payments
-     * ----------------------------------------------------------
-     */
-    supabase
-      .from("payments")
-      .select(
-        `
-        id,
-        amount,
-        payment_date,
-        method,
-        status,
-        gym_membership:gym_memberships (
-          duration_months,
-          plan:membership_plans (
-            plan_name
-          )
-        )
-      `,
-      )
-      .eq("gym_id", gymId)
-      .eq("member_id", memberId)
-      .order("payment_date", { ascending: false })
-      .limit(10),
-
-    /*
-     * ----------------------------------------------------------
-     * Attendance statistics
-     *
-     * ONE RPC now returns:
-     *
-     *   days_attended
-     *   total_days
-     *   attendance_rate
-     *   current_streak
-     *   longest_streak
-     *
-     * No attendance rows are transferred to Next.js.
-     * ----------------------------------------------------------
-     */
-    supabase.rpc("get_member_attendance_stats", {
-      p_member_ids: [memberId],
-      p_gym_id: gymId,
-      p_as_of: asOfDate,
-    }),
-  ]);
-
-  /*
-   * ------------------------------------------------------------
-   * Handle membership error
-   * ------------------------------------------------------------
-   */
-  if (membershipError || !memberships || memberships.length === 0) {
+  if (error) {
+    console.error("get_my_membership_details failed:", error.message);
     return {
       success: false as const,
-      error: membershipError?.message ?? "No membership found",
+      error: "RPC_ERROR",
+      message: error.message,
     };
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Log independent query errors
-   * ------------------------------------------------------------
-   */
-
-  if (gymError) {
-    console.error("Gym fetch failed:", gymError.message);
-  }
-
-  if (trainerAssignmentError) {
-    console.error(
-      "Trainer assignment fetch failed:",
-      trainerAssignmentError.message,
-    );
-  }
-
-  if (paymentsError) {
-    console.error("Payments fetch failed:", paymentsError.message);
-  }
-
-  if (attendanceError) {
-    console.error(
-      "get_member_attendance_stats failed:",
-      attendanceError.message,
-    );
-  }
-
-  /*
-   * ------------------------------------------------------------
-   * Determine CURRENT membership
-   * ------------------------------------------------------------
-   *
-   * First preference:
-   *   Active + currently within start/end date
-   *
-   * Second preference:
-   *   Any Active membership
-   *
-   * Scheduled memberships are never selected as current.
-   * ------------------------------------------------------------
-   */
-  const current =
-    memberships.find(
-      (m) =>
-        m.status === "Active" &&
-        m.start_date <= asOfDate &&
-        m.end_date >= asOfDate,
-    ) ?? memberships.find((m) => m.status === "Active");
-
-  if (!current) {
+  if (!data?.success) {
+    // NO_MEMBERSHIP | NO_ACTIVE_MEMBERSHIP
     return {
       success: false as const,
-      error: "No current active membership found",
+      error: (data?.error as string) ?? "UNKNOWN_ERROR",
+      message: data?.message as string | undefined,
     };
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Determine SCHEDULED membership
-   * ------------------------------------------------------------
-   *
-   * If multiple scheduled memberships exist, use the one
-   * starting soonest.
-   * ------------------------------------------------------------
-   */
-  const scheduledMembership =
-    memberships
-      .filter((m) => m.status === "Scheduled" && m.start_date > asOfDate)
-      .sort(
-        (a, b) =>
-          new Date(a.start_date).getTime() - new Date(b.start_date).getTime(),
-      )[0] ?? null;
+  const d = data.data;
+  const memberships = d.memberships ?? [];
+  const current = d.membership;
+  const scheduledMembership = d.scheduledMembership ?? null;
+  const payments = d.payments ?? [];
+  const asOfDate = d.asOfDate as string;
 
   /*
    * ------------------------------------------------------------
-   * Membership duration calculations
-   * ------------------------------------------------------------
-   */
-  const totalDays =
-    Math.round(
-      (new Date(current.end_date).getTime() -
-        new Date(current.start_date).getTime()) /
-        (1000 * 60 * 60 * 24),
-    ) + 1;
-
-  const usedDays = Math.min(
-    Math.max(
-      Math.round(
-        (new Date(asOfDate).getTime() -
-          new Date(current.start_date).getTime()) /
-          (1000 * 60 * 60 * 24),
-      ) + 1,
-      0,
-    ),
-    totalDays,
-  );
-
-  /*
-   * ------------------------------------------------------------
-   * Total verified payments
-   * ------------------------------------------------------------
-   */
-  const totalPayments = (payments ?? [])
-    .filter((p) => p.status === "Verified")
-    .reduce((sum, p) => sum + Number(p.amount), 0);
-
-  /*
-   * ------------------------------------------------------------
-   * Attendance statistics
-   * ------------------------------------------------------------
-   *
-   * Everything is calculated inside PostgreSQL.
-   *
-   * No:
-   *
-   *   .from("attendance")
-   *   .select("attendance_date")
-   *   computeStreak()
-   *
-   * is required anymore.
-   * ------------------------------------------------------------
-   */
-  const attendance = attendanceStats?.[0];
-
-  const presentDays = Number(attendance?.days_attended ?? 0);
-
-  const attendanceRate = Number(attendance?.attendance_rate ?? 0);
-
-  const currentStreak = Number(attendance?.current_streak ?? 0);
-
-  const longestStreak = Number(attendance?.longest_streak ?? 0);
-
-  /*
-   * ------------------------------------------------------------
-   * First membership / first verified payment
+   * Timeline — built here from `memberships` + `payments`,
+   * same logic as before, just fed by the RPC's single payload
+   * instead of a second set of queries.
    * ------------------------------------------------------------
    */
   const firstMembership = memberships[0];
 
-  const firstVerifiedPayment = [...(payments ?? [])]
-    .filter((p) => p.status === "Verified")
-    .sort((a, b) =>
+  const firstVerifiedPayment = [...payments]
+    .filter((p: any) => p.status === "Verified")
+    .sort((a: any, b: any) =>
       (a.payment_date ?? "").localeCompare(b.payment_date ?? ""),
     )[0];
 
-  /*
-   * ------------------------------------------------------------
-   * Membership timeline
-   * ------------------------------------------------------------
-   */
   const timeline: MembershipTimelineEvent[] = [
     {
       id: "started",
@@ -1388,7 +1142,7 @@ export async function getMyMembershipDetails(
         ]
       : []),
 
-    ...memberships.slice(1).map((m) => ({
+    ...memberships.slice(1).map((m: any) => ({
       id: `renewed-${m.id}`,
       label: "Plan Renewed",
       date: m.start_date,
@@ -1415,52 +1169,20 @@ export async function getMyMembershipDetails(
     },
   ];
 
-  /*
-   * ------------------------------------------------------------
-   * Return result
-   * ------------------------------------------------------------
-   */
   return {
     success: true as const,
 
     data: {
-      /*
-       * Current active membership
-       */
       membership: current,
-
-      /*
-       * Paid scheduled renewal, if any
-       */
       scheduledMembership,
+      gym: d.gym,
+      trainer: d.trainer,
+      totalDays: d.totalDays,
+      usedDays: d.usedDays,
+      totalPayments: Number(d.totalPayments),
 
-      /*
-       * Gym
-       */
-      gym,
-
-      /*
-       * Active trainer
-       */
-      trainer: trainerAssignment?.trainer ?? null,
-
-      /*
-       * Membership duration
-       */
-      totalDays,
-
-      usedDays,
-
-      /*
-       * Total verified payments
-       */
-      totalPayments,
-
-      /*
-       * Payment history
-       */
-      payments: (payments ?? []).map(
-        (p): MemberPayment => ({
+      payments: payments.map(
+        (p: any): MemberPayment => ({
           id: p.id,
           date: p.payment_date,
           amount: Number(p.amount),
@@ -1478,20 +1200,14 @@ export async function getMyMembershipDetails(
         }),
       ),
 
-      /*
-       * Membership timeline
-       */
       timeline,
 
-      /*
-       * Attendance statistics
-       */
       stats: {
-        totalVisits: presentDays,
-        presentDays,
-        attendanceRate,
-        currentStreak,
-        longestStreak,
+        totalVisits: d.stats.totalVisits,
+        presentDays: d.stats.presentDays,
+        attendanceRate: d.stats.attendanceRate,
+        currentStreak: d.stats.currentStreak,
+        longestStreak: d.stats.longestStreak,
       },
     },
   };

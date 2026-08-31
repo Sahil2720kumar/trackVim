@@ -635,7 +635,7 @@ function OnboardingCard({
       <div className="flex w-full max-w-xs flex-col gap-3">
         <Button asChild size="lg" className="w-full rounded-xl">
           <Link
-            href={isPending ? "/applications" : "/gyms/discover"}
+            href={isPending ? "/member/applications" : "/member/discover"}
             className="flex items-center justify-center gap-2"
           >
             {isPending ? (
@@ -653,7 +653,7 @@ function OnboardingCard({
           className="w-full rounded-xl"
         >
           <Link
-            href={isPending ? "/gyms/discover" : "/applications"}
+            href={isPending ? "/member/discover" : "/member/applications"}
             className="flex items-center justify-center gap-2"
           >
             {isPending ? (
@@ -1552,7 +1552,13 @@ export default function MemberHomeClient({
   const [scanResult, setScanResult] = useState<AttendanceResult | null>(null);
   const [scanException, setScanException] = useState<string | null>(null);
 
-  const { data: state, isLoading, isError, refetch } = useMemberHomeState();
+  const {
+    data: state,
+    isLoading,
+    isPending,
+    isError,
+    refetch,
+  } = useMemberHomeState();
 
   const openScanner = useCallback((mode: ScanMode) => {
     setScanMode(mode);
@@ -1625,7 +1631,7 @@ export default function MemberHomeClient({
 
   // Loading state — no data yet, show skeleton placeholders in place of
   // the cards that will eventually render.
-  if (isLoading) {
+  if (isPending) {
     return (
       <div className="min-h-screen bg-background">
         <div className="mx-auto max-w-[1400px] space-y-6 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">

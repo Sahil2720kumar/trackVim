@@ -2262,6 +2262,10 @@ export type Database = {
           total_days: number
         }[]
       }
+      get_my_membership_details: {
+        Args: { p_gym_id: string; p_member_id: string }
+        Returns: Json
+      }
       get_owner_dashboard_stats: {
         Args: { p_as_of?: string; p_gym_id: string }
         Returns: {
@@ -2312,6 +2316,14 @@ export type Database = {
           sessions_today: number
           status: string
           trainer_id: string
+        }[]
+      }
+      get_trainer_attendance_summary: {
+        Args: { p_as_of: string; p_gym_id: string; p_trainer_id: string }
+        Returns: {
+          attendance_rate_today: number
+          attendance_rate_yesterday: number
+          attendance_today_count: number
         }[]
       }
       gym_subscription_plan_for: {

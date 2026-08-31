@@ -331,6 +331,9 @@ export function useMemberAttendanceOverview() {
   return useQuery({
     queryKey: ["member-attendance-overview", activeMemberId, activeGymId],
     queryFn: async () => {
+      if (!activeMemberId || !activeGymId) {
+        throw new Error("No active gym membership to load attendance for.");
+      }
       const result = await getMemberAttendanceOverview(
         supabase,
         activeMemberId!,
@@ -354,7 +357,12 @@ export function useMyTrainingSessions() {
   return useQuery({
     queryKey: ["my-training-sessions", activeGymId, activeMemberId],
     queryFn: async () => {
-      const result = await getMyTrainingSessions(supabase, activeGymId!);
+      if (!activeGymId || !activeMemberId) {
+        // enabled:false doesn't stop manual refetch() — guard here too.
+        throw new Error("No active gym membership to load sessions for.");
+      }
+
+      const result = await getMyTrainingSessions(supabase, activeGymId);
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -429,10 +437,14 @@ export function useMyMembershipDetails() {
   return useQuery({
     queryKey: ["my-membership-details", activeMemberId, activeGymId],
     queryFn: async () => {
+      if (!activeMemberId || !activeGymId) {
+        throw new Error("NO_GYM_CONTEXT");
+      }
+
       const result = await getMyMembershipDetails(
         supabase,
-        activeMemberId!,
-        activeGymId!,
+        activeMemberId,
+        activeGymId,
       );
       if (!result.success) {
         throw new Error(result.error);

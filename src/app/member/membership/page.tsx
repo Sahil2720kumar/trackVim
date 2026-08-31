@@ -36,6 +36,7 @@ import { PaymentHistoryTable } from "@/components/member/membership/PaymentHisto
 import type { MembershipTimelineEvent } from "@/services/member.query";
 import { useMyMembershipDetails } from "@/hooks/queries/member.query";
 import { Button } from "@/components/ui/button";
+import { useMemberStore } from "@/stores/member.store";
 
 const FEATURE_ICONS: Record<string, React.ElementType> = {
   "Unlimited Gym Access": Dumbbell,
@@ -185,15 +186,33 @@ function CircularProgress({
 }
 
 export default function MembershipPage() {
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+  const activeGymId = useMemberStore((state) => state.activeGymId);
+
   const {
-    data: response,
-    isLoading,
+    data: membershipData,
+    isPending,
     error,
     isError,
     refetch,
   } = useMyMembershipDetails();
 
-  if (isLoading) {
+  if (!activeMemberId || !activeGymId) {
+    return (
+      <div className="flex flex-col items-center gap-4 px-4 py-16 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-accent flex items-center justify-center">
+          <Crown className="w-7 h-7 text-primary" />
+        </div>
+        <h2 className="text-lg font-semibold">No membership yet</h2>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          You haven't been enrolled in a gym membership. Speak to the front desk
+          to get started.
+        </p>
+      </div>
+    );
+  }
+
+  if (isPending) {
     return (
       <div className=" space-y-6 px-4 py-6">
         <div className="h-32 animate-pulse rounded-xl bg-muted" />
@@ -207,18 +226,69 @@ export default function MembershipPage() {
     );
   }
 
-  if (isError || !response) {
+  if (isError) {
+    const code = error instanceof Error ? error.message : undefined;
+
+    if (code === "NO_GYM_CONTEXT") {
+      return (
+        <div className="flex flex-col items-center gap-4 px-4 py-16 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-accent flex items-center justify-center">
+            <Crown className="w-7 h-7 text-primary" />
+          </div>
+          <h2 className="text-lg font-semibold">No membership yet</h2>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            You haven't been enrolled in a gym membership. Speak to the front
+            desk to get started.
+          </p>
+        </div>
+      );
+    }
+
+    if (code === "NO_MEMBERSHIP") {
+      return (
+        <div className="flex flex-col items-center gap-4 px-4 py-16 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-accent flex items-center justify-center">
+            <Crown className="w-7 h-7 text-primary" />
+          </div>
+          <h2 className="text-lg font-semibold">No membership yet</h2>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            You haven't been enrolled in a membership plan. Speak to the front
+            desk to get started.
+          </p>
+        </div>
+      );
+    }
+
+    if (code === "NO_ACTIVE_MEMBERSHIP") {
+      return (
+        <div className="flex flex-col items-center gap-4 px-4 py-16 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-accent flex items-center justify-center">
+            <Clock3 className="w-7 h-7 text-primary" />
+          </div>
+          <h2 className="text-lg font-semibold">No active membership</h2>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Your membership isn't active right now. Contact the front desk to
+            renew or activate a plan.
+          </p>
+        </div>
+      );
+    }
+
     return (
-      <div className=" flex  flex-col items-center gap-4 px-4 py-16 text-center">
+      <div className=" flex flex-col items-center gap-4 px-4 py-16 text-center">
         <h2 className="text-lg font-semibold">
           We couldn't load your membership
         </h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          {error ? error.message : "Something went wrong. Please try again."}
+          {code ?? "Something went wrong. Please try again."}
         </p>
         <Button onClick={() => refetch()}>Try again</Button>
       </div>
     );
+  }
+
+  if (!membershipData) {
+    return null;
   }
 
   const {
@@ -232,7 +302,7 @@ export default function MembershipPage() {
     payments,
     timeline,
     stats,
-  } = response;
+  } = membershipData;
 
   const remainingDays = totalDays - usedDays;
   const progressPct =

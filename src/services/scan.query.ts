@@ -113,8 +113,8 @@ function toMembershipView(row: any, daysRemaining?: number): MembershipView {
 export async function getMemberHomeState(
   supabase: TypedSupabaseClient,
   memberId: string,
-  activeGymId: string,
-  activeMembershipId: string,
+  activeGymId?: string,
+  activeMembershipId?: string,
 ): Promise<MemberHomeState> {
   // query Supabase
 

@@ -142,6 +142,7 @@ import {
   subscriptionPayments,
   systemSettings,
   genderEnum,
+  bloodGroupEnum,
 } from "./schema";
 
 // ============================================================================
@@ -701,10 +702,10 @@ export type UpdateTrainerInput = z.infer<typeof updateTrainerSchema>;
 // ============================================================================
 
 const memberRefinements = {
-  fullName: z.string().trim().min(1).max(200).optional().nullable(),
+  fullName: z.string().trim().min(1).max(200),
   contactPhone: optionalPhone,
   dateOfBirth: optionalDate,
-  gender: z.enum(genderEnum.enumValues).optional().nullable(),
+  gender: z.enum(genderEnum.enumValues),
   photoUrl: optionalUrl,
   invitedEmail: z
     .email()
@@ -734,8 +735,10 @@ const memberRefinements = {
   medicalConditions: z.string().trim().max(1000).optional().nullable(),
   allergies: z.string().trim().max(1000).optional().nullable(),
   // Enum overrides
-  gender: optionalString,
-  bloodGroup: optionalString,
+  bloodGroup: z.preprocess(
+    (value) => (value === "" ? null : value),
+    z.enum(bloodGroupEnum.enumValues).nullable().optional(),
+  ),
   occupation: optionalString,
   emergencyContactRelationship: optionalString,
   emergencyContactPhone: optionalPhone,

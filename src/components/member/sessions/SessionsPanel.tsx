@@ -46,6 +46,7 @@ import {
 import Link from "next/link";
 import { useMyTrainingSessions } from "@/hooks/queries/member.query";
 import { StatCard } from "@/components/StatCard";
+import { useMemberStore } from "@/stores/member.store";
 
 export type RawSessionStatus =
   | "Upcoming"
@@ -429,23 +430,28 @@ export function SessionsPanel() {
   const [sortBy, setSortBy] = useState<SortOption>("soonest");
   const [trainer, setTrainer] = useState("all");
 
+  const activeMemberId = useMemberStore((state) => state.activeMemberId);
+  const activeGymId = useMemberStore((state) => state.activeGymId);
+
   const {
     data: response,
-    isLoading,
+    isPending,
     isError,
     error,
     refetch,
   } = useMyTrainingSessions();
 
-  const sessions = response ? response : [];
+  const sessions = response ?? [];
 
   const upcoming = sessions.filter((s) => getDisplayStatus(s) === "Upcoming");
+
   const completed = sessions.filter((s) => getDisplayStatus(s) === "Completed");
 
   const exerciseCount = sessions.reduce(
     (sum, s) => sum + (s.session_exercises?.length ?? 0),
     0,
   );
+
   const nextSession = [...upcoming].sort((a, b) =>
     `${a.session_date}T${a.start_time}`.localeCompare(
       `${b.session_date}T${b.start_time}`,
@@ -482,6 +488,7 @@ export function SessionsPanel() {
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
+
       result = result.filter(
         (s) =>
           s.session_name.toLowerCase().includes(q) ||
@@ -492,50 +499,84 @@ export function SessionsPanel() {
       );
     }
 
-    const key = (s) => `${s.session_date}T${s.start_time}`;
-    const sorted = [...result].sort((a, b) => {
+    const getKey = (s: (typeof sessions)[number]) =>
+      `${s.session_date}T${s.start_time}`;
+
+    return [...result].sort((a, b) => {
       switch (sortBy) {
         case "soonest":
-          return key(a).localeCompare(key(b));
+          return getKey(a).localeCompare(getKey(b));
+
         case "latest":
-          return key(b).localeCompare(key(a));
+          return getKey(b).localeCompare(getKey(a));
+
         case "name":
           return a.session_name.localeCompare(b.session_name);
+
         case "trainer":
           return (a.trainers?.full_name ?? "").localeCompare(
             b.trainers?.full_name ?? "",
           );
+
         default:
           return 0;
       }
     });
-
-    return sorted;
   }, [sessions, activeTab, trainer, search, sortBy]);
 
   const activeFilterCount =
     (sortBy !== "soonest" ? 1 : 0) + (trainer !== "all" ? 1 : 0);
+
   const resetFilters = () => {
     setSortBy("soonest");
     setTrainer("all");
   };
+
   const resetAll = () => {
     resetFilters();
     setSearch("");
     setActiveTab("All");
   };
 
-  if (isLoading) {
+  /*
+   * No member/gym context.
+   *
+   * The query is disabled in this situation, so don't show
+   * the loading skeleton.
+   */
+  if (!activeMemberId || !activeGymId) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-16 text-center">
+        <h2 className="text-lg font-semibold">
+          You don't have a gym membership yet
+        </h2>
+
+        <p className="max-w-sm text-sm text-muted-foreground">
+          Please contact the gym's front desk to complete your membership
+          enrollment and access your training sessions.
+        </p>
+
+        <Button onClick={() => refetch()}>Try again</Button>
+      </div>
+    );
+  }
+
+  /*
+   * Query is actually running.
+   */
+  if (isPending) {
     return (
       <>
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-24 animate-pulse rounded-lg bg-muted" />
           ))}
         </div>
-        <div className="flex flex-col gap-6 mt-6">
+
+        <div className="mt-6 flex flex-col gap-6">
           <div className="flex flex-col gap-3">
             <div className="h-14 animate-pulse rounded-lg bg-muted" />
+
             <div className="flex gap-2">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div
@@ -545,6 +586,7 @@ export function SessionsPanel() {
               ))}
             </div>
           </div>
+
           <div className="flex flex-col gap-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="h-20 animate-pulse rounded-lg bg-muted" />
@@ -555,22 +597,26 @@ export function SessionsPanel() {
     );
   }
 
-  // Error state — covers both a network/query-level failure (isError)
-  // and a request that resolved but reported success: false.
-  if (isError || !response) {
+  /*
+   * Query failed.
+   */
+  if (isError) {
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
         <h2 className="text-lg font-semibold">
           We couldn't load your sessions
         </h2>
+
         <p className="max-w-sm text-sm text-muted-foreground">
-          {error ? error.message : "Something went wrong. Please try again."}
+          {error instanceof Error
+            ? error.message
+            : "Something went wrong. Please try again."}
         </p>
+
         <Button onClick={() => refetch()}>Try again</Button>
       </div>
     );
   }
-
   return (
     <>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">

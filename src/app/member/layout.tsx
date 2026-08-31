@@ -27,6 +27,8 @@ export default function MemberLayout({ children }: MemberLayoutProps) {
     (state) => state.setActiveMemberContext,
   );
 
+  const setActiveMember = useMemberStore((state) => state.setActiveMember);
+
   const setMemberships = useMemberStore((state) => state.setMemberships);
 
   const setGyms = useMemberStore((state) => state.setGyms);
@@ -44,20 +46,22 @@ export default function MemberLayout({ children }: MemberLayoutProps) {
 
   useEffect(() => {
     if (!user) return;
-    if (hasInitializedContext.current) return;
+
+    setMemberships(user.memberships);
+    setGyms(user.gyms);
 
     const firstMembership = user.memberships[0];
 
-    if (!firstMembership) return;
-
-    setActiveMemberContext(
-      user.memberId,
-      firstMembership.gymId,
-      firstMembership.id,
-    );
-
-    hasInitializedContext.current = true;
-  }, [user, setActiveMemberContext]);
+    if (firstMembership) {
+      setActiveMemberContext(
+        user.memberId,
+        firstMembership.gymId,
+        firstMembership.id,
+      );
+    } else {
+      setActiveMember(user.memberId);
+    }
+  }, [user, setMemberships, setGyms, setActiveMember, setActiveMemberContext]);
 
   return (
     <div className="flex min-h-screen bg-background">

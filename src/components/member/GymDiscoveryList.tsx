@@ -538,7 +538,7 @@ export function GymDiscoveryList() {
 
   const {
     data: response,
-    isLoading,
+    isPending,
     error,
     isError,
     refetch,
@@ -636,7 +636,7 @@ export function GymDiscoveryList() {
 
   // Loading state — skeleton placeholders shaped like the header, search
   // bar, filter chips, and gym cards that render once data arrives.
-  if (isLoading) {
+  if (isPending) {
     return (
       <>
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
