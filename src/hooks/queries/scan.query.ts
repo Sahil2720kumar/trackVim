@@ -17,12 +17,6 @@ export function useMemberHomeState() {
     (state) => state.activeMembershipId,
   );
 
-  console.log({
-    activeMemberId,
-    activeGymId,
-    activeMembershipId,
-  });
-
   return useQuery({
     queryKey: [
       "member-home-state",

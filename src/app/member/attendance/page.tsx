@@ -257,10 +257,14 @@ function AttendancePageSkeleton() {
 // ─── Error state ────────────────────────────────────────────────────────────
 
 function AttendancePageError({
+  title = "Couldn't load your attendance",
   message,
+  buttonLabel = "Try again",
   onRetry,
 }: {
+  title?: string;
   message: string;
+  buttonLabel?: string;
   onRetry: () => void;
 }) {
   return (
@@ -271,14 +275,14 @@ function AttendancePageError({
             <AlertTriangle className="w-8 h-8 text-red-500" />
           </div>
           <h3 className="text-lg font-semibold text-foreground mb-2">
-            Couldn't load your attendance
+            {title}
           </h3>
           <p className="text-sm text-muted-foreground max-w-sm mb-6 leading-relaxed">
             {message}
           </p>
           <Button onClick={onRetry} className="gap-2">
-            <RefreshCw className="w-4 h-4" />
-            Try again
+            {buttonLabel === "Try again" && <RefreshCw className="w-4 h-4" />}
+            {buttonLabel}
           </Button>
         </div>
       </div>
@@ -436,8 +440,10 @@ export default function AttendancePage() {
   if (!activeMemberId || !activeGymId) {
     return (
       <AttendancePageError
+        title="No active enrollment application"
         message="You haven't been enrolled in a gym membership yet. Speak to the front desk to get started."
-        onRetry={() => router.push("/member/applications")} // or hide the button entirely
+        buttonLabel="View my applications"
+        onRetry={() => router.push("/member/applications")}
       />
     );
   }

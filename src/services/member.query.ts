@@ -1114,8 +1114,7 @@ export async function getMyMembershipDetails(
    * instead of a second set of queries.
    * ------------------------------------------------------------
    */
-  const firstMembership = memberships[0];
-
+  const firstMembership = memberships[0] ?? current;
   const firstVerifiedPayment = [...payments]
     .filter((p: any) => p.status === "Verified")
     .sort((a: any, b: any) =>
