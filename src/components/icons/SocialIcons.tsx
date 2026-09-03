@@ -4,6 +4,7 @@ export function InstagramIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
+      aria-hidden="true"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -22,6 +23,7 @@ export function LinkedInIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
+      aria-hidden="true"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -40,6 +42,7 @@ export function YouTubeIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
+      aria-hidden="true"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

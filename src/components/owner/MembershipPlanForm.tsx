@@ -240,6 +240,13 @@ export default function MembershipPlanForm({
     );
   };
 
+  // When the owner picks "Custom", show the actual month count in
+  // the live preview instead of the raw "Custom" label.
+  const displayDuration =
+    membershipDuration === "Custom"
+      ? `${durationMonths ?? 0} Month(s)`
+      : membershipDuration;
+
   // Completion progress
   const allFeatures = [...selectedFeatures, ...customFeatures];
   const completionChecks = [
@@ -756,7 +763,7 @@ export default function MembershipPlanForm({
               <p className="text-2xl font-bold text-foreground">
                 ₹{planPrice || "0"}{" "}
                 <span className="text-sm text-muted-foreground">
-                  /{membershipDuration}
+                  /{displayDuration}
                 </span>
               </p>
               {joiningFee && parseInt(joiningFee) > 0 && (
@@ -771,7 +778,7 @@ export default function MembershipPlanForm({
                 {planCategory}
               </Badge>
               <Badge variant="secondary" className="text-xs">
-                {membershipDuration}
+                {displayDuration}
               </Badge>
             </div>
 

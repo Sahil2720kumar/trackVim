@@ -128,6 +128,13 @@ export default function PlanDetailsContent({
 
   const planColor = plan.plan_color || "#8b5cf6";
 
+  // When the owner chose "Custom" duration, show the actual month count
+  // instead of the raw "Custom" label.
+  const displayDuration =
+    plan.membership_duration === "Custom"
+      ? `${plan.duration_months} Month(s)`
+      : plan.membership_duration;
+
   const statusBadgeVariant =
     plan.status === "Active"
       ? "default"
@@ -226,7 +233,7 @@ export default function PlanDetailsContent({
                   ₹{plan.plan_price}
                 </p>
                 <span className="text-xs text-muted-foreground">
-                  / {plan.membership_duration}
+                  / {displayDuration}
                 </span>
               </div>
               <div className="p-4 rounded-xl border border-border bg-card">
@@ -270,7 +277,7 @@ export default function PlanDetailsContent({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <SummaryRow
                 label="Membership Duration"
-                value={plan.membership_duration}
+                value={displayDuration}
               />
               <SummaryRow
                 label="Duration in Months"
@@ -397,7 +404,7 @@ export default function PlanDetailsContent({
                   <p className="text-2xl font-bold text-foreground">
                     ₹{plan.plan_price}{" "}
                     <span className="text-sm text-muted-foreground">
-                      / {plan.membership_duration}
+                      / {displayDuration}
                     </span>
                   </p>
                   {plan.joining_fee && Number(plan.joining_fee) > 0 && (
@@ -412,7 +419,7 @@ export default function PlanDetailsContent({
                     {plan.plan_category || "Standard"}
                   </Badge>
                   <Badge variant="secondary" className="text-xs">
-                    {plan.membership_duration}
+                    {displayDuration}
                   </Badge>
                 </div>
               </div>
