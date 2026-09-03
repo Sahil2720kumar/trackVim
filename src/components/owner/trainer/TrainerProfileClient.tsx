@@ -64,6 +64,11 @@ import {
 import { getInitials } from "@/lib/utils";
 import { type trainerStatusEnum } from "@/db/schema";
 import { ConfirmDialog, useConfirmDialog } from "@/components/Confirmdialog";
+import {
+  InstagramIcon,
+  LinkedInIcon,
+  YouTubeIcon,
+} from "@/components/icons/SocialIcons";
 
 export type TrainerStatus = (typeof trainerStatusEnum.enumValues)[number];
 
@@ -654,21 +659,21 @@ export function TrainerProfileClient({
                   <div className="space-y-3">
                     {trainer.instagram && (
                       <InfoRow
-                        // icon={Instagram}
+                        icon={InstagramIcon}
                         label="Instagram"
                         value={trainer.instagram}
                       />
                     )}
                     {trainer.linkedin && (
                       <InfoRow
-                        // icon={Linkedin}
+                        icon={LinkedInIcon}
                         label="LinkedIn"
                         value={trainer.linkedin}
                       />
                     )}
                     {trainer.youtube && (
                       <InfoRow
-                        // icon={Youtube}
+                        icon={YouTubeIcon}
                         label="YouTube"
                         value={trainer.youtube}
                       />

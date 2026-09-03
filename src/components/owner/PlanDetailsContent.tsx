@@ -69,7 +69,9 @@ function PlanDetailsError({
         <AlertCircle className="w-6 h-6" />
       </div>
       <div>
-        <h3 className="text-lg font-semibold text-foreground">Failed to load plan details</h3>
+        <h3 className="text-lg font-semibold text-foreground">
+          Failed to load plan details
+        </h3>
         <p className="text-sm text-muted-foreground mt-1 max-w-md">{message}</p>
       </div>
       <div className="flex items-center gap-3 mt-2">
@@ -113,8 +115,12 @@ export default function PlanDetailsContent({
     );
   }
 
-  const selectedFeatures = Array.isArray(plan.selected_features) ? plan.selected_features : [];
-  const customFeatures = Array.isArray(plan.custom_features) ? plan.custom_features : [];
+  const selectedFeatures = Array.isArray(plan.selected_features)
+    ? plan.selected_features
+    : [];
+  const customFeatures = Array.isArray(plan.custom_features)
+    ? plan.custom_features
+    : [];
   const allFeatures = [...selectedFeatures, ...customFeatures];
 
   const SelectedIcon =
@@ -126,8 +132,8 @@ export default function PlanDetailsContent({
     plan.status === "Active"
       ? "default"
       : plan.status === "Draft"
-      ? "secondary"
-      : "outline";
+        ? "secondary"
+        : "outline";
 
   return (
     <div className="space-y-6">
@@ -159,7 +165,8 @@ export default function PlanDetailsContent({
                 )}
               </div>
               <p className="text-xs sm:text-sm text-muted-foreground truncate mt-0.5">
-                {plan.short_description || "Detailed overview of this gym membership plan."}
+                {plan.short_description ||
+                  "Detailed overview of this gym membership plan."}
               </p>
             </div>
           </div>
@@ -184,17 +191,27 @@ export default function PlanDetailsContent({
           <SectionCard title="Basic Information" icon={Package}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div className="space-y-1">
-                <span className="text-xs font-medium text-muted-foreground uppercase">Plan Name</span>
+                <span className="text-xs font-medium text-muted-foreground uppercase">
+                  Plan Name
+                </span>
                 <p className="font-medium text-foreground">{plan.plan_name}</p>
               </div>
               <div className="space-y-1">
-                <span className="text-xs font-medium text-muted-foreground uppercase">Category</span>
-                <p className="font-medium text-foreground">{plan.plan_category || "Standard"}</p>
+                <span className="text-xs font-medium text-muted-foreground uppercase">
+                  Category
+                </span>
+                <p className="font-medium text-foreground">
+                  {plan.plan_category || "Standard"}
+                </p>
               </div>
             </div>
             <div className="space-y-1 pt-2 border-t border-border">
-              <span className="text-xs font-medium text-muted-foreground uppercase">Description</span>
-              <p className="text-sm text-foreground">{plan.short_description}</p>
+              <span className="text-xs font-medium text-muted-foreground uppercase">
+                Description
+              </span>
+              <p className="text-sm text-foreground">
+                {plan.short_description}
+              </p>
             </div>
           </SectionCard>
 
@@ -202,24 +219,43 @@ export default function PlanDetailsContent({
           <SectionCard title="Pricing & Fees" icon={IndianRupee}>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="p-4 rounded-xl border border-border bg-card">
-                <span className="text-xs font-medium text-muted-foreground">Plan Price</span>
-                <p className="text-2xl font-bold text-foreground mt-1">₹{plan.plan_price}</p>
-                <span className="text-xs text-muted-foreground">/ {plan.membership_duration}</span>
+                <span className="text-xs font-medium text-muted-foreground">
+                  Plan Price
+                </span>
+                <p className="text-2xl font-bold text-foreground mt-1">
+                  ₹{plan.plan_price}
+                </p>
+                <span className="text-xs text-muted-foreground">
+                  / {plan.membership_duration}
+                </span>
               </div>
               <div className="p-4 rounded-xl border border-border bg-card">
-                <span className="text-xs font-medium text-muted-foreground">Joining Fee</span>
-                <p className="text-xl font-bold text-foreground mt-1">₹{plan.joining_fee ?? 0}</p>
+                <span className="text-xs font-medium text-muted-foreground">
+                  Joining Fee
+                </span>
+                <p className="text-xl font-bold text-foreground mt-1">
+                  ₹{plan.joining_fee ?? 0}
+                </p>
                 <span className="text-xs text-muted-foreground">One-time</span>
               </div>
               <div className="p-4 rounded-xl border border-border bg-card">
-                <span className="text-xs font-medium text-muted-foreground">Security Deposit</span>
-                <p className="text-xl font-bold text-foreground mt-1">₹{plan.security_deposit ?? 0}</p>
-                <span className="text-xs text-muted-foreground">Refundable</span>
+                <span className="text-xs font-medium text-muted-foreground">
+                  Security Deposit
+                </span>
+                <p className="text-xl font-bold text-foreground mt-1">
+                  ₹{plan.security_deposit ?? 0}
+                </p>
+                <span className="text-xs text-muted-foreground">
+                  Refundable
+                </span>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-sm">
-              <SummaryRow label="Pricing Type" value={plan.pricing_type || "Recurring"} />
+              <SummaryRow
+                label="Pricing Type"
+                value={plan.pricing_type || "Recurring"}
+              />
               {plan.discount_type && plan.discount_value && (
                 <SummaryRow
                   label="Discount Available"
@@ -232,15 +268,29 @@ export default function PlanDetailsContent({
           {/* Duration & Rules */}
           <SectionCard title="Duration & Freeze Policy" icon={Calendar}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <SummaryRow label="Membership Duration" value={plan.membership_duration} />
-              <SummaryRow label="Duration in Months" value={`${plan.duration_months} Month(s)`} />
-              <SummaryRow label="Validity Starts" value={plan.validity_starts || "From Joining Date"} />
-              <SummaryRow label="Grace Period" value={`${plan.grace_period_days ?? 0} Days`} />
+              <SummaryRow
+                label="Membership Duration"
+                value={plan.membership_duration}
+              />
+              <SummaryRow
+                label="Duration in Months"
+                value={`${plan.duration_months} Month(s)`}
+              />
+              <SummaryRow
+                label="Validity Starts"
+                value={plan.validity_starts || "From Joining Date"}
+              />
+              <SummaryRow
+                label="Grace Period"
+                value={`${plan.grace_period_days ?? 0} Days`}
+              />
             </div>
 
             <div className="pt-2 border-t border-border flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-foreground">Membership Freeze</p>
+                <p className="text-sm font-medium text-foreground">
+                  Membership Freeze
+                </p>
                 <p className="text-xs text-muted-foreground">
                   {plan.allow_freeze
                     ? `Members can pause up to ${plan.max_freeze_days ?? 0} days`
@@ -257,10 +307,14 @@ export default function PlanDetailsContent({
           <SectionCard
             title="Included Features"
             icon={CheckCircle2}
-            badge={<Badge variant="secondary">{allFeatures.length} Total</Badge>}
+            badge={
+              <Badge variant="secondary">{allFeatures.length} Total</Badge>
+            }
           >
             {allFeatures.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No specific features listed.</p>
+              <p className="text-sm text-muted-foreground">
+                No specific features listed.
+              </p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {allFeatures.map((feature) => (
@@ -285,12 +339,23 @@ export default function PlanDetailsContent({
               />
               <SummaryRow
                 label="Max Active Members"
-                value={plan.max_active_members ? `${plan.max_active_members} members` : "Unlimited"}
+                value={
+                  plan.max_active_members
+                    ? `${plan.max_active_members} members`
+                    : "Unlimited"
+                }
               />
-              <SummaryRow label="Enrollment Mode" value={plan.enrollment_mode || "Open"} />
+              <SummaryRow
+                label="Enrollment Mode"
+                value={plan.enrollment_mode || "Open"}
+              />
               <SummaryRow
                 label="Cancellation Policy"
-                value={plan.cancellation_allowed ? "Allowed before expiry" : "Not allowed"}
+                value={
+                  plan.cancellation_allowed
+                    ? "Allowed before expiry"
+                    : "Not allowed"
+                }
               />
             </div>
           </SectionCard>
@@ -319,7 +384,9 @@ export default function PlanDetailsContent({
                     <SelectedIcon className="w-6 h-6" />
                   </div>
                   <div className="min-w-0">
-                    {plan.is_featured && <Badge className="text-xs mb-1">Featured</Badge>}
+                    {plan.is_featured && (
+                      <Badge className="text-xs mb-1">Featured</Badge>
+                    )}
                     <h4 className="font-semibold text-foreground truncate">
                       {plan.plan_name}
                     </h4>
@@ -329,7 +396,9 @@ export default function PlanDetailsContent({
                 <div className="space-y-1">
                   <p className="text-2xl font-bold text-foreground">
                     ₹{plan.plan_price}{" "}
-                    <span className="text-sm text-muted-foreground">/Month</span>
+                    <span className="text-sm text-muted-foreground">
+                      / {plan.membership_duration}
+                    </span>
                   </p>
                   {plan.joining_fee && Number(plan.joining_fee) > 0 && (
                     <p className="text-xs text-muted-foreground">
@@ -351,7 +420,9 @@ export default function PlanDetailsContent({
 
             {/* Quick Actions */}
             <div className="p-4 rounded-2xl border border-border bg-card space-y-3">
-              <h4 className="font-semibold text-sm text-foreground">Quick Actions</h4>
+              <h4 className="font-semibold text-sm text-foreground">
+                Quick Actions
+              </h4>
               <Button
                 className={`w-full ${bigSquareButton}`}
                 onClick={() => router.push(`/owner/plans/${planId}/edit`)}

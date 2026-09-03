@@ -242,6 +242,9 @@ export default function SettingsForm({
       reset(data);
       logo.clear();
       paymentQr.clear();
+      if (result.data?.galleryUrls) {
+        setExistingGalleryUrls(result.data.galleryUrls);
+      }
       gallery.clear();
     } catch (error) {
       console.error("Error saving gym settings:", error);

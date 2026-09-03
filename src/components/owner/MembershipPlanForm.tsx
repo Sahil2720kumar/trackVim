@@ -95,9 +95,7 @@ const defaultValues: Partial<CreateMembershipPlanInput> = {
     "Workout Plan",
     "Diet Plan",
   ],
-  customFeatures: [
-    "Nutrition Consultation",
-  ],
+  customFeatures: ["Nutrition Consultation"],
   minimumAge: 18,
   maximumAge: 60,
   maxActiveMembers: 200,
@@ -109,7 +107,9 @@ const defaultValues: Partial<CreateMembershipPlanInput> = {
   additionalNotes: "",
 };
 
-function mapPlanToFormValues(plan: PlanDetail): Partial<CreateMembershipPlanInput> {
+function mapPlanToFormValues(
+  plan: PlanDetail,
+): Partial<CreateMembershipPlanInput> {
   return {
     planName: plan.plan_name ?? "",
     shortDescription: plan.short_description ?? "",
@@ -118,18 +118,24 @@ function mapPlanToFormValues(plan: PlanDetail): Partial<CreateMembershipPlanInpu
     planIcon: plan.plan_icon ?? "Crown",
     planPrice: plan.plan_price != null ? String(plan.plan_price) : "0",
     joiningFee: plan.joining_fee != null ? String(plan.joining_fee) : "0",
-    securityDeposit: plan.security_deposit != null ? String(plan.security_deposit) : "0",
+    securityDeposit:
+      plan.security_deposit != null ? String(plan.security_deposit) : "0",
     pricingType: plan.pricing_type ?? "Recurring",
     discountType: plan.discount_type ?? undefined,
-    discountValue: plan.discount_value != null ? String(plan.discount_value) : "",
+    discountValue:
+      plan.discount_value != null ? String(plan.discount_value) : "",
     membershipDuration: plan.membership_duration ?? "1 Month",
     durationMonths: plan.duration_months ?? 1,
     validityStarts: plan.validity_starts ?? "From Joining Date",
     gracePeriodDays: plan.grace_period_days ?? 0,
     allowFreeze: plan.allow_freeze ?? false,
     maxFreezeDays: plan.max_freeze_days ?? 0,
-    selectedFeatures: Array.isArray(plan.selected_features) ? plan.selected_features : [],
-    customFeatures: Array.isArray(plan.custom_features) ? plan.custom_features : [],
+    selectedFeatures: Array.isArray(plan.selected_features)
+      ? plan.selected_features
+      : [],
+    customFeatures: Array.isArray(plan.custom_features)
+      ? plan.custom_features
+      : [],
     minimumAge: plan.minimum_age ?? 14,
     maximumAge: plan.maximum_age ?? 80,
     maxActiveMembers: plan.max_active_members ?? undefined,
@@ -159,7 +165,9 @@ export default function MembershipPlanForm({
   const [isPending, startTransition] = useTransition();
   const [customFeatureInput, setCustomFeatureInput] = useState("");
 
-  const formDefaults = initialData ? mapPlanToFormValues(initialData) : defaultValues;
+  const formDefaults = initialData
+    ? mapPlanToFormValues(initialData)
+    : defaultValues;
 
   const {
     register,
@@ -260,14 +268,26 @@ export default function MembershipPlanForm({
           const result = await updateMembershipPlanAction(planId, {
             planName: data.planName,
             shortDescription: data.shortDescription,
+            planCategory: (data.planCategory as any) ?? null,
+            planColor: data.planColor ?? null,
+            planIcon: data.planIcon ?? null,
             planPrice: Number(data.planPrice),
             joiningFee: Number(data.joiningFee ?? 0),
+            discountType: (data.discountType as any) ?? null,
+            discountValue:
+              data.discountValue != null && data.discountValue !== ""
+                ? Number(data.discountValue)
+                : null,
             membershipDuration: data.membershipDuration,
             durationMonths: data.durationMonths,
+            gracePeriodDays: Number(data.gracePeriodDays ?? 0),
             status: data.status as "Active" | "Draft" | "Hidden",
             selectedFeatures: data.selectedFeatures ?? [],
             customFeatures: data.customFeatures ?? [],
+            minimumAge: Number(data.minimumAge ?? 14),
+            maximumAge: Number(data.maximumAge ?? 80),
             enrollmentMode: (data.enrollmentMode as any) ?? "Open",
+            cancellationAllowed: data.cancellationAllowed ?? true,
             isFeatured: data.isFeatured ?? false,
             additionalNotes: data.additionalNotes ?? "",
             allowFreeze: data.allowFreeze ?? false,
@@ -735,7 +755,9 @@ export default function MembershipPlanForm({
             <div className="space-y-1">
               <p className="text-2xl font-bold text-foreground">
                 ₹{planPrice || "0"}{" "}
-                <span className="text-sm text-muted-foreground">/Month</span>
+                <span className="text-sm text-muted-foreground">
+                  /{membershipDuration}
+                </span>
               </p>
               {joiningFee && parseInt(joiningFee) > 0 && (
                 <p className="text-xs text-muted-foreground">

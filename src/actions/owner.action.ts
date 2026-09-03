@@ -293,7 +293,7 @@ export async function updateGymSettingsAction(
     gallery?: File[] | null;
     existingGalleryUrls?: string[];
   },
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; galleryUrls?: string[] }>> {
   // 1. Auth
   const { userId } = await auth();
   if (!userId) {
@@ -467,10 +467,14 @@ export async function updateGymSettingsAction(
 
   // 6b. Sync gym_photos table
   if (existingGalleryUrls !== undefined || newGalleryUrls.length > 0) {
-    const { data: currentPhotos } = await supabase
+    const { data: currentPhotos, error: fetchPhotosError } = await supabase
       .from("gym_photos")
       .select("id, photo_url")
       .eq("gym_id", gymId);
+
+    if (fetchPhotosError) {
+      return { success: false, error: fetchPhotosError.message };
+    }
 
     if (
       existingGalleryUrls !== undefined &&
@@ -483,7 +487,14 @@ export async function updateGymSettingsAction(
         .map((p) => p.id);
 
       if (idsToDelete.length > 0) {
-        await supabase.from("gym_photos").delete().in("id", idsToDelete);
+        const { error: deletePhotosError } = await supabase
+          .from("gym_photos")
+          .delete()
+          .in("id", idsToDelete);
+
+        if (deletePhotosError) {
+          return { success: false, error: deletePhotosError.message };
+        }
       }
     }
 
@@ -498,7 +509,13 @@ export async function updateGymSettingsAction(
         is_cover: remainingCount === 0 && index === 0,
         sort_order: remainingCount + index,
       }));
-      await supabase.from("gym_photos").insert(newPhotoRows);
+      const { error: insertPhotosError } = await supabase
+        .from("gym_photos")
+        .insert(newPhotoRows);
+
+      if (insertPhotosError) {
+        return { success: false, error: insertPhotosError.message };
+      }
     }
   }
 
@@ -519,7 +536,7 @@ export async function updateGymSettingsAction(
   }
 
   revalidatePath("/owner/settings");
-  return { success: true, data: { id: gymId } };
+  return { success: true, data: { id: gymId, galleryUrls: finalGalleryUrls } };
 }
 
 /**
@@ -742,10 +759,19 @@ export async function updateMembershipPlanAction(
   payload: Partial<{
     planName: string;
     shortDescription: string;
+    planCategory: string | null;
+    planColor: string | null;
+    planIcon: string | null;
     planPrice: number;
     durationMonths: number;
     membershipDuration: string;
     joiningFee: number;
+    discountType: string | null;
+    discountValue: number | null;
+    gracePeriodDays: number;
+    minimumAge: number;
+    maximumAge: number;
+    cancellationAllowed: boolean;
     status: "Active" | "Draft" | "Hidden";
     selectedFeatures: string[];
     customFeatures: string[];
@@ -765,6 +791,12 @@ export async function updateMembershipPlanAction(
   if (payload.planName !== undefined) update.plan_name = payload.planName;
   if (payload.shortDescription !== undefined)
     update.short_description = payload.shortDescription;
+  if (payload.planCategory !== undefined)
+    update.plan_category = payload.planCategory;
+  if (payload.planColor !== undefined)
+    update.plan_color = payload.planColor;
+  if (payload.planIcon !== undefined)
+    update.plan_icon = payload.planIcon;
   if (payload.planPrice !== undefined)
     update.plan_price = payload.planPrice.toString();
   if (payload.durationMonths !== undefined)
@@ -773,6 +805,19 @@ export async function updateMembershipPlanAction(
     update.membership_duration = payload.membershipDuration;
   if (payload.joiningFee !== undefined)
     update.joining_fee = payload.joiningFee.toString();
+  if (payload.discountType !== undefined)
+    update.discount_type = payload.discountType;
+  if (payload.discountValue !== undefined)
+    update.discount_value =
+      payload.discountValue !== null ? payload.discountValue.toString() : null;
+  if (payload.gracePeriodDays !== undefined)
+    update.grace_period_days = payload.gracePeriodDays;
+  if (payload.minimumAge !== undefined)
+    update.minimum_age = payload.minimumAge;
+  if (payload.maximumAge !== undefined)
+    update.maximum_age = payload.maximumAge;
+  if (payload.cancellationAllowed !== undefined)
+    update.cancellation_allowed = payload.cancellationAllowed;
   if (payload.status !== undefined) update.status = payload.status;
   if (payload.selectedFeatures !== undefined)
     update.selected_features = payload.selectedFeatures;
