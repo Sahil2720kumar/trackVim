@@ -2021,6 +2021,75 @@ export type Database = {
         Returns: undefined
       }
       check_in_or_out: { Args: { p_token: string }; Returns: Json }
+      check_member_email_conflict: {
+        Args: { p_email: string }
+        Returns: {
+          conflict_type: string
+          member_id: string
+        }[]
+      }
+      check_trainer_email_conflict: {
+        Args: { p_email: string; p_gym_id: string }
+        Returns: {
+          conflict_type: string
+          trainer_id: string
+          user_id: string
+        }[]
+      }
+      create_gym: {
+        Args: {
+          p_address_line1?: string
+          p_address_line2?: string
+          p_amenities?: Json
+          p_billing_address?: string
+          p_business_email?: string
+          p_business_name?: string
+          p_business_phone?: string
+          p_city?: string
+          p_clerk_id: string
+          p_code: string
+          p_contact_email?: string
+          p_contact_phone?: string
+          p_country?: string
+          p_equipment?: Json
+          p_facility_notes?: string
+          p_gallery_urls?: string[]
+          p_gst_registered?: boolean
+          p_gst_state?: string
+          p_gstin?: string
+          p_gym_description?: string
+          p_gym_short_name?: string
+          p_has_locker_room?: boolean
+          p_has_sauna_room?: boolean
+          p_has_shower_room?: boolean
+          p_has_steam_room?: boolean
+          p_has_washroom?: boolean
+          p_legal_business_name?: string
+          p_locker_room_count?: number
+          p_logo_url?: string
+          p_name: string
+          p_number_of_floors?: number
+          p_number_of_rooms?: number
+          p_owner_name: string
+          p_payment_qr_url?: string
+          p_phone: string
+          p_place_of_supply?: string
+          p_postal_code?: string
+          p_sac_code?: string
+          p_sauna_room_count?: number
+          p_shower_room_count?: number
+          p_state?: string
+          p_state_code?: string
+          p_steam_room_count?: number
+          p_timezone?: string
+          p_washroom_count?: number
+          p_website?: string
+        }
+        Returns: {
+          gym_code: string
+          gym_id: string
+        }[]
+      }
       create_gym_invoice: {
         Args: {
           p_gym_id: string
@@ -2409,6 +2478,13 @@ export type Database = {
         Args: { p_payment_id: string; p_reason: string }
         Returns: undefined
       }
+      remove_member_from_gym: {
+        Args: { p_gym_id: string; p_member_id: string }
+        Returns: {
+          member_name: string
+          success: boolean
+        }[]
+      }
       renew_membership: {
         Args: {
           p_collected_by?: string
@@ -2598,12 +2674,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2627,11 +2703,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2652,11 +2728,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2677,11 +2753,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2694,11 +2770,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

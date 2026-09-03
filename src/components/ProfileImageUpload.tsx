@@ -1,7 +1,13 @@
 "use client";
-import React, { useRef, useState } from "react";
+import React, { useRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Upload, User } from "lucide-react";
+import { toast } from "sonner";
+import {
+  ALLOWED_IMAGE_TYPES,
+  validateImageMime,
+  validateImageSize,
+} from "@/lib/utils"; // adjust path to wherever these live
 
 type ProfileImageUploadProps = {
   image: string | null;
@@ -20,14 +26,21 @@ export default function ProfileImageUpload({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Reset immediately so re-selecting the same rejected file re-fires
+    // onChange (browsers only fire it on a value change).
+    e.target.value = "";
+
     if (!file) return;
 
-    if (file.size > maxSize * 1024 * 1024) {
-      alert("File size must be less than 2MB");
+    const mimeError = validateImageMime(file);
+    if (mimeError) {
+      toast.error(mimeError);
       return;
     }
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      alert("File must be JPG, PNG, or WEBP");
+
+    const sizeError = validateImageSize(file, maxSize);
+    if (sizeError) {
+      toast.error(sizeError);
       return;
     }
 
@@ -51,14 +64,16 @@ export default function ProfileImageUpload({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept={[...ALLOWED_IMAGE_TYPES].join(",")}
             onChange={handleFileChange}
             className="hidden"
           />
         </label>
       </div>
       <div className="text-sm text-muted-foreground">
-        <p className="font-medium text-foreground">Profile photo</p>
+        <p className="font-medium text-foreground">
+          {title ?? "Profile photo"}
+        </p>
         <p>JPG, PNG or WEBP · max {maxSize}MB</p>
       </div>
     </div>

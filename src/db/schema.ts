@@ -852,6 +852,8 @@ export const trainers = pgTable(
     uniqueIndex("trainers_profile_gym_idx").on(t.profileId, t.gymId),
     index("trainers_gym_idx").on(t.gymId),
     uniqueIndex("trainers_employee_id_gym_idx").on(t.gymId, t.employeeId),
+    index("trainers_gym_contact_email_idx").on(t.gymId, t.contactEmail),
+    index("trainers_gym_invited_email_idx").on(t.gymId, t.invitedEmail),
     pgPolicy("Anyone connected to the gym can view its trainers", {
       for: "select",
       to: authenticatedRole,
@@ -949,6 +951,9 @@ export const members = pgTable(
   },
   (t) => [
     uniqueIndex("members_profile_idx").on(t.profileId),
+    index("members_contact_email_idx").on(t.contactEmail),
+
+    index("members_invited_email_idx").on(t.invitedEmail),
     pgPolicy("Members can view their own profile", {
       for: "select",
       to: authenticatedRole,

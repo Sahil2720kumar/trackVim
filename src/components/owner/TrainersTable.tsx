@@ -1,6 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  useReactTable,
+  RowSelectionState,
+} from "@tanstack/react-table";
 import {
   Users,
   Search,
@@ -8,6 +16,8 @@ import {
   Download,
   Plus,
   MoreHorizontal,
+  ChevronLeft,
+  ChevronRight,
   Trash2,
   Eye,
   Pencil,
@@ -16,6 +26,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/StatCard";
 import {
@@ -29,9 +40,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 import type { TrainerRow } from "@/services/owner.query";
 import { useRouter } from "next/navigation";
 import { useAllTrainers, useTrainerStats } from "@/hooks/queries/owner.query";
+import { deleteTrainerAction } from "@/actions/owner.action";
+import { ConfirmDialog, useConfirmDialog } from "../Confirmdialog";
+import { toast } from "sonner";
+import { getInitials } from "@/lib/utils";
 
 const STATUS_COLORS: Record<string, string> = {
   Active: "bg-green-100 text-green-700",
@@ -42,16 +65,6 @@ const STATUS_COLORS: Record<string, string> = {
 
 function getStatusColor(status: string) {
   return STATUS_COLORS[status] ?? "bg-gray-100 text-gray-700";
-}
-
-function getInitials(name: string | null) {
-  if (!name) return "NA";
-  return name
-    .split(" ")
-    .map((p) => p[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
 }
 
 // ─── Loading skeleton — flat blocks, matches DashboardSkeleton style ───────
@@ -143,19 +156,16 @@ export function TrainersTable() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [selectedTrainers, setSelectedTrainers] = useState<Set<string>>(
-    new Set(),
-  );
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [specializationFilter, setSpecializationFilter] = useState(
     "All Specializations",
   );
-  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+
   const itemsPerPage = 5;
 
-  const trainers: TrainerRow[] = trainersResponse ? trainersResponse : [];
+  const trainers: TrainerRow[] = trainersResponse ?? [];
 
   const stats = statsResponse
     ? statsResponse
@@ -198,43 +208,12 @@ export function TrainersTable() {
     });
   }, [trainers, searchQuery, selectedStatus, specializationFilter]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredTrainers.length / itemsPerPage),
-  );
-  const safePage = Math.min(currentPage, totalPages);
-  const startIdx = (safePage - 1) * itemsPerPage;
-  const paginatedTrainers = filteredTrainers.slice(
-    startIdx,
-    startIdx + itemsPerPage,
-  );
-
   const activeFilterCount =
     specializationFilter !== "All Specializations" ? 1 : 0;
 
-  const toggleTrainerSelection = (id: string) => {
-    const next = new Set(selectedTrainers);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setSelectedTrainers(next);
-  };
-
-  const toggleAllSelection = () => {
-    const allSelected =
-      paginatedTrainers.length > 0 &&
-      paginatedTrainers.every((t) => selectedTrainers.has(t.id));
-    const next = new Set(selectedTrainers);
-    paginatedTrainers.forEach((t) =>
-      allSelected ? next.delete(t.id) : next.add(t.id),
-    );
-    setSelectedTrainers(next);
-  };
-
-  const goToPage = (page: number) =>
-    setCurrentPage(Math.min(Math.max(1, page), totalPages));
-
   const resetAdvancedFilters = () => {
     setSpecializationFilter("All Specializations");
-    setCurrentPage(1);
+    table.setPageIndex(0);
   };
 
   const handleExport = () => {
@@ -259,7 +238,9 @@ export function TrainersTable() {
       t.status,
     ]);
     const csvContent = [headers, ...rows]
-      .map((row) => row.map((val) => `"${val}"`).join(","))
+      .map((row) =>
+        row.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(","),
+      )
       .join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -273,24 +254,204 @@ export function TrainersTable() {
     URL.revokeObjectURL(url);
   };
 
-  // TODO: wire to a real server action (deleteTrainer) + query invalidation.
-  // Local-only mutation removed for now since `trainers` is derived from the
-  // query result and no longer held in component state — deleting from the
-  // UI without a mutation would just be reverted on next refetch. Surface a
-  // "not implemented" toast instead until the server action exists.
-  const handleDeleteTrainer = (_id: string) => {
-    setOpenActionMenuId(null);
+  const deleteConfirm = useConfirmDialog<TrainerRow>();
+
+  const handleDeleteTrainer = async (trainer: TrainerRow) => {
+    const result = await deleteTrainerAction(trainer.id);
+    if (!result.success) {
+      throw new Error(result.error ?? "Failed to remove trainer.");
+    }
+    toast.success(
+      trainer.full_name
+        ? `${trainer.full_name} was removed from the gym.`
+        : "Trainer removed successfully.",
+    );
+    setRowSelection({});
+    refetchAll();
   };
+
+  const columns = useMemo<ColumnDef<TrainerRow>[]>(
+    () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() && "indeterminate")
+            }
+            onCheckedChange={(value) =>
+              table.toggleAllPageRowsSelected(!!value)
+            }
+            aria-label="Select all"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+          />
+        ),
+      },
+      {
+        accessorKey: "full_name",
+        header: "Trainer",
+        cell: ({ row }) => {
+          const trainer = row.original;
+          return (
+            <div className="flex items-center gap-3">
+              {trainer.photo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={trainer.photo_url}
+                  alt={trainer.full_name ?? ""}
+                  className="w-10 h-10 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+                  {getInitials(trainer.full_name)}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="font-medium text-foreground truncate">
+                  {trainer.full_name}
+                </p>
+                {trainer.professional_title && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {trainer.professional_title}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground truncate">
+                  {trainer.contact_email}
+                </p>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "specializations",
+        header: "Specializations",
+        cell: ({ row }) => (
+          <div className="flex flex-wrap gap-1">
+            {(row.original.specializations ?? []).map((s) => (
+              <span
+                key={s}
+                className="inline-flex items-center rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-medium"
+              >
+                {s}
+              </span>
+            ))}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "experience_years",
+        header: "Experience",
+        cell: ({ row }) => (
+          <p className="text-sm text-foreground">
+            {row.original.experience_years ?? 0} years
+          </p>
+        ),
+      },
+      {
+        accessorKey: "members_trained",
+        header: "Members Trained",
+        cell: ({ row }) => (
+          <p className="text-sm text-foreground">
+            {row.original.members_trained ?? 0}
+          </p>
+        ),
+      },
+      {
+        accessorKey: "average_rating",
+        header: "Rating",
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1.5">
+            <span className="text-yellow-500">★</span>
+            <span className="text-sm font-medium text-foreground">
+              {Number(row.original.average_rating ?? 0).toFixed(1)}
+            </span>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => (
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
+              row.original.status,
+            )}`}
+          >
+            {row.original.status}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: ({ row }) => {
+          const trainer = row.original;
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="p-2 hover:bg-muted rounded-lg transition-colors">
+                  <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem
+                  onClick={() => router.push(`/owner/trainers/${trainer.id}`)}
+                  className="gap-2"
+                >
+                  <Eye className="w-4 h-4" /> View Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2">
+                  <Pencil className="w-4 h-4" /> Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2">
+                  <Calendar className="w-4 h-4" /> Schedule
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => deleteConfirm.request(trainer)}
+                  className="gap-2 text-red-600 focus:text-red-600 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [router],
+  );
+
+  const table = useReactTable({
+    data: filteredTrainers,
+    columns,
+    getRowId: (row) => row.id,
+    state: { rowSelection },
+    onRowSelectionChange: setRowSelection,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageSize: itemsPerPage } },
+  });
+
+  const rows = table.getRowModel().rows;
+  const { pageIndex, pageSize } = table.getState().pagination;
+  const startIdx = pageIndex * pageSize;
+  const totalPages = table.getPageCount();
+  const safePage = pageIndex + 1;
 
   if (isLoading) {
     return <TrainersSkeleton />;
   }
 
-  const hasResponseError =
-    (trainersResponse && !trainersResponse) ||
-    (statsResponse && !statsResponse);
-
-  if (isError || hasResponseError) {
+  if (isError) {
     const firstError = trainersError ?? statsError;
     return (
       <TrainersError
@@ -339,6 +500,7 @@ export function TrainersTable() {
         />
       </div>
 
+      {/* Search and Filters */}
       <div className="flex flex-col gap-4 mt-4 sm:mt-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-card border border-border rounded-lg p-3 sm:p-4">
           <div className="relative flex-1 min-w-0">
@@ -349,7 +511,7 @@ export function TrainersTable() {
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
-                setCurrentPage(1);
+                table.setPageIndex(0);
               }}
               className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
             />
@@ -394,7 +556,7 @@ export function TrainersTable() {
                       value={specializationFilter}
                       onChange={(e) => {
                         setSpecializationFilter(e.target.value);
-                        setCurrentPage(1);
+                        table.setPageIndex(0);
                       }}
                       className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary"
                     >
@@ -440,10 +602,11 @@ export function TrainersTable() {
               key={status}
               onClick={() => {
                 setSelectedStatus(status === "All" ? null : status);
-                setCurrentPage(1);
+                table.setPageIndex(0);
               }}
               className={`px-3 sm:px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors shrink-0 ${
-                selectedStatus === (status === "All" ? null : status)
+                (status === "All" && !selectedStatus) ||
+                status === selectedStatus
                   ? "bg-primary text-primary-foreground"
                   : "bg-background border border-border text-foreground hover:bg-muted"
               }`}
@@ -454,167 +617,52 @@ export function TrainersTable() {
         </div>
       </div>
 
+      {/* Trainers Table */}
       <div className="bg-card border border-border rounded-lg overflow-hidden mt-4 sm:mt-6">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-muted/50">
-                <th className="px-6 py-3 text-left">
-                  <input
-                    type="checkbox"
-                    checked={
-                      paginatedTrainers.length > 0 &&
-                      paginatedTrainers.every((t) => selectedTrainers.has(t.id))
-                    }
-                    onChange={toggleAllSelection}
-                    className="w-4 h-4 rounded border-border cursor-pointer"
-                  />
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Trainer
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Specializations
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Experience
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Members Trained
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Rating
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedTrainers.length > 0 ? (
-                paginatedTrainers.map((trainer) => (
-                  <tr
-                    key={trainer.id}
-                    className="border-b border-border hover:bg-muted/50 transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedTrainers.has(trainer.id)}
-                        onChange={() => toggleTrainerSelection(trainer.id)}
-                        className="w-4 h-4 rounded border-border cursor-pointer"
-                      />
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        {trainer.photo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={trainer.photo_url}
-                            alt={trainer.full_name ?? ""}
-                            className="w-10 h-10 rounded-full object-cover shrink-0"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                            {getInitials(trainer.full_name)}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="font-medium text-foreground truncate">
-                            {trainer.full_name}
-                          </p>
-                          {trainer.professional_title && (
-                            <p className="text-xs text-muted-foreground truncate">
-                              {trainer.professional_title}
-                            </p>
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow
+                  key={headerGroup.id}
+                  className="bg-muted/50 hover:bg-muted/50"
+                >
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className="text-xs font-semibold text-muted-foreground uppercase tracking-wide"
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
                           )}
-                          <p className="text-xs text-muted-foreground truncate">
-                            {trainer.contact_email}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-1">
-                        {(trainer.specializations ?? []).map((s) => (
-                          <span
-                            key={s}
-                            className="inline-flex items-center rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-medium"
-                          >
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-foreground">
-                        {trainer.experience_years ?? 0} years
-                      </p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-foreground">
-                        {trainer.members_trained ?? 0}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-yellow-500">★</span>
-                        <span className="text-sm font-medium text-foreground">
-                          {Number(trainer.average_rating ?? 0).toFixed(1)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(trainer.status)}`}
-                      >
-                        {trainer.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 relative">
-                      <DropdownMenu
-                        open={openActionMenuId === trainer.id}
-                        onOpenChange={(open) =>
-                          setOpenActionMenuId(open ? trainer.id : null)
-                        }
-                      >
-                        <DropdownMenuTrigger asChild>
-                          <button className="p-2 hover:bg-muted rounded-lg transition-colors">
-                            <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem
-                            onClick={() =>
-                              router.push(`/owner/trainers/${trainer.id}`)
-                            }
-                            className="gap-2"
-                          >
-                            <Eye className="w-4 h-4" /> View Profile
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2">
-                            <Pencil className="w-4 h-4" /> Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2">
-                            <Calendar className="w-4 h-4" /> Schedule
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDeleteTrainer(trainer.id)}
-                            className="gap-2 text-red-600 focus:text-red-600"
-                          >
-                            <Trash2 className="w-4 h-4" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </td>
-                  </tr>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {rows.length > 0 ? (
+                rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="py-4">
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
                 ))
               ) : (
-                <tr>
-                  <td colSpan={8} className="px-6 py-12">
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="py-12">
                     <div className="text-center">
                       <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                       <h3 className="font-semibold text-foreground mb-2">
@@ -624,54 +672,101 @@ export function TrainersTable() {
                         Try adjusting your search or filters
                       </p>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-3">
-        <p className="text-sm text-muted-foreground">
-          Showing {paginatedTrainers.length > 0 ? startIdx + 1 : 0} to{" "}
-          {Math.min(startIdx + itemsPerPage, filteredTrainers.length)} of{" "}
-          {filteredTrainers.length} trainers
-        </p>
-        <div className="flex items-center gap-1 flex-wrap justify-center">
-          <button
-            onClick={() => goToPage(safePage - 1)}
-            disabled={safePage === 1}
-            className="p-2 hover:bg-muted rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            ←
-          </button>
-          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-            const pageNum =
-              Math.max(1, Math.min(safePage - 2, totalPages - 4)) + i;
-            return (
-              <button
-                key={pageNum}
-                onClick={() => goToPage(pageNum)}
-                className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                  pageNum === safePage
-                    ? "bg-primary text-primary-foreground font-medium"
-                    : "hover:bg-muted text-foreground"
-                }`}
-              >
-                {pageNum}
-              </button>
-            );
-          })}
-          <button
-            onClick={() => goToPage(safePage + 1)}
-            disabled={safePage === totalPages}
-            className="p-2 hover:bg-muted rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            →
-          </button>
+      {/* Pagination */}
+      {filteredTrainers.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-3">
+          <p className="text-sm text-muted-foreground">
+            Showing {startIdx + 1} to{" "}
+            {Math.min(startIdx + pageSize, filteredTrainers.length)} of{" "}
+            {filteredTrainers.length} trainers
+          </p>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              className="p-2 hover:bg-muted rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <div className="hidden sm:flex items-center gap-2">
+              {Array.from({ length: totalPages }).map((_, i) => {
+                const page = i + 1;
+                const isEdge = page === 1 || page === totalPages;
+                const isNear = Math.abs(page - safePage) <= 1;
+                if (!isEdge && !isNear) {
+                  if (page === safePage - 2 || page === safePage + 2) {
+                    return (
+                      <span key={page} className="px-2 text-muted-foreground">
+                        ...
+                      </span>
+                    );
+                  }
+                  return null;
+                }
+                return (
+                  <button
+                    key={page}
+                    onClick={() => table.setPageIndex(page - 1)}
+                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                      page === safePage
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-muted"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+            </div>
+
+            <span className="sm:hidden text-sm font-medium text-foreground px-2 whitespace-nowrap">
+              Page {safePage} of {totalPages}
+            </span>
+
+            <button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              className="p-2 hover:bg-muted rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      <ConfirmDialog
+        open={deleteConfirm.isOpen}
+        onOpenChange={(open) => !open && deleteConfirm.close()}
+        title="Remove this trainer?"
+        description={
+          deleteConfirm.target
+            ? `This will remove ${deleteConfirm.target.full_name ?? "this trainer"} from the gym. This action cannot be undone.`
+            : ""
+        }
+        confirmLabel="Remove"
+        onConfirm={async () => {
+          if (!deleteConfirm.target) return;
+          try {
+            await handleDeleteTrainer(deleteConfirm.target);
+          } catch (err) {
+            console.error(err);
+            toast.error(
+              err instanceof Error ? err.message : "Something went wrong.",
+            );
+            throw err;
+          }
+        }}
+        destructive
+      />
     </>
   );
 }

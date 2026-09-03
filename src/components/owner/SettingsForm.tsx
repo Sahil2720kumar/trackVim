@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -11,6 +11,7 @@ import {
   Dumbbell,
   FileText,
   Image as ImageIcon,
+  Images,
   Info,
   Layers,
   Plus,
@@ -41,10 +42,17 @@ import {
   ROOM_TYPES,
   SAC_CODE_OPTIONS,
 } from "@/constants/gym-options";
-import { SingleImageUpload, useSingleUpload } from "@/components/ImageUpload";
+import {
+  SingleImageUpload,
+  DropZone,
+  useSingleUpload,
+  useMultiUpload,
+} from "@/components/ImageUpload";
 import { updateGymSettingsAction } from "@/actions/owner.action";
 
 export const SETTINGS_FORM_ID = "gym-settings-form";
+
+const MAX_GALLERY_IMAGES = 10;
 
 // Row is snake_case; the form/schema is camelCase. Mirrors RegisterGymForm's
 // field set exactly, since this is the same schema — only owner_id, code,
@@ -103,6 +111,27 @@ function toDefaultValues(
   };
 }
 
+function getInitialGalleryUrls(
+  gym: Record<string, unknown> | undefined,
+): string[] {
+  if (!gym) return [];
+  if (Array.isArray(gym.gym_photos) && gym.gym_photos.length > 0) {
+    const activePhotos = [...gym.gym_photos]
+      .filter((p: any) => !p.deleted_at && p.status !== "Deleted")
+      .sort((a: any, b: any) => {
+        if (a.is_cover !== b.is_cover) return a.is_cover ? -1 : 1;
+        return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+      });
+    if (activePhotos.length > 0) {
+      return activePhotos.map((p: any) => p.photo_url).filter(Boolean);
+    }
+  }
+  if (Array.isArray(gym.gallery_urls) && gym.gallery_urls.length > 0) {
+    return (gym.gallery_urls as string[]).filter(Boolean);
+  }
+  return [];
+}
+
 export default function SettingsForm({
   gymId,
   initialData,
@@ -113,6 +142,14 @@ export default function SettingsForm({
   const logo = useSingleUpload((initialData?.logo_url as string) || undefined);
   const paymentQr = useSingleUpload(
     (initialData?.payment_qr_url as string) || undefined,
+  );
+
+  const [existingGalleryUrls, setExistingGalleryUrls] = useState<string[]>(
+    () => getInitialGalleryUrls(initialData),
+  );
+
+  const gallery = useMultiUpload(
+    Math.max(0, MAX_GALLERY_IMAGES - existingGalleryUrls.length),
   );
 
   const {
@@ -133,7 +170,12 @@ export default function SettingsForm({
   // after first render).
   const initialDataKey = initialData ? JSON.stringify(initialData) : null;
   useEffect(() => {
-    if (initialDataKey) reset(toDefaultValues(JSON.parse(initialDataKey)));
+    if (initialDataKey) {
+      const data = JSON.parse(initialDataKey);
+      reset(toDefaultValues(data));
+      setExistingGalleryUrls(getInitialGalleryUrls(data));
+      gallery.clear();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialDataKey, reset]);
   const {
@@ -148,7 +190,17 @@ export default function SettingsForm({
   const gymShortName = watch("gymShortName");
   const businessName = watch("businessName");
 
-  const hasChanges = isDirty || logo.file != null || paymentQr.file != null;
+  const initialGalleryJson = JSON.stringify(getInitialGalleryUrls(initialData));
+  const currentExistingGalleryJson = JSON.stringify(existingGalleryUrls);
+  const galleryChanged =
+    gallery.files.length > 0 ||
+    currentExistingGalleryJson !== initialGalleryJson;
+
+  const hasChanges =
+    isDirty ||
+    logo.file != null ||
+    paymentQr.file != null ||
+    galleryChanged;
 
   const toggleAmenity = (value: string, checked: boolean) => {
     const current = amenities ?? [];
@@ -169,6 +221,8 @@ export default function SettingsForm({
     reset(toDefaultValues(initialData));
     logo.clear();
     paymentQr.clear();
+    setExistingGalleryUrls(getInitialGalleryUrls(initialData));
+    gallery.clear();
   };
 
   const onSubmit = async (data: CreateGymInput) => {
@@ -177,6 +231,8 @@ export default function SettingsForm({
       const result = await updateGymSettingsAction(gymId, data, {
         logo: logo.file,
         paymentQr: paymentQr.file,
+        gallery: gallery.files,
+        existingGalleryUrls: existingGalleryUrls,
       });
       if (!result.success) {
         toast.error(result.error);
@@ -186,6 +242,7 @@ export default function SettingsForm({
       reset(data);
       logo.clear();
       paymentQr.clear();
+      gallery.clear();
     } catch (error) {
       console.error("Error saving gym settings:", error);
       toast.error("Error saving gym settings. Please try again.");
@@ -208,6 +265,7 @@ export default function SettingsForm({
     !!watch("businessPhone"),
     !gstRegistered || !!watch("gstin"),
     !!(logo.preview || initialData?.logo_url),
+    existingGalleryUrls.length > 0 || gallery.previews.length > 0,
     !!watch("numberOfFloors") && !!watch("numberOfRooms"),
     equipmentFields.length > 0,
   ];
@@ -294,6 +352,108 @@ export default function SettingsForm({
           <p className="text-xs text-muted-foreground">
             Recommended size: 512 × 512 pixels.
           </p>
+        </SectionCard>
+
+        {/* Gym Gallery */}
+        <SectionCard title="Gym Gallery" icon={Images}>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Upload photos of your gym — equipment, ambience, facilities — to
+            help prospective members decide before joining.
+          </p>
+
+          <DropZone
+            dropzone={gallery.dropzone}
+            hint="PNG, JPG, WEBP • Up to 10 images • Recommended 1920 × 1080"
+          />
+
+          {gallery.error && (
+            <p className="text-xs text-destructive" role="alert">
+              {gallery.error}
+            </p>
+          )}
+
+          {(existingGalleryUrls.length > 0 || gallery.previews.length > 0) && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                {existingGalleryUrls.length + gallery.previews.length} /{" "}
+                {MAX_GALLERY_IMAGES} uploaded — the first image is used as the
+                cover photo
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {/* Existing Gallery Images */}
+                {existingGalleryUrls.map((src, i) => (
+                  <div
+                    key={`existing-${src}`}
+                    className="relative group aspect-video rounded-lg overflow-hidden border border-border"
+                  >
+                    <Image
+                      src={src}
+                      alt={`Gallery ${i + 1}`}
+                      fill
+                      unoptimized
+                      className="object-cover"
+                    />
+                    {i === 0 && (
+                      <span className="absolute top-1.5 left-1.5 text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
+                        Cover
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExistingGalleryUrls((prev) =>
+                          prev.filter((_, idx) => idx !== i),
+                        )
+                      }
+                      className="absolute top-1.5 right-1.5 rounded-full bg-destructive p-1 text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+
+                {/* New Gallery Upload Previews */}
+                {gallery.previews.map((src, i) => {
+                  const isCover = existingGalleryUrls.length === 0 && i === 0;
+                  return (
+                    <div
+                      key={`new-${src}`}
+                      className="relative group aspect-video rounded-lg overflow-hidden border border-border"
+                    >
+                      <Image
+                        src={src}
+                        alt={`New Gallery ${i + 1}`}
+                        fill
+                        unoptimized
+                        className="object-cover"
+                      />
+                      {isCover && (
+                        <span className="absolute top-1.5 left-1.5 text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
+                          Cover
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => gallery.remove(i)}
+                        className="absolute top-1.5 right-1.5 rounded-full bg-destructive p-1 text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertTitle>Shown to prospective members</AlertTitle>
+            <AlertDescription>
+              Gallery images appear on your gym&apos;s public profile in the
+              TrackVim app.
+            </AlertDescription>
+          </Alert>
         </SectionCard>
 
         {/* Facilities & Equipment */}

@@ -714,9 +714,9 @@ export function MemberProfileContent({
                   className="h-auto p-0 text-indigo-600"
                   asChild
                 >
-                  <Link href={`/owner/members/${memberDetails.id}/payments`}>
+                  {/* <Link href={`/owner/members/${memberDetails.id}/payments`}>
                     View All
-                  </Link>
+                  </Link> */}
                 </Button>
               </CardHeader>
               <CardContent className="space-y-4">

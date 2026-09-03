@@ -34,6 +34,11 @@ import {
 } from "@/constants/profile-options";
 import { Switch } from "../ui/switch";
 import { PaymentMethod } from "@/actions/staff.action";
+import {
+  validateImageSize,
+  validateImageMime,
+  ALLOWED_IMAGE_TYPES,
+} from "@/lib/utils";
 
 // Real trainer/plan rows from getTrainersAndPlans — see that file's select()
 // for the exact columns fetched.
@@ -57,6 +62,8 @@ type InviteMemberFormProps = {
   trainers: TrainerOption[];
   plans: PlanOption[];
 };
+
+const MAX_PHOTO_SIZE_MB = 2;
 
 // What actually counts as a valid transaction ref differs by method — a
 // UPI ID (sahil@oksbi) is NOT a transaction ref, it's just an address. The
@@ -87,7 +94,11 @@ export default function InviteMemberForm({
 }: InviteMemberFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const photo = useSingleUpload(undefined, undefined, 5 * 1024 * 1024);
+  const photo = useSingleUpload(
+    undefined,
+    undefined,
+    MAX_PHOTO_SIZE_MB * 1024 * 1024,
+  );
 
   // Invite-flow behavior only, not a members-table field.
   const [sendInvitation, setSendInvitation] = useState(true);
@@ -132,6 +143,24 @@ export default function InviteMemberForm({
         shouldDirty: true,
       });
     }
+  };
+
+  // Runs MIME check before size check — no point telling someone their
+  // 8MB .heic is "too large" when the real problem is the file type.
+  const validateAndSelectPhoto = (file: File) => {
+    const mimeError = validateImageMime(file);
+    if (mimeError) {
+      toast.error(mimeError);
+      return;
+    }
+
+    const sizeError = validateImageSize(file, MAX_PHOTO_SIZE_MB);
+    if (sizeError) {
+      toast.error(sizeError);
+      return;
+    }
+
+    photo.selectFile(file);
   };
 
   const calculateBMI = () => {
@@ -250,6 +279,7 @@ export default function InviteMemberForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormSelect
               label="Gender"
+              required
               options={["Male", "Female", "Other"]}
               {...register("gender")}
             />
@@ -598,16 +628,18 @@ export default function InviteMemberForm({
               onDrop={(e) => {
                 e.preventDefault();
                 const file = e.dataTransfer.files?.[0];
-                if (file) photo.selectFile(file);
+                if (file) validateAndSelectPhoto(file);
               }}
               className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-primary/50 transition-colors cursor-pointer bg-muted/50"
             >
               <input
                 type="file"
-                accept="image/*"
+                accept={[...ALLOWED_IMAGE_TYPES].join(",")}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) photo.selectFile(file);
+                  if (file) validateAndSelectPhoto(file);
+                  // reset so re-selecting the same rejected file re-fires onChange
+                  e.target.value = "";
                 }}
                 className="hidden"
                 id="photo-upload"
@@ -634,7 +666,7 @@ export default function InviteMemberForm({
                         Upload Member Photo
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        PNG, JPG, JPEG (Max 5MB)
+                        PNG, JPG, JPEG, WEBP (Max {MAX_PHOTO_SIZE_MB}MB)
                       </p>
                     </div>
                   </div>

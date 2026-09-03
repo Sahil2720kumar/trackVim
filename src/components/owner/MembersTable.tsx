@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   ColumnDef,
   flexRender,
@@ -60,6 +60,8 @@ import {
   useTrainersAndPlans,
 } from "@/hooks/queries/owner.query";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { deleteMemberAction } from "@/actions/owner.action";
+import { ConfirmDialog, useConfirmDialog } from "../Confirmdialog";
 
 const statusOptions = ["All", "Active", "Expired", "Expiring Soon", "Pending"];
 const memberTypeOptions = ["All Types", "Normal", "WalkIn"] as const;
@@ -236,6 +238,7 @@ export function MembersTable() {
   const [trainerFilter, setTrainerFilter] = useState("All Trainers");
   const [memberTypeFilter, setMemberTypeFilter] =
     useState<(typeof memberTypeOptions)[number]>("All Types");
+  const [isPending, startTransition] = useTransition();
 
   const itemsPerPage = 5;
 
@@ -243,8 +246,22 @@ export function MembersTable() {
   const handleViewMember = (id: string) => router.push(`/owner/members/${id}`);
   const handleEditMember = () =>
     toast.error("Edit function is not implemented yet");
-  const handleDeleteMember = () =>
-    toast.error("Delete function is not implemented yet");
+
+  const deleteConfirm = useConfirmDialog<MemberRow>();
+
+  const handleDeleteMember = async (member: MemberRow) => {
+    const result = await deleteMemberAction(member.id);
+    if (!result.success) {
+      throw new Error(result.error ?? "Failed to remove member.");
+    }
+    toast.success(
+      result.data?.memberName
+        ? `${result.data.memberName} was removed from the gym.`
+        : "Member removed successfully.",
+    );
+    setRowSelection({});
+    refetchAll();
+  };
 
   const members: MemberRow[] = useMemo(() => {
     if (!membersResponse) return [];
@@ -530,7 +547,7 @@ export function MembersTable() {
                   Edit
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={handleDeleteMember}
+                  onClick={() => deleteConfirm.request(member)}
                   className="text-red-600 focus:text-red-600"
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
@@ -903,7 +920,7 @@ export function MembersTable() {
                           Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={handleDeleteMember}
+                          onClick={() => deleteConfirm.request(member)}
                           className="text-red-600 focus:text-red-600"
                         >
                           <Trash2 className="w-4 h-4 mr-2" />
@@ -1056,6 +1073,31 @@ export function MembersTable() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirm.isOpen}
+        onOpenChange={(open) => !open && deleteConfirm.close()}
+        title="Remove this member?"
+        description={
+          deleteConfirm.target
+            ? `This will remove ${deleteConfirm.target.name} from the gym. This can't be undone.`
+            : ""
+        }
+        confirmLabel="Remove"
+        onConfirm={async () => {
+          if (!deleteConfirm.target) return;
+          try {
+            await handleDeleteMember(deleteConfirm.target);
+          } catch (err) {
+            console.error(err);
+            toast.error(
+              err instanceof Error ? err.message : "Something went wrong.",
+            );
+            throw err; // re-throw so ConfirmDialog doesn't treat it as success... see note below
+          }
+        }}
+        destructive
+      />
     </>
   );
 }

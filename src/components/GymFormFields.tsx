@@ -36,6 +36,7 @@ export const FormInput = ({
         error
           ? "border-destructive bg-destructive/5"
           : "border-border bg-background hover:border-border/80 focus:border-primary",
+        "disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:hover:border-border disabled:text-muted-foreground",
         className,
       )}
       {...props}
@@ -65,7 +66,7 @@ export const FormInputWithUnit = ({
           error
             ? "border-destructive bg-destructive/5"
             : "border-border bg-background hover:border-border/80 focus:border-primary"
-        } focus:outline-none focus:ring-2 focus:ring-primary/20`}
+        } focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:hover:border-border disabled:text-muted-foreground`}
         {...props}
       />
       <span className="text-xs text-muted-foreground pb-2 shrink-0">
@@ -98,11 +99,11 @@ export const FormSelect = ({
     </label>
 
     <select
-      className={`w-full px-3 py-2 rounded-lg border transition-colors ${
+      className={`w-full px-3 py-2 rounded-lg border transition-colors disabled:appearance-none disabled:[&::-ms-expand]:hidden ${
         error
           ? "border-destructive bg-destructive/5"
           : "border-border bg-background hover:border-border/80 focus:border-primary"
-      } focus:outline-none focus:ring-2 focus:ring-primary/20`}
+      } focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:hover:border-border disabled:text-muted-foreground`}
       {...props}
     >
       <option value="">Select...</option>
@@ -145,7 +146,7 @@ export const FormTextarea = ({ label, placeholder, error, ...props }: any) => (
         error
           ? "border-destructive bg-destructive/5"
           : "border-border bg-background hover:border-border/80 focus:border-primary"
-      } focus:outline-none focus:ring-2 focus:ring-primary/20`}
+      } focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:hover:border-border disabled:text-muted-foreground`}
       rows={3}
       {...props}
     />

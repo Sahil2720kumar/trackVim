@@ -199,7 +199,7 @@ export default function TrainerInviteForm() {
               type="number"
               placeholder="35000"
               required
-              {...register("salary", { valueAsNumber: true })}
+              {...register("salary")}
               error={errors.salary}
             />
             <FormSelect

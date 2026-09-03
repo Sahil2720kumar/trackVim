@@ -76,7 +76,10 @@ export function formatDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function daysBetween(endDate: string, timezone: string = "Asia/Kolkata") {
+export function daysBetween(
+  endDate: string,
+  timezone: string = "Asia/Kolkata",
+) {
   const todayStr = getTodayDateStr(timezone);
 
   const today = new Date(`${todayStr}T00:00:00Z`);
@@ -256,4 +259,37 @@ export function mostFrequent(values: (string | null)[]) {
     }
   }
   return top;
+}
+
+//------------------------------------------------------------------------------
+//IMAGE VALIDATION
+//------------------------------------------------------------------------------
+export const ALLOWED_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/jpg",
+  "image/gif",
+]);
+
+export function validateImageSize(
+  file: File,
+  maxSizeMB: number,
+): string | null {
+  const maxSize = maxSizeMB * 1024 * 1024; // MB → bytes
+
+  if (file.size > maxSize) {
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    return `Image too large. Maximum size is ${maxSizeMB} MB (${sizeMB} MB).`;
+  }
+
+  return null;
+}
+
+export function validateImageMime(file: File): string | null {
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+    return "Invalid image type. Only JPEG, PNG, JPG, GIF and WEBP are allowed.";
+  }
+
+  return null;
 }

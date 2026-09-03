@@ -72,7 +72,7 @@ export async function getMyGymSettings(
 
   const { data, error } = await supabase
     .from("gyms")
-    .select("*")
+    .select("*, gym_photos(*)")
     .eq("owner_id", userData.id)
     .is("deleted_at", null)
     .maybeSingle();
@@ -840,7 +840,62 @@ export async function getTrainerById(
     .from("trainers")
     .select(
       `
-    *,
+    id,
+    trainer_code,
+    contact_email,
+    contact_phone,
+    full_name,
+    photo_url,
+    status,
+    employee_id,
+    gender,
+    date_of_birth,
+    professional_title,
+    bio,
+    joining_date,
+    experience_years,
+    qualification,
+    certification,
+    salary,
+    employment_type,
+    specializations,
+    max_members,
+    max_sessions_per_day,
+    working_days,
+    start_time,
+    end_time,
+    session_types,
+    accepting_new_members,
+    languages,
+    instagram,
+    linkedin,
+    youtube,
+    website_url,
+    members_trained,
+    completed_sessions,
+    average_rating,
+    total_reviews,
+    retention_rate,
+    coaching_experience,
+    training_philosophy,
+    emergency_contact_name,
+    emergency_relationship,
+    emergency_phone,
+    emergency_alternate_phone,
+    address_line,
+    city,
+    state,
+    country,
+    postal_code,
+    email_notifications,
+    sms_notifications,
+    push_notifications,
+    two_factor_enabled,
+    additional_notes,
+    invited_email,
+    invitation_sent_at,
+    invitation_accepted_at,
+    created_at,
     trainer_assignments!trainer_id (
       id,
       assigned_at,
@@ -1098,6 +1153,38 @@ export type GymMembershipStatus =
   | "Active"
   | "Expired"
   | "Cancelled";
+
+/**
+ * GetPlanById
+ */
+export async function getPlanById(
+  supabase: TypedSupabaseClient,
+  planId: string,
+  gymId?: string,
+) {
+  let query = supabase.from("membership_plans").select("*").eq("id", planId);
+
+  if (gymId) {
+    query = query.eq("gym_id", gymId);
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    return { success: false as const, error: error.message };
+  }
+
+  if (!data) {
+    return { success: false as const, error: "Membership plan not found." };
+  }
+
+  return { success: true as const, data: data };
+}
+
+export type PlanDetail = Extract<
+  Awaited<ReturnType<typeof getPlanById>>,
+  { success: true }
+>["data"];
 
 /**
  * The attendance-stats RPC and the trainer-assignment lookup are both

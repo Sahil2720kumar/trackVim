@@ -11,7 +11,11 @@ import {
   InviteMemberFormInput,
   inviteMemberFormSchema,
 } from "@/db/validators";
-import { MAX_GALLERY_IMAGES, uploadFile } from "@/lib/cloudinary/upload";
+import {
+  deleteFile,
+  MAX_GALLERY_IMAGES,
+  uploadFile,
+} from "@/lib/cloudinary/upload";
 import { extractGymFields, extractTrainerFields } from "@/lib/extractFields";
 import { createServerClient } from "@/lib/supabase/server";
 import {
@@ -41,6 +45,7 @@ export type ActionResult<T = void> =
  *   - billing_start_date = today + 1 month
  *   - current_plan_id    = Basic
  */
+
 export async function createGymAction(
   data: CreateGymInput,
   files: {
@@ -49,8 +54,8 @@ export async function createGymAction(
     gallery?: File[] | null;
   },
 ): Promise<ActionResult<{ id: string; code: string }>> {
-  // 1. Auth
   const { userId } = await auth();
+
   if (!userId) {
     return {
       success: false,
@@ -58,187 +63,221 @@ export async function createGymAction(
     };
   }
 
-  // 2. Validate
+  // ------------------------------------------------------------
+  // 2. VALIDATE
+  // ------------------------------------------------------------
+
+  const validationStart = performance.now();
+
   const parsed = createGymSchema.safeParse(data);
+
   if (!parsed.success) {
     return {
       success: false,
       error: parsed.error.issues[0]?.message ?? "Invalid gym data.",
     };
   }
+
   const gymData = parsed.data;
 
-  // 3. Files
+  // ------------------------------------------------------------
+  // 3. FILES
+  // ------------------------------------------------------------
+
   const { logo, paymentQr, gallery = [] } = files;
 
-  if (gallery && gallery.length > MAX_GALLERY_IMAGES) {
+  if (gallery.length > MAX_GALLERY_IMAGES) {
     return {
       success: false,
       error: `You can upload up to ${MAX_GALLERY_IMAGES} gallery images.`,
     };
   }
 
-  // 4. Upload all files in parallel
-  let logoUrl: string | undefined;
-  let paymentQrUrl: string | undefined;
+  // ------------------------------------------------------------
+  // 4. UPLOAD ALL FILES IN PARALLEL
+  // ------------------------------------------------------------
+
+  let logoUrl: string | null = null;
+  let paymentQrUrl: string | null = null;
   let galleryUrls: string[] = [];
+
+  const uploadedPaths: string[] = [];
 
   try {
     const folder = `trackVim/gyms/${userId}`;
+
     const [logoResult, qrResult, galleryResult] = await Promise.all([
+      // Logo
       logo && logo.size > 0
         ? uploadFile(logo, `${folder}/logo`)
-        : Promise.resolve(undefined),
+        : Promise.resolve(null),
+
+      // Payment QR
       paymentQr && paymentQr.size > 0
         ? uploadFile(paymentQr, `${folder}/payment-qr`)
-        : Promise.resolve(undefined),
-      gallery && gallery.length
-        ? Promise.all(gallery.map((f) => uploadFile(f, `${folder}/gallery`)))
-        : Promise.resolve([]),
+        : Promise.resolve(null),
+
+      // Gallery
+      gallery.length > 0
+        ? Promise.all(
+            gallery.map((file) => uploadFile(file, `${folder}/gallery`)),
+          )
+        : Promise.resolve([] as string[]),
     ]);
+
     logoUrl = logoResult;
     paymentQrUrl = qrResult;
     galleryUrls = galleryResult;
-  } catch (err) {
+
+    // Keep track of uploaded files so they can be
+    // cleaned up if the database transaction fails.
+    if (logoUrl) {
+      uploadedPaths.push(logoUrl);
+    }
+
+    if (paymentQrUrl) {
+      uploadedPaths.push(paymentQrUrl);
+    }
+
+    uploadedPaths.push(...galleryUrls);
+  } catch (error) {
+    console.error("UPLOAD FAILED:", error);
+
     return {
       success: false,
       error:
-        err instanceof Error
-          ? err.message
+        error instanceof Error
+          ? error.message
           : "Failed to upload images. Please try again.",
     };
   }
 
+  // ------------------------------------------------------------
+  // 5. SUPABASE
+  // ------------------------------------------------------------
+
   const supabase = await createServerClient();
+
+  // ------------------------------------------------------------
+  // 6. GENERATE GYM CODE
+  // ------------------------------------------------------------
+
   const code = generateGymCode();
 
-  // 5. Update user row first — we need users.id for gyms.owner_id
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .update({
-      full_name: gymData.ownerName,
-      phone: gymData.contactPhone ?? gymData.businessPhone,
-      role: "owner",
-      account_status: "Active",
-    })
-    .eq("clerk_id", userId)
-    .select("id,email")
-    .single();
+  // ------------------------------------------------------------
+  // 7. SINGLE RPC TRANSACTION
+  // ------------------------------------------------------------
 
-  if (userError) return { success: false, error: userError.message };
+  const rpcStart = performance.now();
 
-  const internalUserId = userData.id;
+  const { data: rpcData, error: rpcError } = await supabase.rpc("create_gym", {
+    p_clerk_id: userId,
+    p_owner_name: gymData.ownerName,
+    p_phone: gymData.contactPhone ?? gymData.businessPhone ?? null,
+    p_name: gymData.name,
+    p_code: code,
+    p_gym_short_name: gymData.gymShortName ?? null,
+    p_gym_description: gymData.gymDescription ?? null,
+    p_contact_email: null,
+    p_contact_phone: gymData.contactPhone ?? null,
+    p_website: gymData.website ?? null,
+    p_logo_url: logoUrl,
+    p_payment_qr_url: paymentQrUrl,
+    p_business_name: gymData.businessName ?? null,
+    p_business_email: gymData.businessEmail ?? null,
+    p_business_phone: gymData.businessPhone ?? null,
+    p_address_line1: gymData.addressLine1 ?? null,
+    p_address_line2: gymData.addressLine2 ?? null,
+    p_city: gymData.city ?? null,
+    p_state: gymData.state ?? null,
+    p_state_code: gymData.stateCode ?? null,
+    p_postal_code: gymData.postalCode ?? null,
+    p_country: gymData.country ?? "India",
+    p_timezone: gymData.timezone ?? "Asia/Kolkata",
+    p_number_of_floors: gymData.numberOfFloors ?? null,
+    p_number_of_rooms: gymData.numberOfRooms ?? null,
+    p_facility_notes: gymData.facilityNotes ?? null,
+    p_has_washroom: gymData.hasWashroom ?? false,
+    p_washroom_count: gymData.washroomCount ?? null,
+    p_has_sauna_room: gymData.hasSaunaRoom ?? false,
+    p_sauna_room_count: gymData.saunaRoomCount ?? null,
+    p_has_steam_room: gymData.hasSteamRoom ?? false,
+    p_steam_room_count: gymData.steamRoomCount ?? null,
+    p_has_shower_room: gymData.hasShowerRoom ?? false,
+    p_shower_room_count: gymData.showerRoomCount ?? null,
+    p_has_locker_room: gymData.hasLockerRoom ?? false,
+    p_locker_room_count: gymData.lockerRoomCount ?? null,
+    p_amenities: gymData.amenities ?? [],
+    p_equipment: gymData.equipment ?? [],
+    p_gst_registered: gymData.gstRegistered ?? false,
+    p_gstin: gymData.gstin ?? null,
+    p_legal_business_name: gymData.legalBusinessName ?? null,
+    p_billing_address: gymData.billingAddress ?? null,
+    p_gst_state: gymData.gstState ?? null,
+    p_place_of_supply: gymData.placeOfSupply ?? null,
+    p_sac_code: gymData.sacCode ?? null,
+    p_gallery_urls: galleryUrls,
+  });
 
-  // 6. Insert gym
-  const { data: gymData2, error: gymError } = await supabase
-    .from("gyms")
-    .insert({
-      owner_id: internalUserId,
-      name: gymData.name,
-      code,
-      gym_short_name: gymData.gymShortName ?? null,
-      gym_description: gymData.gymDescription ?? null,
-      contact_email: userData.email ?? null,
-      contact_phone: gymData.contactPhone ?? null,
-      website: gymData.website ?? null,
-      logo_url: logoUrl ?? null,
-      payment_qr_url: paymentQrUrl ?? null,
-      owner_name: gymData.ownerName ?? null,
-      business_name: gymData.businessName ?? null,
-      business_email: gymData.businessEmail ?? null,
-      business_phone: gymData.businessPhone ?? null,
-      address_line1: gymData.addressLine1 ?? null,
-      address_line2: gymData.addressLine2 ?? null,
-      city: gymData.city ?? null,
-      state: gymData.state ?? null,
-      state_code: gymData.stateCode ?? null,
-      postal_code: gymData.postalCode ?? null,
-      country: gymData.country ?? "India",
-      timezone: gymData.timezone ?? "Asia/Kolkata",
-      number_of_floors: gymData.numberOfFloors ?? null,
-      number_of_rooms: gymData.numberOfRooms ?? null,
-      facility_notes: gymData.facilityNotes ?? null,
-      has_washroom: gymData.hasWashroom ?? false,
-      washroom_count: gymData.hasWashroom
-        ? (gymData.washroomCount ?? null)
-        : null,
-      has_sauna_room: gymData.hasSaunaRoom ?? false,
-      sauna_room_count: gymData.hasSaunaRoom
-        ? (gymData.saunaRoomCount ?? null)
-        : null,
-      has_steam_room: gymData.hasSteamRoom ?? false,
-      steam_room_count: gymData.hasSteamRoom
-        ? (gymData.steamRoomCount ?? null)
-        : null,
-      has_shower_room: gymData.hasShowerRoom ?? false,
-      shower_room_count: gymData.hasShowerRoom
-        ? (gymData.showerRoomCount ?? null)
-        : null,
-      has_locker_room: gymData.hasLockerRoom ?? false,
-      locker_room_count: gymData.hasLockerRoom
-        ? (gymData.lockerRoomCount ?? null)
-        : null,
-      amenities: gymData.amenities ?? [],
-      equipment: gymData.equipment ?? [],
-      gst_registered: gymData.gstRegistered ?? false,
-      gstin: gymData.gstRegistered ? (gymData.gstin ?? null) : null,
-      legal_business_name: gymData.gstRegistered
-        ? (gymData.legalBusinessName ?? null)
-        : null,
-      billing_address: gymData.gstRegistered
-        ? (gymData.billingAddress ?? null)
-        : null,
-      gst_state: gymData.gstRegistered ? (gymData.gstState ?? null) : null,
-      place_of_supply: gymData.gstRegistered
-        ? (gymData.placeOfSupply ?? null)
-        : null,
-      sac_code: gymData.gstRegistered ? (gymData.sacCode ?? null) : null,
-    })
-    .select("id, code")
-    .single();
+  if (rpcError || !rpcData?.length) {
+    console.error("CREATE GYM RPC FAILED:", rpcError);
 
-  if (gymError) return { success: false, error: gymError.message };
+    // Database transaction has already rolled back.
+    // Now clean up storage files.
+    if (uploadedPaths.length > 0) {
+      const cleanupStart = performance.now();
 
-  const gymId = gymData2.id;
+      await Promise.allSettled(uploadedPaths.map((path) => deleteFile(path)));
 
-  // 7. Gallery photos + Clerk metadata in parallel
-  const sideEffects: PromiseLike<unknown>[] = [
-    clerkClient().then((client) =>
-      client.users.updateUserMetadata(userId, {
-        publicMetadata: { role: "owner", gymId, onboardingComplete: true },
-      }),
-    ),
-  ];
+      console.log(
+        "FILE CLEANUP:",
+        `${(performance.now() - cleanupStart).toFixed(2)}ms`,
+      );
+    }
 
-  if (galleryUrls.length) {
-    sideEffects.push(
-      supabase
-        .from("gym_photos")
-        .insert(
-          galleryUrls.map((url, i) => ({
-            gym_id: gymId,
-            uploaded_by: internalUserId,
-            photo_url: url,
-            is_cover: i === 0,
-            sort_order: i,
-          })),
-        )
-        .then(({ error }) => {
-          if (error) console.error("gym_photos insert failed:", error);
-        }),
-    );
-  }
-
-  const results = await Promise.allSettled(sideEffects);
-  const failed = results.find((r) => r.status === "rejected");
-  if (failed) {
     return {
       success: false,
-      error:
-        "Gym created, but finalizing your account failed. Please retry to finish setup.",
+      error: rpcError?.message ?? "Failed to create gym.",
     };
   }
-  return { success: true, data: { id: gymId, code: gymData2.code } };
+
+  // ------------------------------------------------------------
+  // 9. GET RESULT
+  // ------------------------------------------------------------
+
+  const gym = rpcData[0];
+
+  const gymId = gym.gym_id;
+  const gymCode = gym.gym_code;
+
+  // ------------------------------------------------------------
+  // 10. CLERK METADATA
+  // ------------------------------------------------------------
+
+  try {
+    const client = await clerkClient();
+
+    await client.users.updateUserMetadata(userId, {
+      publicMetadata: {
+        role: "owner",
+        gymId,
+        onboardingComplete: true,
+      },
+    });
+  } catch (error) {
+    console.error("CLERK METADATA UPDATE FAILED:", error);
+  }
+
+  // ------------------------------------------------------------
+  // 11. SUCCESS
+  // ------------------------------------------------------------
+  return {
+    success: true,
+    data: {
+      id: gymId,
+      code: gymCode,
+    },
+  };
 }
 
 /**
@@ -251,6 +290,8 @@ export async function updateGymSettingsAction(
   files?: {
     logo?: File | null;
     paymentQr?: File | null;
+    gallery?: File[] | null;
+    existingGalleryUrls?: string[];
   },
 ): Promise<ActionResult<{ id: string }>> {
   // 1. Auth
@@ -306,25 +347,30 @@ export async function updateGymSettingsAction(
     return { success: false, error: "Gym not found." };
   }
 
-  // 5. Uploads — keyed on gymId so repeated saves overwrite the same
-  // path instead of accumulating, same pattern as member/trainer photo
-  // uploads.
-  const { logo, paymentQr } = files ?? {};
+  // 5. Uploads — keyed on gymId
+  const { logo, paymentQr, gallery = [], existingGalleryUrls } = files ?? {};
   let logoUrl: string | undefined;
   let paymentQrUrl: string | undefined;
+  let newGalleryUrls: string[] = [];
 
   try {
     const folder = `trackVim/gyms/${gymId}`;
-    const [logoResult, qrResult] = await Promise.all([
+    const [logoResult, qrResult, galleryResult] = await Promise.all([
       logo && logo.size > 0
         ? uploadFile(logo, `${folder}/logo`)
         : Promise.resolve(undefined),
       paymentQr && paymentQr.size > 0
         ? uploadFile(paymentQr, `${folder}/payment-qr`)
         : Promise.resolve(undefined),
+      gallery && gallery.length > 0
+        ? Promise.all(
+            gallery.map((file) => uploadFile(file, `${folder}/gallery`)),
+          )
+        : Promise.resolve([] as string[]),
     ]);
     logoUrl = logoResult;
     paymentQrUrl = qrResult;
+    newGalleryUrls = galleryResult;
   } catch (err) {
     return {
       success: false,
@@ -334,6 +380,13 @@ export async function updateGymSettingsAction(
           : "Failed to upload images. Please try again.",
     };
   }
+
+  const finalGalleryUrls =
+    existingGalleryUrls !== undefined
+      ? [...existingGalleryUrls, ...newGalleryUrls]
+      : newGalleryUrls.length > 0
+        ? newGalleryUrls
+        : undefined;
 
   // 6. Same field set createGymAction writes on insert, minus
   // create-only columns (owner_id, code, timezone/contact_email — the
@@ -411,6 +464,43 @@ export async function updateGymSettingsAction(
     .eq("id", gymId);
 
   if (updateError) return { success: false, error: updateError.message };
+
+  // 6b. Sync gym_photos table
+  if (existingGalleryUrls !== undefined || newGalleryUrls.length > 0) {
+    const { data: currentPhotos } = await supabase
+      .from("gym_photos")
+      .select("id, photo_url")
+      .eq("gym_id", gymId);
+
+    if (
+      existingGalleryUrls !== undefined &&
+      currentPhotos &&
+      currentPhotos.length > 0
+    ) {
+      const keepUrls = new Set(existingGalleryUrls);
+      const idsToDelete = currentPhotos
+        .filter((p) => !keepUrls.has(p.photo_url))
+        .map((p) => p.id);
+
+      if (idsToDelete.length > 0) {
+        await supabase.from("gym_photos").delete().in("id", idsToDelete);
+      }
+    }
+
+    if (newGalleryUrls.length > 0) {
+      const remainingCount = existingGalleryUrls
+        ? existingGalleryUrls.length
+        : 0;
+      const newPhotoRows = newGalleryUrls.map((url, index) => ({
+        gym_id: gymId,
+        uploaded_by: userData.id,
+        photo_url: url,
+        is_cover: remainingCount === 0 && index === 0,
+        sort_order: remainingCount + index,
+      }));
+      await supabase.from("gym_photos").insert(newPhotoRows);
+    }
+  }
 
   // 7. Keep the owner's users row in sync — same fields createGymAction
   // writes at signup. Deliberately does NOT touch avatar_url: the gym
@@ -744,7 +834,12 @@ export async function inviteTrainerAction(
   sendInvitation: boolean,
   photoFile?: File,
 ): Promise<ActionResult<{ id: string; message?: string }>> {
+  // ============================================================
+  // 1. AUTHORIZATION
+  // ============================================================
+
   const { sessionClaims } = await auth();
+
   const ownerMeta = (sessionClaims?.publicMetadata ?? {}) as {
     role?: string;
     gymId?: string;
@@ -756,17 +851,27 @@ export async function inviteTrainerAction(
       error: "Not authorized to invite trainers for a gym.",
     };
   }
+
   const gymId = ownerMeta.gymId;
 
-  // 2. Validate against the same schema the form uses client-side.
+  // ============================================================
+  // 2. VALIDATE INPUT
+  // ============================================================
+
   const parsed = createTrainerSchema.safeParse(data);
+
   if (!parsed.success) {
     return {
       success: false,
       error: parsed.error.issues[0]?.message ?? "Invalid form data.",
     };
   }
+
   const trainerData = parsed.data;
+
+  // ============================================================
+  // 3. INVITATION EMAIL VALIDATION
+  // ============================================================
 
   if (sendInvitation && !trainerData.invitedEmail) {
     return {
@@ -775,98 +880,363 @@ export async function inviteTrainerAction(
     };
   }
 
+  // ============================================================
+  // 4. NORMALIZE EMAIL
+  // ============================================================
+
+  const normalizedEmail =
+    trainerData.invitedEmail?.trim().toLowerCase() || null;
+
+  // ============================================================
+  // 5. CREATE SUPABASE CLIENT
+  // ============================================================
+
   const supabase = await createServerClient();
-  // 3. DB half — placeholder row first, photo_url null for now.
+
+  // ============================================================
+  // 6. EXISTING GLOBAL USER ID
+  // ============================================================
+
+  let existingUserId: string | null = null;
+
+  // ============================================================
+  // 7. CHECK EMAIL CONFLICT
+  // ============================================================
+
+  if (normalizedEmail) {
+    const { data: emailConflict, error: emailConflictError } =
+      await supabase.rpc("check_trainer_email_conflict", {
+        p_gym_id: gymId,
+        p_email: normalizedEmail,
+      });
+
+    if (emailConflictError) {
+      console.error(
+        "Failed to check trainer email conflict:",
+        emailConflictError,
+      );
+
+      return {
+        success: false,
+        error: "Could not verify email availability. Please try again.",
+      };
+    }
+
+    // ==========================================================
+    // RPC RESULT
+    // ==========================================================
+
+    const conflict = emailConflict?.[0];
+
+    if (!conflict) {
+      return {
+        success: false,
+        error: "Could not verify email availability. Please try again.",
+      };
+    }
+
+    // ==========================================================
+    // OWNER EMAIL
+    // ==========================================================
+
+    if (conflict.conflict_type === "owner") {
+      return {
+        success: false,
+        error:
+          "This email address already belongs to an owner account and cannot be used for a trainer.",
+      };
+    }
+
+    // ==========================================================
+    // MEMBER EMAIL
+    // ==========================================================
+
+    if (conflict.conflict_type === "member") {
+      return {
+        success: false,
+        error:
+          "This email address already belongs to a member account and cannot be used for a trainer.",
+      };
+    }
+
+    // ==========================================================
+    // TRAINER ALREADY EXISTS IN THIS GYM
+    // ==========================================================
+
+    if (conflict.conflict_type === "trainer") {
+      return {
+        success: false,
+        error: "A trainer with this email address already exists in this gym.",
+      };
+    }
+
+    // ==========================================================
+    // AVAILABLE
+    //
+    // If user_id exists:
+    //
+    // Existing global trainer account
+    //
+    // We create a NEW trainer row and connect it to
+    // the existing users.id.
+    // ==========================================================
+
+    if (conflict.conflict_type === "available") {
+      existingUserId = conflict.user_id ?? null;
+    }
+  }
+
+  // ============================================================
+  // 8. GENERATE TRAINER CODE
+  // ============================================================
 
   const trainerCode = generateTrainerCode();
-  const { data: trainer, error } = await supabase
+
+  // ============================================================
+  // 9. DETERMINE STATUS
+  //
+  // Existing trainer account:
+  //     Active
+  //
+  // New account + invitation:
+  //     Invited
+  //
+  // New account + no invitation:
+  //     Inactive
+  // ============================================================
+
+  const trainerStatus = existingUserId
+    ? "Active"
+    : sendInvitation
+      ? "Invited"
+      : "Inactive";
+
+  // ============================================================
+  // 10. CREATE NEW GYM-SPECIFIC TRAINER ROW
+  //
+  // IMPORTANT:
+  //
+  // We ALWAYS insert a NEW trainers row.
+  //
+  // We NEVER reuse the trainer ID from another gym.
+  //
+  // Existing trainer account:
+  //
+  //   users.id
+  //        ↓
+  //   trainers.profile_id
+  //
+  // Gym A:
+  //   trainers.id = A
+  //
+  // Gym B:
+  //   trainers.id = B
+  //
+  // Both:
+  //   profile_id = same users.id
+  // ============================================================
+
+  const { data: trainer, error: trainerError } = await supabase
     .from("trainers")
     .insert({
       gym_id: gymId,
+
+      /*
+       * Existing trainer account:
+       *
+       * profile_id = existing global users.id
+       *
+       * New trainer:
+       *
+       * profile_id = null
+       */
+      profile_id: existingUserId,
+
       full_name: trainerData.fullName,
-      invited_email: trainerData.invitedEmail,
-      contact_phone: trainerData.contactPhone,
-      contact_email: trainerData.invitedEmail,
+
+      invited_email: normalizedEmail,
+
+      contact_email: normalizedEmail,
+
+      contact_phone: trainerData.contactPhone || null,
+
       trainer_code: trainerCode,
+
       employee_id: trainerCode,
+
       professional_title: trainerData.professionalTitle ?? "Trainer",
+
       joining_date: trainerData.joiningDate ?? new Date().toISOString(),
+
       experience_years: trainerData.experienceYears ?? 0,
+
       qualification: trainerData.qualification,
+
       certification: trainerData.certification ?? "No certification",
+
       salary: Number(trainerData.salary ?? 0),
+
       employment_type: trainerData.employmentType as
         | "Full Time"
         | "Part Time"
         | "Contract",
+
       specializations: trainerData.specializations ?? [],
+
       working_days: trainerData.workingDays ?? [],
+
       session_types: trainerData.sessionTypes,
+
       start_time: trainerData.startTime ?? "09:00",
+
       end_time: trainerData.endTime ?? "18:00",
+
       max_members: trainerData.maxMembers,
+
       max_sessions_per_day: trainerData.maxSessionsPerDay ?? 0,
+
       accepting_new_members: trainerData.acceptingNewMembers ?? false,
+
       additional_notes: trainerData.additionalNotes ?? "",
-      status: sendInvitation ? "Invited" : "Inactive",
-      // invitation_sent_at: sendInvitation ? new Date().toISOString() : null,
+
+      /*
+       * Existing global trainer account:
+       *     Active
+       *
+       * New invited trainer:
+       *     Invited
+       *
+       * New non-invited trainer:
+       *     Inactive
+       */
+      status: trainerStatus,
     })
     .select("id")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  // ============================================================
+  // 11. TRAINER INSERT ERROR
+  // ============================================================
 
-  // 3.5. Clerk invitation — only when the owner opted to send one.
-  if (sendInvitation && trainerData.invitedEmail) {
+  if (trainerError || !trainer) {
+    console.error("Failed to create trainer:", trainerError);
+
+    return {
+      success: false,
+      error: trainerError?.message ?? "Failed to create trainer.",
+    };
+  }
+
+  // ============================================================
+  // 12. SEND CLERK INVITATION
+  //
+  // IMPORTANT:
+  //
+  // ONLY send invitation when there is NO existing user.
+  //
+  // Existing trainer account already has a Clerk account,
+  // so creating another invitation is unnecessary.
+  // ============================================================
+
+  if (sendInvitation && normalizedEmail && !existingUserId) {
     try {
       const client = await clerkClient();
+
+      // ========================================================
+      // CREATE CLERK INVITATION
+      // ========================================================
+
       const invitation = await client.invitations.createInvitation({
-        emailAddress: trainerData.invitedEmail,
+        emailAddress: normalizedEmail,
+
         redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/sign-up`,
+
         publicMetadata: {
           role: "trainer",
           gymId,
           trainerId: trainer.id,
           onboardingComplete: false,
         },
+
         notify: true,
+
         ignoreExisting: true,
       });
+
+      // ========================================================
+      // SAVE INVITATION ID
+      // ========================================================
 
       const { error: clerkIdError } = await supabase
         .from("trainers")
         .update({
           clerk_invitation_id: invitation.id,
-          invitation_sent_at: sendInvitation ? new Date().toISOString() : null,
+
+          invitation_sent_at: new Date().toISOString(),
         })
         .eq("id", trainer.id);
-      if (clerkIdError) return { success: false, error: clerkIdError.message };
+
+      if (clerkIdError) {
+        console.error("Failed to save Clerk invitation:", clerkIdError);
+
+        return {
+          success: false,
+          error: clerkIdError.message,
+        };
+      }
     } catch (err) {
-      // Trainer row already exists at this point — surface the failure
-      // rather than silently leaving it stuck in "Invited" with no invite sent.
-      const message =
-        err instanceof Error ? err.message : "Failed to send invitation.";
+      console.error("Failed to send trainer invitation:", err);
+
+      // ========================================================
+      // ROLLBACK TRAINER STATUS
+      // ========================================================
+
       await supabase
         .from("trainers")
-        .update({ status: "Inactive", invitation_sent_at: null })
+        .update({
+          status: "Inactive",
+          invitation_sent_at: null,
+          clerk_invitation_id: null,
+        })
         .eq("id", trainer.id);
-      return { success: false, error: message };
+
+      return {
+        success: false,
+        error:
+          err instanceof Error ? err.message : "Failed to send invitation.",
+      };
     }
   }
 
-  // 4. Photo upload — now trainer.id exists to build the storage path.
+  // ============================================================
+  // 13. PHOTO UPLOAD
+  // ============================================================
+
   if (photoFile && photoFile.size > 0) {
     try {
       const profileImageUrl = await uploadFile(
         photoFile,
         `trackVim/trainers/${trainer.id}/photo`,
       );
+
       const { error: photoError } = await supabase
         .from("trainers")
-        .update({ photo_url: profileImageUrl })
+        .update({
+          photo_url: profileImageUrl,
+        })
         .eq("id", trainer.id);
-      if (photoError) return { success: false, error: photoError.message };
+
+      if (photoError) {
+        console.error("Failed to save trainer photo:", photoError);
+
+        return {
+          success: false,
+          error: photoError.message,
+        };
+      }
     } catch (err) {
+      console.error("Failed to upload trainer photo:", err);
+
       return {
         success: false,
         error:
@@ -877,13 +1247,29 @@ export async function inviteTrainerAction(
     }
   }
 
+  // ============================================================
+  // 14. REVALIDATE
+  // ============================================================
+
+  revalidatePath("/owner/trainers");
+
+  revalidatePath(`/owner/trainers/${trainer.id}`);
+
+  // ============================================================
+  // 15. SUCCESS MESSAGE
+  // ============================================================
+
   return {
     success: true,
+
     data: {
       id: trainer.id,
-      message: sendInvitation
-        ? "Trainer invited successfully"
-        : "Trainer added successfully",
+
+      message: existingUserId
+        ? "Trainer added successfully."
+        : sendInvitation
+          ? "Trainer invited successfully."
+          : "Trainer added successfully.",
     },
   };
 }
@@ -924,7 +1310,7 @@ export async function deleteTrainerAction(trainerId: string) {
   }
   const { error } = await supabase
     .from("trainers")
-    .update({ deleted_at: new Date().toISOString() })
+    .update({ deleted_at: new Date().toISOString(), status: "Inactive" })
     .eq("id", trainerId)
     .eq("gym_id", meta.gymId);
 
@@ -954,12 +1340,17 @@ export async function addMemberAction(
   photoFile: File | null,
   paymentMethod: PaymentMethod,
 ): Promise<ActionResult<{ memberId: string; membershipId: string }>> {
-  // 1. Auth
+  // ============================================================
+  // 1. AUTH
+  // ============================================================
+
   const { sessionClaims } = await auth();
+
   const ownerMeta = (sessionClaims?.publicMetadata ?? {}) as {
     role?: string;
     gymId?: string;
   };
+
   const isOwner = ownerMeta.role === "owner";
 
   if ((!isOwner && ownerMeta.role !== "trainer") || !ownerMeta.gymId) {
@@ -968,16 +1359,22 @@ export async function addMemberAction(
       error: "Not authorized to add members for a gym.",
     };
   }
+
   const gymId = ownerMeta.gymId;
 
-  // 2. Validate
+  // ============================================================
+  // 2. VALIDATE
+  // ============================================================
+
   const parsed = inviteMemberFormSchema.safeParse(data);
+
   if (!parsed.success) {
     return {
       success: false,
       error: parsed.error.issues[0]?.message ?? "Invalid form data.",
     };
   }
+
   const memberData = parsed.data;
 
   if (sendInvitation && !memberData.invitedEmail) {
@@ -989,28 +1386,176 @@ export async function addMemberAction(
 
   const supabase = await createServerClient();
 
-  // 3. Step 1 — "Owner creates member". No auth account yet; profile_id
-  // stays null until the member eventually signs up and links it.
-  const { data: member, error: memberError } = await supabase.rpc(
-    "create_walkin_member",
-    {
-      p_gym_id: gymId,
-      p_full_name: memberData.fullName!,
-      ...(memberData.invitedEmail && { p_email: memberData.invitedEmail }),
-      ...(memberData.contactPhone && { p_phone: memberData.contactPhone }),
-      p_member_code: generateMemberCode(),
-    },
-  );
+  // ============================================================
+  // 3. NORMALIZE EMAIL
+  // ============================================================
 
-  if (memberError || !member) {
-    return {
-      success: false,
-      error: memberError?.message ?? "Failed to create member.",
-    };
+  const normalizedEmail = memberData.invitedEmail?.trim().toLowerCase() || null;
+
+  // Existing global member ID, if found.
+  let existingMemberId: string | null = null;
+
+  // ============================================================
+  // 4. GLOBAL EMAIL CONFLICT CHECK
+  //
+  // IMPORTANT:
+  // This is now handled by SECURITY DEFINER RPC.
+  //
+  // We do NOT directly query users/trainers/members here because
+  // normal RLS can hide globally existing records.
+  // ============================================================
+
+  if (normalizedEmail) {
+    const { data: emailConflict, error: emailConflictError } =
+      await supabase.rpc("check_member_email_conflict", {
+        p_email: normalizedEmail,
+      });
+
+    if (emailConflictError) {
+      console.error(
+        "Failed to check member email conflict:",
+        emailConflictError,
+      );
+
+      return {
+        success: false,
+        error: "Could not verify email availability. Please try again.",
+      };
+    }
+
+    const conflict = emailConflict?.[0];
+
+    if (!conflict) {
+      return {
+        success: false,
+        error: "Could not verify email availability. Please try again.",
+      };
+    }
+
+    // ----------------------------------------------------------
+    // EXISTING OWNER
+    // ----------------------------------------------------------
+
+    if (conflict.conflict_type === "owner") {
+      return {
+        success: false,
+        error:
+          "This email address already belongs to an owner account and cannot be added as a member.",
+      };
+    }
+
+    // ----------------------------------------------------------
+    // EXISTING TRAINER
+    // ----------------------------------------------------------
+
+    if (conflict.conflict_type === "trainer") {
+      return {
+        success: false,
+        error:
+          "This email address already belongs to a trainer account and cannot be added as a member.",
+      };
+    }
+
+    // ----------------------------------------------------------
+    // EXISTING GLOBAL MEMBER
+    // ----------------------------------------------------------
+
+    if (conflict.conflict_type === "member") {
+      existingMemberId = conflict.member_id;
+
+      if (!existingMemberId) {
+        return {
+          success: false,
+          error: "Existing member record is invalid.",
+        };
+      }
+
+      // --------------------------------------------------------
+      // CHECK CURRENT GYM MEMBERSHIP
+      //
+      // This query is gym-scoped, so normal RLS is appropriate.
+      // --------------------------------------------------------
+
+      const { data: existingGymMembership, error: gymMembershipError } =
+        await supabase
+          .from("gym_memberships")
+          .select("id")
+          .eq("gym_id", gymId)
+          .eq("member_id", existingMemberId)
+          .limit(1)
+          .maybeSingle();
+
+      if (gymMembershipError) {
+        console.error(
+          "Failed to check existing gym membership:",
+          gymMembershipError,
+        );
+
+        return {
+          success: false,
+          error: "Could not verify gym membership. Please try again.",
+        };
+      }
+
+      if (existingGymMembership) {
+        return {
+          success: false,
+          error: "Member already in the gym.",
+        };
+      }
+    }
   }
 
-  // 4. Step 2 — "Membership", Option A (no application). Creates the
-  // gym_membership (PaymentPending) AND the Pending payment stub together.
+  // ============================================================
+  // 5. CREATE OR REUSE MEMBER
+  // ============================================================
+
+  let member: { id: string } | null = null;
+
+  if (existingMemberId) {
+    // ----------------------------------------------------------
+    // EXISTING GLOBAL MEMBER
+    // ----------------------------------------------------------
+
+    member = {
+      id: existingMemberId,
+    };
+  } else {
+    // ----------------------------------------------------------
+    // NEW MEMBER
+    // ----------------------------------------------------------
+
+    const { data: createdMember, error: memberError } = await supabase.rpc(
+      "create_walkin_member",
+      {
+        p_gym_id: gymId,
+        p_full_name: memberData.fullName!,
+        ...(normalizedEmail && {
+          p_email: normalizedEmail,
+        }),
+        ...(memberData.contactPhone && {
+          p_phone: memberData.contactPhone,
+        }),
+        p_member_code: generateMemberCode(),
+      },
+    );
+
+    if (memberError || !createdMember) {
+      console.error("Failed to create member:", memberError);
+
+      return {
+        success: false,
+        error: memberError?.message ?? "Failed to create member.",
+      };
+    }
+
+    member = createdMember;
+  }
+
+  // ============================================================
+  // 6. CREATE MEMBERSHIP
+  // ============================================================
+
   const { data: membershipId, error: membershipError } = await supabase.rpc(
     "create_walkin_membership",
     {
@@ -1021,14 +1566,20 @@ export async function addMemberAction(
   );
 
   if (membershipError || !membershipId) {
+    console.error("Failed to create membership:", membershipError);
+
     return {
       success: false,
       error: membershipError?.message ?? "Failed to create membership.",
     };
   }
 
-  // 5. Fill in the rest of the profile (+ photo, if provided).
+  // ============================================================
+  // 7. UPLOAD PHOTO
+  // ============================================================
+
   let photoUrl: string | null = null;
+
   if (photoFile && photoFile.size > 0) {
     try {
       photoUrl = await uploadFile(
@@ -1036,6 +1587,8 @@ export async function addMemberAction(
         `trackVim/members/${member.id}/photo`,
       );
     } catch (err) {
+      console.error("Failed to upload member photo:", err);
+
       return {
         success: false,
         error:
@@ -1045,6 +1598,10 @@ export async function addMemberAction(
       };
     }
   }
+
+  // ============================================================
+  // 8. UPDATE MEMBER PROFILE
+  // ============================================================
 
   const { error: profileError } = await supabase
     .from("members")
@@ -1089,10 +1646,18 @@ export async function addMemberAction(
     .eq("id", member.id);
 
   if (profileError) {
-    return { success: false, error: profileError.message };
+    console.error("Failed to update member profile:", profileError);
+
+    return {
+      success: false,
+      error: profileError.message,
+    };
   }
 
-  // 6. Optional trainer assignment.
+  // ============================================================
+  // 9. OPTIONAL TRAINER ASSIGNMENT
+  // ============================================================
+
   if (memberData.trainerId) {
     const { error: assignmentError } = await supabase
       .from("trainer_assignments")
@@ -1101,15 +1666,23 @@ export async function addMemberAction(
         member_id: member.id,
         trainer_id: memberData.trainerId,
       });
+
     if (assignmentError) {
-      return { success: false, error: assignmentError.message };
+      console.error("Failed to assign trainer:", assignmentError);
+
+      return {
+        success: false,
+        error: assignmentError.message,
+      };
     }
   }
 
-  // 7. Payment. Look up the Pending stub create_walkin_membership just
-  // inserted regardless of markPaidNow, since we need its id either way
-  // for the verify step below.
+  // ============================================================
+  // 10. PAYMENT
+  // ============================================================
+
   let paymentId: string | null = null;
+
   if (markPaidNow) {
     const { data: payment, error: paymentLookupError } = await supabase
       .from("payments")
@@ -1119,6 +1692,8 @@ export async function addMemberAction(
       .single();
 
     if (paymentLookupError || !payment) {
+      console.error("Failed to find pending payment:", paymentLookupError);
+
       return {
         success: false,
         error:
@@ -1126,10 +1701,13 @@ export async function addMemberAction(
           "Could not find the pending payment to record.",
       };
     }
+
     paymentId = payment.id;
 
-    // 7a. Record — Pending -> PendingVerification. Staff-wide (owner or
-    // trainer); this is just "front desk collected the money".
+    // ----------------------------------------------------------
+    // 10A. RECORD PAYMENT
+    // ----------------------------------------------------------
+
     const { error: recordError } = await supabase.rpc("record_walkin_payment", {
       p_payment_id: payment.id,
       p_method: paymentMethod as "Cash" | "UPI" | "Card" | "Bank Transfer",
@@ -1137,31 +1715,49 @@ export async function addMemberAction(
     });
 
     if (recordError) {
-      return { success: false, error: recordError.message };
+      console.error("Failed to record payment:", recordError);
+
+      return {
+        success: false,
+        error: recordError.message,
+      };
     }
 
-    // 7b. Verify — owner ONLY. PendingVerification -> Verified, and (per
-    // verify_payment's own logic, unchanged/004) the linked gym_membership
-    // moves to Active. Trainers stop here at PendingVerification; an
-    // actual owner has to come back and verify it, same as any other
-    // trainer-recorded payment.
+    // ----------------------------------------------------------
+    // 10B. OWNER VERIFIES PAYMENT
+    // ----------------------------------------------------------
+
     if (isOwner) {
       const { error: verifyError } = await supabase.rpc("verify_payment", {
         p_payment_id: paymentId,
       });
 
       if (verifyError) {
-        return { success: false, error: verifyError.message };
+        console.error("Failed to verify payment:", verifyError);
+
+        return {
+          success: false,
+          error: verifyError.message,
+        };
       }
     }
   }
 
-  // 8. Invitation — decoupled, fire-and-forget.
-  if (sendInvitation && memberData.invitedEmail) {
+  // ============================================================
+  // 11. INVITATION
+  //
+  // Only invite newly created global members.
+  //
+  // Existing members already have their own account/invitation
+  // lifecycle, so we must NEVER send a new invitation here.
+  // ============================================================
+
+  if (sendInvitation && normalizedEmail && !existingMemberId) {
     try {
       const client = await clerkClient();
+
       const invitation = await client.invitations.createInvitation({
-        emailAddress: memberData.invitedEmail,
+        emailAddress: normalizedEmail,
         redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/sign-up`,
         publicMetadata: {
           role: "member",
@@ -1177,20 +1773,171 @@ export async function addMemberAction(
         .from("members")
         .update({
           clerk_invitation_id: invitation.id,
-          invitation_sent_at: sendInvitation ? new Date().toISOString() : null,
+          invitation_sent_at: new Date().toISOString(),
         })
         .eq("id", member.id);
-      if (clerkIdError) return { success: false, error: clerkIdError.message };
+
+      if (clerkIdError) {
+        console.error("Failed to save Clerk invitation:", clerkIdError);
+
+        return {
+          success: false,
+          error: clerkIdError.message,
+        };
+      }
     } catch (err) {
+      /*
+       * Invitation failure should NOT fail member creation.
+       */
       console.error("Failed to send member invitation email:", err);
     }
   }
+
+  // ============================================================
+  // 12. REVALIDATE
+  // ============================================================
 
   revalidatePath("/owner/members");
 
   return {
     success: true,
-    data: { memberId: member.id, membershipId },
+    data: {
+      memberId: member.id,
+      membershipId,
+    },
+  };
+}
+
+//Delete membership
+
+type DeleteMemberResult = {
+  memberName: string;
+};
+
+export async function deleteMemberAction(
+  memberId: string,
+): Promise<ActionResult<DeleteMemberResult>> {
+  // ============================================================
+  // 1. AUTH
+  // ============================================================
+
+  const { sessionClaims } = await auth();
+
+  const ownerMeta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+
+  const isStaff = ownerMeta.role === "owner" || ownerMeta.role === "trainer";
+
+  if (!isStaff || !ownerMeta.gymId) {
+    return {
+      success: false,
+      error: "Not authorized to remove members from a gym.",
+    };
+  }
+
+  const gymId = ownerMeta.gymId;
+
+  // ============================================================
+  // 2. VALIDATE MEMBER ID
+  // ============================================================
+
+  if (!memberId?.trim()) {
+    return {
+      success: false,
+      error: "Member ID is required.",
+    };
+  }
+
+  // ============================================================
+  // 3. SUPABASE
+  // ============================================================
+
+  const supabase = await createServerClient();
+
+  // ============================================================
+  // 4. REMOVE MEMBER FROM THIS GYM
+  //
+  // IMPORTANT:
+  //
+  // This removes ONLY the gym_memberships relationship.
+  //
+  // It does NOT delete:
+  // - members row
+  // - users row
+  // - global member account
+  //
+  // The RPC is responsible for:
+  // - authorization
+  // - verifying membership belongs to gym
+  // - deleting gym_memberships
+  // - cleaning trainer assignment
+  // - clearing active_gym_membership_id
+  // ============================================================
+
+  const { data, error } = await supabase.rpc("remove_member_from_gym", {
+    p_gym_id: gymId,
+    p_member_id: memberId,
+  });
+
+  // ============================================================
+  // 5. HANDLE RPC ERROR
+  // ============================================================
+
+  if (error) {
+    console.error("Failed to remove member from gym:", {
+      memberId,
+      gymId,
+      error,
+    });
+
+    return {
+      success: false,
+      error: error.message || "Failed to remove member. Please try again.",
+    };
+  }
+
+  // ============================================================
+  // 6. READ RPC RESULT
+  //
+  // Expected:
+  //
+  // [
+  //   {
+  //     success: true,
+  //     member_name: "Sahil Kumar"
+  //   }
+  // ]
+  // ============================================================
+
+  const result = data?.[0];
+
+  if (!result?.success) {
+    return {
+      success: false,
+      error: "Failed to remove member.",
+    };
+  }
+
+  // ============================================================
+  // 7. REVALIDATE
+  // ============================================================
+
+  revalidatePath("/owner/members");
+
+  // If this route exists:
+  revalidatePath(`/owner/members/${memberId}`);
+
+  // ============================================================
+  // 8. SUCCESS
+  // ============================================================
+
+  return {
+    success: true,
+    data: {
+      memberName: result.member_name,
+    },
   };
 }
 

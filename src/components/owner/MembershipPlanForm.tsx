@@ -51,7 +51,11 @@ import {
 } from "@/constants/plan-options";
 // TODO: wire up to the real action once it exists, mirroring
 // inviteTrainerAction's (data) => { success, error? } shape.
-import { createMembershipPlanAction } from "@/actions/owner.action";
+import {
+  createMembershipPlanAction,
+  updateMembershipPlanAction,
+} from "@/actions/owner.action";
+import { PlanDetail } from "@/services/owner.query";
 import { toast } from "sonner";
 
 // Auto-fills durationMonths when a preset duration is picked. "Custom" is
@@ -93,9 +97,6 @@ const defaultValues: Partial<CreateMembershipPlanInput> = {
   ],
   customFeatures: [
     "Nutrition Consultation",
-    "Swimming Pool",
-    "Zumba Classes",
-    "Juice Bar Discount",
   ],
   minimumAge: 18,
   maximumAge: 60,
@@ -108,16 +109,57 @@ const defaultValues: Partial<CreateMembershipPlanInput> = {
   additionalNotes: "",
 };
 
-// Stable id so the header's "Save Plan" button — rendered outside this
-// component in the server component — can submit this form via the HTML
-// `form="..."` attribute, without needing access to react-hook-form's
-// handleSubmit.
+function mapPlanToFormValues(plan: PlanDetail): Partial<CreateMembershipPlanInput> {
+  return {
+    planName: plan.plan_name ?? "",
+    shortDescription: plan.short_description ?? "",
+    planCategory: plan.plan_category ?? "Standard",
+    planColor: plan.plan_color ?? "#8b5cf6",
+    planIcon: plan.plan_icon ?? "Crown",
+    planPrice: plan.plan_price != null ? String(plan.plan_price) : "0",
+    joiningFee: plan.joining_fee != null ? String(plan.joining_fee) : "0",
+    securityDeposit: plan.security_deposit != null ? String(plan.security_deposit) : "0",
+    pricingType: plan.pricing_type ?? "Recurring",
+    discountType: plan.discount_type ?? undefined,
+    discountValue: plan.discount_value != null ? String(plan.discount_value) : "",
+    membershipDuration: plan.membership_duration ?? "1 Month",
+    durationMonths: plan.duration_months ?? 1,
+    validityStarts: plan.validity_starts ?? "From Joining Date",
+    gracePeriodDays: plan.grace_period_days ?? 0,
+    allowFreeze: plan.allow_freeze ?? false,
+    maxFreezeDays: plan.max_freeze_days ?? 0,
+    selectedFeatures: Array.isArray(plan.selected_features) ? plan.selected_features : [],
+    customFeatures: Array.isArray(plan.custom_features) ? plan.custom_features : [],
+    minimumAge: plan.minimum_age ?? 14,
+    maximumAge: plan.maximum_age ?? 80,
+    maxActiveMembers: plan.max_active_members ?? undefined,
+    enrollmentMode: plan.enrollment_mode ?? "Open",
+    cancellationAllowed: plan.cancellation_allowed ?? true,
+    status: plan.status ?? "Active",
+    visibility: plan.visibility ?? "Visible to Everyone",
+    isFeatured: plan.is_featured ?? false,
+    additionalNotes: plan.additional_notes ?? "",
+  };
+}
+
 export const MEMBERSHIP_PLAN_FORM_ID = "create-membership-plan-form";
 
-export default function MembershipPlanForm() {
+export interface MembershipPlanFormProps {
+  initialData?: PlanDetail;
+  planId?: string;
+  mode?: "create" | "edit";
+}
+
+export default function MembershipPlanForm({
+  initialData,
+  planId,
+  mode = "create",
+}: MembershipPlanFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [customFeatureInput, setCustomFeatureInput] = useState("");
+
+  const formDefaults = initialData ? mapPlanToFormValues(initialData) : defaultValues;
 
   const {
     register,
@@ -127,7 +169,7 @@ export default function MembershipPlanForm() {
     setValue,
   } = useForm<CreateMembershipPlanInput>({
     resolver: zodResolver(createMembershipPlanSchema),
-    defaultValues,
+    defaultValues: formDefaults,
     mode: "onBlur",
   });
 
@@ -214,15 +256,44 @@ export default function MembershipPlanForm() {
     if (isPending) return;
     startTransition(async () => {
       try {
-        const result = await createMembershipPlanAction(data);
-        if (!result.success) {
-          console.error(result.error);
-          toast.error(result.error ?? "Failed to create membership plan.");
-          return;
-        }
+        if (mode === "edit" && planId) {
+          const result = await updateMembershipPlanAction(planId, {
+            planName: data.planName,
+            shortDescription: data.shortDescription,
+            planPrice: Number(data.planPrice),
+            joiningFee: Number(data.joiningFee ?? 0),
+            membershipDuration: data.membershipDuration,
+            durationMonths: data.durationMonths,
+            status: data.status as "Active" | "Draft" | "Hidden",
+            selectedFeatures: data.selectedFeatures ?? [],
+            customFeatures: data.customFeatures ?? [],
+            enrollmentMode: (data.enrollmentMode as any) ?? "Open",
+            isFeatured: data.isFeatured ?? false,
+            additionalNotes: data.additionalNotes ?? "",
+            allowFreeze: data.allowFreeze ?? false,
+            maxFreezeDays: Number(data.maxFreezeDays ?? 0),
+            maxActiveMembers: Number(data.maxActiveMembers ?? 0),
+          });
 
-        toast.success("Membership plan created successfully.");
-        router.push("/owner/plans");
+          if (!result.success) {
+            console.error(result.error);
+            toast.error(result.error ?? "Failed to update membership plan.");
+            return;
+          }
+
+          toast.success("Membership plan updated successfully.");
+          router.push("/owner/plans");
+        } else {
+          const result = await createMembershipPlanAction(data);
+          if (!result.success) {
+            console.error(result.error);
+            toast.error(result.error ?? "Failed to create membership plan.");
+            return;
+          }
+
+          toast.success("Membership plan created successfully.");
+          router.push("/owner/plans");
+        }
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");
@@ -339,6 +410,7 @@ export default function MembershipPlanForm() {
             <FormSelect
               label="Pricing Type"
               options={PRICING_TYPES}
+              disabled={true}
               {...register("pricingType")}
             />
             <FormSelect
@@ -384,6 +456,7 @@ export default function MembershipPlanForm() {
             <FormSelect
               label="Validity Starts"
               options={VALIDITY_OPTIONS}
+              disabled={true}
               {...register("validityStarts")}
             />
           </div>
@@ -534,6 +607,7 @@ export default function MembershipPlanForm() {
           <FormSelect
             label="Enrollment Mode"
             options={ENROLLMENT_MODES}
+            disabled={true}
             {...register("enrollmentMode")}
           />
           <div className="flex items-center justify-between pt-2 border-t border-border">
@@ -570,6 +644,7 @@ export default function MembershipPlanForm() {
               label="Visibility"
               options={VISIBILITY_OPTIONS}
               required
+              disabled={true}
               {...register("visibility")}
               error={errors.visibility}
             />
@@ -625,8 +700,10 @@ export default function MembershipPlanForm() {
               {isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Creating Plan…
+                  {mode === "edit" ? "Updating Plan…" : "Creating Plan…"}
                 </>
+              ) : mode === "edit" ? (
+                "Update Membership Plan"
               ) : (
                 "Create Membership Plan"
               )}

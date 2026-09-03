@@ -165,8 +165,12 @@ export function useMultiUpload(
     [max],
   );
 
-  useEffect(() => {
-    return () => urlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+  const clear = useCallback(() => {
+    urlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+    urlsRef.current.clear();
+    setFiles([]);
+    setPreviews([]);
+    setError(null);
   }, []);
 
   const dropzone = useDropzone({
@@ -176,7 +180,7 @@ export function useMultiUpload(
     disabled: files.length >= max,
   });
 
-  return { files, previews, error, remove, dropzone };
+  return { files, previews, error, remove, clear, dropzone };
 }
 
 // ─────────────────────────────────────────────

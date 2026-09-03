@@ -29,6 +29,7 @@ import {
   getGymPayments,
   getGymPaymentsOverview,
   getPaymentById,
+  getPlanById,
 } from "@/services/owner.query";
 
 const FAST = 30_000; // attendance, sessions, today-status
@@ -474,6 +475,24 @@ export function usePaymentById(paymentId: string) {
       return result.data;
     },
     enabled: !!activeGymId && !!paymentId,
+    staleTime: SLOW,
+  });
+}
+
+export function usePlanById(planId: string) {
+  const { supabase } = useSupabaseClient();
+  const activeGymId = useOwnerStore((state) => state.activeGymId);
+
+  return useQuery({
+    queryKey: ["plan", activeGymId, planId],
+    queryFn: async () => {
+      const result = await getPlanById(supabase, planId, activeGymId!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    enabled: !!activeGymId && !!planId,
     staleTime: SLOW,
   });
 }
