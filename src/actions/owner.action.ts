@@ -793,10 +793,8 @@ export async function updateMembershipPlanAction(
     update.short_description = payload.shortDescription;
   if (payload.planCategory !== undefined)
     update.plan_category = payload.planCategory;
-  if (payload.planColor !== undefined)
-    update.plan_color = payload.planColor;
-  if (payload.planIcon !== undefined)
-    update.plan_icon = payload.planIcon;
+  if (payload.planColor !== undefined) update.plan_color = payload.planColor;
+  if (payload.planIcon !== undefined) update.plan_icon = payload.planIcon;
   if (payload.planPrice !== undefined)
     update.plan_price = payload.planPrice.toString();
   if (payload.durationMonths !== undefined)
@@ -812,10 +810,8 @@ export async function updateMembershipPlanAction(
       payload.discountValue !== null ? payload.discountValue.toString() : null;
   if (payload.gracePeriodDays !== undefined)
     update.grace_period_days = payload.gracePeriodDays;
-  if (payload.minimumAge !== undefined)
-    update.minimum_age = payload.minimumAge;
-  if (payload.maximumAge !== undefined)
-    update.maximum_age = payload.maximumAge;
+  if (payload.minimumAge !== undefined) update.minimum_age = payload.minimumAge;
+  if (payload.maximumAge !== undefined) update.maximum_age = payload.maximumAge;
   if (payload.cancellationAllowed !== undefined)
     update.cancellation_allowed = payload.cancellationAllowed;
   if (payload.status !== undefined) update.status = payload.status;
@@ -2463,4 +2459,92 @@ export async function correctAttendanceAction(
 
   revalidatePath("/dashboard/attendance");
   return { success: true, data: undefined };
+}
+
+/**
+ * Manual check-in/check-out (Admin / Staff)
+ *
+ * This lets an admin manually punch a member in or out for a specific date.
+ */
+
+export async function manualCheckInOutAction(input: {
+  memberId: string;
+  attendanceDate: string; // YYYY-MM-DD
+}) {
+  // ============================================================
+  // 1. AUTH
+  // ============================================================
+
+  const { sessionClaims } = await auth();
+
+  const userId = sessionClaims?.sub;
+
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+
+  // ============================================================
+  // 2. OWNER AUTHORIZATION
+  // ============================================================
+
+  if (!userId) {
+    return {
+      success: false as const,
+      error: "Not authenticated.",
+    };
+  }
+
+  if (meta.role !== "owner" || !meta.gymId) {
+    return {
+      success: false as const,
+      error: "Not authorized to manage attendance for this gym.",
+    };
+  }
+
+  // ============================================================
+  // 3. VALIDATE DATE
+  // ============================================================
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.attendanceDate)) {
+    return {
+      success: false as const,
+      error: "Invalid attendance date.",
+    };
+  }
+
+  // ============================================================
+  // 4. SUPABASE
+  // ============================================================
+
+  const supabase = await createServerClient();
+
+  // ============================================================
+  // 5. MANUAL CHECK-IN / CHECK-OUT
+  // ============================================================
+
+  const { data, error } = await supabase.rpc("manual_check_in_out", {
+    p_gym_id: meta.gymId,
+    p_member_id: input.memberId,
+    p_attendance_date: input.attendanceDate,
+  });
+
+  if (error) {
+    return {
+      success: false as const,
+      error: error.message,
+    };
+  }
+
+  // ============================================================
+  // 6. REVALIDATE ATTENDANCE PAGES
+  // ============================================================
+
+  revalidatePath("/owner/attendance");
+  revalidatePath("/owner/members");
+
+  return {
+    success: true as const,
+    data,
+  };
 }

@@ -25,6 +25,7 @@ import {
   IndianRupee,
   Loader2,
   RefreshCw,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -61,6 +62,10 @@ import {
 } from "@/hooks/queries/owner.query";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { deleteMemberAction } from "@/actions/owner.action";
+import {
+  ManualAttendanceDialog,
+  useManualAttendanceDialog,
+} from "../ManualAttendanceDialog";
 import { ConfirmDialog, useConfirmDialog } from "../Confirmdialog";
 
 const statusOptions = ["All", "Active", "Expired", "Expiring Soon", "Pending"];
@@ -248,6 +253,7 @@ export function MembersTable() {
     toast.error("Edit function is not implemented yet");
 
   const deleteConfirm = useConfirmDialog<MemberRow>();
+  const attendanceDialog = useManualAttendanceDialog<MemberRow>();
 
   const handleDeleteMember = async (member: MemberRow) => {
     const result = await deleteMemberAction(member.id);
@@ -545,6 +551,12 @@ export function MembersTable() {
                 <DropdownMenuItem onClick={handleEditMember}>
                   <Pencil className="w-4 h-4 mr-2" />
                   Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => attendanceDialog.request(member)}
+                >
+                  <Clock className="w-4 h-4 mr-2" />
+                  Attendance
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => deleteConfirm.request(member)}
@@ -920,6 +932,12 @@ export function MembersTable() {
                           Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem
+                          onClick={() => attendanceDialog.request(member)}
+                        >
+                          <Clock className="w-4 h-4 mr-2" />
+                          Attendance
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           onClick={() => deleteConfirm.request(member)}
                           className="text-red-600 focus:text-red-600"
                         >
@@ -1097,6 +1115,13 @@ export function MembersTable() {
           }
         }}
         destructive
+      />
+      <ManualAttendanceDialog
+        open={attendanceDialog.isOpen}
+        onOpenChange={(open) => !open && attendanceDialog.close()}
+        memberId={attendanceDialog.target?.id ?? ""}
+        memberName={attendanceDialog.target?.name ?? ""}
+        onSuccess={() => refetchAll()}
       />
     </>
   );

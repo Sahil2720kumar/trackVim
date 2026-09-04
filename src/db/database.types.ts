@@ -2418,7 +2418,11 @@ export type Database = {
       }
       is_gym_owner: { Args: { target_gym_id: string }; Returns: boolean }
       manual_check_in_out: {
-        Args: { p_gym_id: string; p_member_id: string }
+        Args: {
+          p_attendance_date: string
+          p_gym_id: string
+          p_member_id: string
+        }
         Returns: Json
       }
       mark_gym_subscription_paid: {
