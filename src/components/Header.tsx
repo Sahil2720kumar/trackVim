@@ -451,7 +451,7 @@ const UserMenu = ({
             <DropdownMenuItem asChild className="cursor-pointer">
               <Link
                 className="flex flex-row flex-1 items-center "
-                href="/owner/payments"
+                href="/owner/billing"
               >
                 <CreditCard className="h-4 w-4 mr-2 text-muted-foreground" />
                 <span>Billing </span>
