@@ -141,6 +141,14 @@ export const ownerBreadcrumbRoutes: BreadcrumbRoute[] = [
     ],
   },
   {
+    pattern: "/owner/attendance/scan",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Attendance", href: "/owner/attendance/scan" },
+      { label: "Scan QR", href: "/owner/attendance/scan", isActive: true },
+    ],
+  },
+  {
     pattern: "/owner/payments",
     items: [
       { label: "Home", href: "/owner/dashboard" },

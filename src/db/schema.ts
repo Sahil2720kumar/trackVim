@@ -219,6 +219,21 @@ export const attendanceStatusEnum = pgEnum("attendance_status", [
   "CheckedOut",
 ]);
 
+export const attendanceSourceEnum = pgEnum("attendance_source", [
+  "MemberQr",
+  "MembershipCard",
+  "ReceptionManual",
+]);
+
+// Member scans gym QR
+// → attendanceSource = MemberQr
+
+// Receptionist scans card
+// → attendanceSource = MembershipCard
+
+// Receptionist searches member manually
+// → attendanceSource = ReceptionManual
+
 export const workoutTypeEnum = pgEnum("workout_type", [
   "Strength",
   "Hypertrophy",
@@ -650,6 +665,78 @@ export const gymQrCodes = pgTable(
     }),
 
     pgPolicy("Gym staff can update QR codes", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`gym_id in ${STAFF_GYM_IDS}`,
+      withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
+    }),
+  ],
+).enableRLS();
+
+export const membershipQrCodes = pgTable(
+  "membership_qr_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+
+    gymId: uuid("gym_id")
+      .notNull()
+      .references(() => gyms.id, {
+        onDelete: "cascade",
+      }),
+
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => members.id, {
+        onDelete: "cascade",
+      }),
+
+    gymMembershipId: uuid("gym_membership_id")
+      .notNull()
+      .references(() => gymMemberships.id, {
+        onDelete: "cascade",
+      }),
+
+    // Random opaque token encoded into the physical membership-card QR.
+    token: uuid("token").notNull().defaultRandom().unique(),
+
+    isActive: boolean("is_active").notNull().default(true),
+
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("membership_qr_codes_gym_idx").on(t.gymId),
+
+    index("membership_qr_codes_member_idx").on(t.memberId),
+
+    index("membership_qr_codes_membership_idx").on(t.gymMembershipId),
+
+    uniqueIndex("membership_qr_codes_one_active_per_membership_idx")
+      .on(t.gymMembershipId)
+      .where(sql`${t.isActive} = true`),
+
+    pgPolicy("Gym staff can view membership QR codes", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`gym_id in ${STAFF_GYM_IDS}`,
+    }),
+
+    pgPolicy("Gym staff can create membership QR codes", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: sql`gym_id in ${STAFF_GYM_IDS}`,
+    }),
+
+    pgPolicy("Gym staff can update membership QR codes", {
       for: "update",
       to: authenticatedRole,
       using: sql`gym_id in ${STAFF_GYM_IDS}`,
@@ -1382,6 +1469,15 @@ export const attendance = pgTable(
     qrCodeId: uuid("qr_code_id").references(() => gymQrCodes.id, {
       onDelete: "set null",
     }),
+    membershipQrCodeId: uuid("membership_qr_code_id").references(
+      () => membershipQrCodes.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    attendanceSource: attendanceSourceEnum("attendance_source")
+      .notNull()
+      .default("MemberQr"),
     locationId: uuid("location_id").references(() => gymLocations.id, {
       onDelete: "set null",
     }),
