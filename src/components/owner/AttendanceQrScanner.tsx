@@ -88,8 +88,12 @@ type ScanRpcResult = {
   end_date?: string;
 };
 
-const formatTime = (value?: string | null) =>
-  value ? format(new Date(value), "h:mm a") : format(new Date(), "h:mm a");
+const formatTime = (value?: string | null) => {
+  if (!value) return "Unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unavailable";
+  return format(date, "h:mm a");
+};
 
 const formatDay = (value?: string | null) =>
   value ? format(new Date(value), "d MMM yyyy") : "—";
@@ -286,7 +290,7 @@ export function AttendanceQrScanner({
         setState({
           type: "already_marked",
           memberName: member.full_name ?? undefined,
-          timeRecorded: formatTime(res.data?.checkOut),
+          timeRecorded: formatTime(res.data?.checkOut ?? res.data?.checkIn),
         });
         toast.success(`${member.full_name} already checked out for today`);
         return;

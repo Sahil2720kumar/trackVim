@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useCallback } from "react";
 import {
   ColumnDef,
   flexRender,
@@ -279,22 +279,25 @@ export function MembersTable() {
     refetchAll();
   };
 
-  const handleDownloadCard = (member: MemberRow) => {
-    downloadCard(
-      {
-        memberName: member.name,
-        memberCode: member.memberCode,
-        memberPhoto: member.avatar,
-        planName: member.plan,
-        status: member.status,
-        validUntil: member.expiry,
-        qrToken: member.qrToken, // raw token in, data URL generated inside the hook
-        gymName,
-        gymLogoUrl,
-      },
-      `${member.name.trim().replace(/\s+/g, "-").toLowerCase()}-membership-card.png`,
-    );
-  };
+  const handleDownloadCard = useCallback(
+    (member: MemberRow) => {
+      downloadCard(
+        {
+          memberName: member.name,
+          memberCode: member.memberCode,
+          memberPhoto: member.avatar,
+          planName: member.plan,
+          status: member.status,
+          validUntil: member.expiry,
+          qrToken: member.qrToken, // raw token in, data URL generated inside the hook
+          gymName,
+          gymLogoUrl,
+        },
+        `${member.name.trim().replace(/\s+/g, "-").toLowerCase()}-membership-card.png`,
+      );
+    },
+    [downloadCard, gymName, gymLogoUrl],
+  );
 
   const members: MemberRow[] = useMemo(() => {
     if (!membersResponse) return [];
@@ -603,7 +606,7 @@ export function MembersTable() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [router],
+    [router, handleDownloadCard],
   );
 
   const table = useReactTable({

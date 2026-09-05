@@ -13,6 +13,13 @@ type MembershipCardInput = Omit<MembershipCardProps, "qrDataUrl" | "ref"> & {
   qrToken: string | null;
 };
 
+type QueueItem = {
+  data: MembershipCardInput;
+  suggestedFileName: string;
+  resolve: () => void;
+  reject: (reason?: unknown) => void;
+};
+
 export function useMembershipCardDownload() {
   const [cardData, setCardData] = useState<Omit<
     MembershipCardProps,
@@ -20,23 +27,61 @@ export function useMembershipCardDownload() {
   > | null>(null);
   const [fileName, setFileName] = useState("membership-card.png");
   const cardRef = useRef<HTMLDivElement>(null);
-  const resolverRef = useRef<(() => void) | null>(null);
 
-  const downloadCard = useCallback(
-    async (data: MembershipCardInput, suggestedFileName: string) => {
-      const qrDataUrl = data.qrToken
-        ? await generateMembershipQrDataUrl(data.qrToken)
+  const queueRef = useRef<QueueItem[]>([]);
+  const isProcessingRef = useRef(false);
+  const currentItemRef = useRef<QueueItem | null>(null);
+
+  const processQueue = useCallback(async () => {
+    if (isProcessingRef.current || queueRef.current.length === 0) {
+      return;
+    }
+
+    isProcessingRef.current = true;
+    const nextItem = queueRef.current.shift()!;
+    currentItemRef.current = nextItem;
+
+    try {
+      const qrDataUrl = nextItem.data.qrToken
+        ? await generateMembershipQrDataUrl(nextItem.data.qrToken)
         : null;
 
-      return new Promise<void>((resolve) => {
-        resolverRef.current = resolve;
-        setFileName(suggestedFileName);
-        const { qrToken, ...rest } = data;
-        setCardData({ ...rest, qrDataUrl });
+      setFileName(nextItem.suggestedFileName);
+      const { qrToken, ...rest } = nextItem.data;
+      setCardData({ ...rest, qrDataUrl });
+    } catch (err) {
+      console.error(err);
+      toast.error("Couldn't generate QR code for membership card.");
+      nextItem.reject(err);
+      currentItemRef.current = null;
+      isProcessingRef.current = false;
+      processQueue();
+    }
+  }, []);
+
+  const downloadCard = useCallback(
+    (data: MembershipCardInput, suggestedFileName: string) => {
+      return new Promise<void>((resolve, reject) => {
+        queueRef.current.push({
+          data,
+          suggestedFileName,
+          resolve,
+          reject,
+        });
+        processQueue();
       });
     },
-    [],
+    [processQueue],
   );
+
+  useEffect(() => {
+    return () => {
+      while (queueRef.current.length > 0) {
+        const item = queueRef.current.shift();
+        item?.reject(new Error("Component unmounted"));
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!cardData || !cardRef.current) return;
@@ -59,6 +104,7 @@ export function useMembershipCardDownload() {
     };
 
     const run = async () => {
+      let captureError: unknown = null;
       try {
         await waitForImages();
         if (cancelled) return;
@@ -74,12 +120,22 @@ export function useMembershipCardDownload() {
         document.body.removeChild(link);
       } catch (err) {
         console.error(err);
+        captureError = err;
         if (!cancelled) toast.error("Couldn't generate the membership card.");
       } finally {
         if (!cancelled) {
           setCardData(null);
-          resolverRef.current?.();
-          resolverRef.current = null;
+          const activeItem = currentItemRef.current;
+          currentItemRef.current = null;
+          if (activeItem) {
+            if (captureError) {
+              activeItem.reject(captureError);
+            } else {
+              activeItem.resolve();
+            }
+          }
+          isProcessingRef.current = false;
+          processQueue();
         }
       }
     };
@@ -88,8 +144,7 @@ export function useMembershipCardDownload() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardData]);
+  }, [cardData, fileName, processQueue]);
 
   const CardCapture = cardData ? (
     <div
