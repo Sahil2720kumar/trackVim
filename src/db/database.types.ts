@@ -2574,6 +2574,10 @@ export type Database = {
         Args: { p_exercises: Json; p_template_id: string }
         Returns: undefined
       }
+      scan_membership_qr: {
+        Args: { p_gym_id: string; p_location_id?: string; p_token: string }
+        Returns: Json
+      }
       staff_gym_ids: { Args: never; Returns: string[] }
       submit_membership_application: {
         Args: {
