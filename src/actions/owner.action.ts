@@ -2548,3 +2548,24 @@ export async function manualCheckInOutAction(input: {
     data,
   };
 }
+
+export async function scanMembershipQrAction(token: string, gymId: string) {
+  const supabase = await createServerClient();
+
+  const { data, error } = await supabase.rpc("scan_membership_qr", {
+    p_token: token,
+    p_gym_id: gymId,
+  });
+
+  if (error) {
+    return {
+      success: false as const,
+      error: error.message,
+    };
+  }
+
+  return {
+    success: true as const,
+    data,
+  };
+}

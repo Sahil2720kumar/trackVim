@@ -96,13 +96,13 @@ const navigationConfig: NavConfig = {
         { icon: <></>, label: "Add New Plan", href: "/owner/plans/new" },
       ],
     },
-    // {
-    //   icon: <CalendarCheck className="h-5 w-5" />,
-    //   label: "Attendance",
-    //   children: [
-    //     { icon: <></>, label: "Attendance", href: "/owner/attendance" },
-    //   ],
-    // },
+    {
+      icon: <CalendarCheck className="h-5 w-5" />,
+      label: "Attendance",
+      children: [
+        { icon: <></>, label: "Scan QR", href: "/owner/attendance/scan" },
+      ],
+    },
     {
       icon: <CreditCard className="h-5 w-5" />,
       label: "Payments",

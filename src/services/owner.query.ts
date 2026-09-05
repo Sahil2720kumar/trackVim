@@ -1220,10 +1220,31 @@ export async function getMembersWithAttendance(
           membership_duration,
           duration_months
         )
+      ),
+
+      membership_qr_codes (
+        id,
+        token,
+        is_active
       )
     `,
     )
     .eq("gym_memberships.gym_id", gymId)
+    // -----------------------------------------------------------------------
+    // Physical membership QR card.
+    //
+    // Scoped independently of gym_memberships: there is one active QR per
+    // (gym_id, member_id) — the SAME physical card is repointed to whichever
+    // gym_membership_id is current (see verify_payment / renew_membership /
+    // the expiry cron). It is NOT nested under a specific membership row.
+    //
+    // Left join (no !inner): members without an active QR yet — e.g. a
+    // walk-in who hasn't been verified, or someone whose only membership is
+    // still Scheduled — must still appear in the list, just with
+    // qrCode: null.
+    // -----------------------------------------------------------------------
+    .eq("membership_qr_codes.gym_id", gymId)
+    .eq("membership_qr_codes.is_active", true)
     .order("full_name", { ascending: true });
 
   if (error) {
@@ -1349,6 +1370,15 @@ export async function getMembersWithAttendance(
     const attendanceRate = attendanceByMember.get(member.id) ?? 0;
     const trainer = trainerByMember.get(member.id) ?? null;
 
+    // -------------------------------------------------------------------
+    // Physical membership QR card.
+    //
+    // Filtered server-side to is_active = true for this gym, so under
+    // normal operation there's at most one row. Defensively take the
+    // first if more than one somehow exists rather than throwing.
+    // -------------------------------------------------------------------
+    const qrCode = member.membership_qr_codes?.[0] ?? null;
+
     return {
       id: member.id,
       full_name: member.full_name,
@@ -1363,6 +1393,7 @@ export async function getMembersWithAttendance(
       hasScheduledRenewal: scheduledMembership !== null,
       attendanceRate,
       trainer,
+      qrCode,
     };
   });
 
@@ -1385,6 +1416,8 @@ export type MemberRow = {
   email: string;
   phone: string;
   avatar: string;
+  memberCode: string;
+  qrToken: string | null;
   plan: string;
   planPrice: string;
   trainer: string;

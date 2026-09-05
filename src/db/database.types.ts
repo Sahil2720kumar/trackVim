@@ -42,6 +42,7 @@ export type Database = {
       attendance: {
         Row: {
           attendance_date: string
+          attendance_source: Database["public"]["Enums"]["attendance_source"]
           check_in: string | null
           check_out: string | null
           created_at: string
@@ -51,12 +52,14 @@ export type Database = {
           id: string
           location_id: string | null
           member_id: string
+          membership_qr_code_id: string | null
           notes: string | null
           qr_code_id: string | null
           status: Database["public"]["Enums"]["attendance_status"]
         }
         Insert: {
           attendance_date: string
+          attendance_source?: Database["public"]["Enums"]["attendance_source"]
           check_in?: string | null
           check_out?: string | null
           created_at?: string
@@ -66,12 +69,14 @@ export type Database = {
           id?: string
           location_id?: string | null
           member_id: string
+          membership_qr_code_id?: string | null
           notes?: string | null
           qr_code_id?: string | null
           status?: Database["public"]["Enums"]["attendance_status"]
         }
         Update: {
           attendance_date?: string
+          attendance_source?: Database["public"]["Enums"]["attendance_source"]
           check_in?: string | null
           check_out?: string | null
           created_at?: string
@@ -81,6 +86,7 @@ export type Database = {
           id?: string
           location_id?: string | null
           member_id?: string
+          membership_qr_code_id?: string | null
           notes?: string | null
           qr_code_id?: string | null
           status?: Database["public"]["Enums"]["attendance_status"]
@@ -112,6 +118,13 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_membership_qr_code_id_membership_qr_codes_id_fk"
+            columns: ["membership_qr_code_id"]
+            isOneToOne: false
+            referencedRelation: "membership_qr_codes"
             referencedColumns: ["id"]
           },
           {
@@ -1011,6 +1024,61 @@ export type Database = {
             columns: ["gym_id"]
             isOneToOne: false
             referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      membership_qr_codes: {
+        Row: {
+          created_at: string
+          gym_id: string
+          gym_membership_id: string
+          id: string
+          is_active: boolean
+          member_id: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          gym_id: string
+          gym_membership_id: string
+          id?: string
+          is_active?: boolean
+          member_id: string
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          gym_id?: string
+          gym_membership_id?: string
+          id?: string
+          is_active?: boolean
+          member_id?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "membership_qr_codes_gym_id_gyms_id_fk"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "membership_qr_codes_gym_membership_id_gym_memberships_id_fk"
+            columns: ["gym_membership_id"]
+            isOneToOne: false
+            referencedRelation: "gym_memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "membership_qr_codes_member_id_members_id_fk"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
             referencedColumns: ["id"]
           },
         ]
@@ -2506,6 +2574,10 @@ export type Database = {
         Args: { p_exercises: Json; p_template_id: string }
         Returns: undefined
       }
+      scan_membership_qr: {
+        Args: { p_gym_id: string; p_location_id?: string; p_token: string }
+        Returns: Json
+      }
       staff_gym_ids: { Args: never; Returns: string[] }
       submit_membership_application: {
         Args: {
@@ -2554,6 +2626,7 @@ export type Database = {
     }
     Enums: {
       application_status: "Pending" | "Approved" | "Rejected"
+      attendance_source: "MemberQr" | "MembershipCard" | "ReceptionManual"
       attendance_status: "CheckedIn" | "CheckedOut"
       billing_model: "PerMember" | "Flat"
       blood_group: "A+" | "A-" | "B+" | "B-" | "O+" | "O-" | "AB+" | "AB-"
@@ -2794,6 +2867,7 @@ export const Constants = {
   public: {
     Enums: {
       application_status: ["Pending", "Approved", "Rejected"],
+      attendance_source: ["MemberQr", "MembershipCard", "ReceptionManual"],
       attendance_status: ["CheckedIn", "CheckedOut"],
       billing_model: ["PerMember", "Flat"],
       blood_group: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"],

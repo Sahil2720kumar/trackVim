@@ -141,6 +141,25 @@ export function formatTime12h(time24h: string): string {
   return `${String(hours).padStart(2, "0")}:${mStr} ${period}`;
 }
 
+export function formatTimeStr(
+  value?: string | Date | null,
+  fallback: string = "Unavailable",
+): string {
+  if (!value) return fallback;
+
+  const date = typeof value === "string" ? new Date(value) : value;
+
+  if (Number.isNaN(date.getTime())) {
+    return fallback;
+  }
+
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 export const getDaysInMonth = (date: Date): number =>
   new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 

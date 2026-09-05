@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useCallback } from "react";
 import {
   ColumnDef,
   flexRender,
@@ -26,6 +26,7 @@ import {
   Loader2,
   RefreshCw,
   Clock,
+  QrCodeIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -60,6 +61,7 @@ import {
   useGymMemberStats,
   useTrainersAndPlans,
 } from "@/hooks/queries/owner.query";
+import { useMembershipCardDownload } from "@/hooks/useMembershipCardDownload";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { deleteMemberAction } from "@/actions/owner.action";
 import {
@@ -67,6 +69,7 @@ import {
   useManualAttendanceDialog,
 } from "../ManualAttendanceDialog";
 import { ConfirmDialog, useConfirmDialog } from "../Confirmdialog";
+import { useOwnerStore } from "@/stores/owner.store";
 
 const statusOptions = ["All", "Active", "Expired", "Expiring Soon", "Pending"];
 const memberTypeOptions = ["All Types", "Normal", "WalkIn"] as const;
@@ -122,6 +125,8 @@ function toMemberRow(member: MemberWithAttendance): MemberRow {
     email: member.contact_email ?? "—",
     phone: member.contact_phone ?? "—",
     avatar: member.photo_url,
+    memberCode: member.member_code ?? "—",
+    qrToken: member.qrCode?.token ?? null,
     memberType: member.memberType,
     plan: membership?.plan?.plan_name ?? "No Plan",
     planPrice:
@@ -221,6 +226,11 @@ export function MembersTable() {
     error: trainersPlansError,
     refetch: refetchTrainersPlans,
   } = useTrainersAndPlans();
+  const { downloadCard, CardCapture } = useMembershipCardDownload();
+  const gym = useOwnerStore((state) => state.gym);
+
+  const gymName = gym?.name || "Your Gym";
+  const gymLogoUrl: string | null = gym?.logoUrl || null;
 
   // Members is the core dataset the page can't render without. Stats and
   // trainers/plans degrade gracefully to defaults/empty arrays.
@@ -268,6 +278,26 @@ export function MembersTable() {
     setRowSelection({});
     refetchAll();
   };
+
+  const handleDownloadCard = useCallback(
+    (member: MemberRow) => {
+      downloadCard(
+        {
+          memberName: member.name,
+          memberCode: member.memberCode,
+          memberPhoto: member.avatar,
+          planName: member.plan,
+          status: member.status,
+          validUntil: member.expiry,
+          qrToken: member.qrToken, // raw token in, data URL generated inside the hook
+          gymName,
+          gymLogoUrl,
+        },
+        `${member.name.trim().replace(/\s+/g, "-").toLowerCase()}-membership-card.png`,
+      );
+    },
+    [downloadCard, gymName, gymLogoUrl],
+  );
 
   const members: MemberRow[] = useMemo(() => {
     if (!membersResponse) return [];
@@ -558,6 +588,10 @@ export function MembersTable() {
                   <Clock className="w-4 h-4 mr-2" />
                   Attendance
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownloadCard(member)}>
+                  <QrCodeIcon className="w-4 h-4 mr-2" />
+                  Download Card
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => deleteConfirm.request(member)}
                   className="text-red-600 focus:text-red-600"
@@ -572,7 +606,7 @@ export function MembersTable() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [router],
+    [router, handleDownloadCard],
   );
 
   const table = useReactTable({
@@ -938,6 +972,12 @@ export function MembersTable() {
                           Attendance
                         </DropdownMenuItem>
                         <DropdownMenuItem
+                          onClick={() => handleDownloadCard(member)}
+                        >
+                          <QrCodeIcon className="w-4 h-4 mr-2" />
+                          Download Card
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           onClick={() => deleteConfirm.request(member)}
                           className="text-red-600 focus:text-red-600"
                         >
@@ -1123,6 +1163,8 @@ export function MembersTable() {
         memberName={attendanceDialog.target?.name ?? ""}
         onSuccess={() => refetchAll()}
       />
+
+      {CardCapture}
     </>
   );
 }
