@@ -702,13 +702,15 @@ export function MembersTable() {
                     Cancel Renewal
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem
-                  onClick={() => deleteConfirm.request(member)}
-                  className="text-red-600 focus:text-red-600"
-                >
-                  <CircleX className="w-4 h-4 mr-2" />
-                  Cancel Membership
-                </DropdownMenuItem>
+                {member.status !== "Cancelled" && (
+                  <DropdownMenuItem
+                    onClick={() => deleteConfirm.request(member)}
+                    className="text-red-600 focus:text-red-600"
+                  >
+                    <CircleX className="w-4 h-4 mr-2" />
+                    Cancel Membership
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           );
@@ -1096,13 +1098,15 @@ export function MembersTable() {
                             Cancel Renewal
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem
-                          onClick={() => deleteConfirm.request(member)}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <CircleX className="w-4 h-4 mr-2" />
-                          Cancel Membership
-                        </DropdownMenuItem>
+                        {member.status !== "Cancelled" && (
+                          <DropdownMenuItem
+                            onClick={() => deleteConfirm.request(member)}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            <CircleX className="w-4 h-4 mr-2" />
+                            Cancel Membership
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -1262,7 +1266,7 @@ export function MembersTable() {
             ? `This will cancel ${deleteConfirm.target.name}'s membership. This can't be undone.`
             : ""
         }
-        confirmLabel="Remove"
+        confirmLabel="Cancel Membership"
         onConfirm={async () => {
           if (!deleteConfirm.target) return;
           try {
