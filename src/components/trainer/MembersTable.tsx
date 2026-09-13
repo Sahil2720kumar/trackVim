@@ -185,23 +185,26 @@ const MembershipBadge: React.FC<{ plan: string }> = ({ plan }) => (
   </Badge>
 );
 
-const AttendanceBadge: React.FC<{ percentage: number }> = ({ percentage }) => (
-  <div className="flex flex-col items-center gap-1 w-full max-w-[100px]">
-    <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-      <div
-        className={`h-full transition-all ${
-          percentage >= 80
-            ? "bg-green-500"
-            : percentage >= 60
-              ? "bg-amber-500"
-              : "bg-red-500"
-        }`}
-        style={{ width: `${percentage}%` }}
-      />
+const AttendanceBadge: React.FC<{ percentage: number }> = ({ percentage }) => {
+  const safePercent = Math.max(0, Math.min(100, Math.round(percentage ?? 0)));
+  return (
+    <div className="flex flex-col items-center gap-1 w-full max-w-[100px]">
+      <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className={`h-full transition-all ${
+            safePercent >= 80
+              ? "bg-green-500"
+              : safePercent >= 60
+                ? "bg-amber-500"
+                : "bg-red-500"
+          }`}
+          style={{ width: `${safePercent}%` }}
+        />
+      </div>
+      <p className="text-sm font-semibold text-foreground">{safePercent}%</p>
     </div>
-    <p className="text-sm font-semibold text-foreground">{percentage}%</p>
-  </div>
-);
+  );
+};
 
 const MemberStatusBadge: React.FC<{ status: MemberStatus }> = ({ status }) => (
   <div

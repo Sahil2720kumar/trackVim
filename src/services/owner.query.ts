@@ -1094,45 +1094,25 @@ export async function getMembersAndPlans(
   supabase: TypedSupabaseClient,
   gymId: string,
 ) {
-  const [membershipsResult, plansResult] = await Promise.all([
-    supabase
-      .from("gym_memberships")
-      .select(
-        `id, status, plan_id, member_id, end_date,
-         members!gym_memberships_member_id_members_id_fk (
-           id, full_name, contact_email, contact_phone, photo_url, member_code
-         ),
-         membership_plans ( id, plan_name, grace_period_days )`,
-      )
-      .eq("gym_id", gymId)
-      .in("status", ["Active", "Expired"])
-      // Expired-first (renewals are usually more urgent), then soonest-expiring within each group
-      .order("status", { ascending: false })
-      .order("end_date", { ascending: true }),
-    supabase
-      .from("membership_plans")
-      .select(
-        "id, plan_name, plan_price, joining_fee, discount_type, discount_value, membership_duration, duration_months",
-      )
-      .eq("gym_id", gymId)
-      .eq("status", "Active")
-      .is("deleted_at", null)
-      .order("plan_price", { ascending: true }),
-  ]);
+  const { data, error } = await supabase.rpc("get_members_and_plans", {
+    p_gym_id: gymId,
+  });
 
-  if (membershipsResult.error) {
-    return { success: false as const, error: membershipsResult.error.message };
+  if (error) {
+    return {
+      success: false as const,
+      error: error.message,
+    };
   }
-  if (plansResult.error) {
-    return { success: false as const, error: plansResult.error.message };
-  }
+
+  const result = data as {
+    memberships: MemberMembershipRow[];
+    plans: MembershipPlanRow[];
+  };
 
   return {
     success: true as const,
-    data: {
-      memberships: membershipsResult.data,
-      plans: plansResult.data,
-    },
+    data: result,
   };
 }
 
@@ -1206,7 +1186,8 @@ export async function getMembersWithAttendance(
       photo_url,
       member_code,
       profile_id,
-      gym_memberships:gym_memberships!gym_memberships_member_id_members_id_fk!inner (
+
+      gym_memberships:gym_memberships!gym_memberships_member_id_members_id_fk (
         id,
         status,
         plan_id,
@@ -1230,19 +1211,6 @@ export async function getMembersWithAttendance(
     `,
     )
     .eq("gym_memberships.gym_id", gymId)
-    // -----------------------------------------------------------------------
-    // Physical membership QR card.
-    //
-    // Scoped independently of gym_memberships: there is one active QR per
-    // (gym_id, member_id) — the SAME physical card is repointed to whichever
-    // gym_membership_id is current (see verify_payment / renew_membership /
-    // the expiry cron). It is NOT nested under a specific membership row.
-    //
-    // Left join (no !inner): members without an active QR yet — e.g. a
-    // walk-in who hasn't been verified, or someone whose only membership is
-    // still Scheduled — must still appear in the list, just with
-    // qrCode: null.
-    // -----------------------------------------------------------------------
     .eq("membership_qr_codes.gym_id", gymId)
     .eq("membership_qr_codes.is_active", true)
     .order("full_name", { ascending: true });
@@ -1258,14 +1226,6 @@ export async function getMembersWithAttendance(
   const memberIds = members.map((member) => member.id);
   const asOfDate = getTodayDateStr("Asia/Kolkata");
 
-  // ---------------------------------------------------------------------------
-  // Attendance + active trainer assignments, run concurrently.
-  //
-  // No FK exists between gym_memberships and trainers — the relationship
-  // is via trainer_assignments (member_id -> trainer_id), so this stays a
-  // separate query from attendance, just no longer a sequential one.
-  // ---------------------------------------------------------------------------
-
   const attendanceByMember = new Map<string, number>();
   const trainerByMember = new Map<string, { id: string; full_name: string }>();
 
@@ -1279,6 +1239,7 @@ export async function getMembersWithAttendance(
         p_gym_id: gymId,
         p_as_of: asOfDate,
       }),
+
       supabase
         .from("trainer_assignments")
         .select(
@@ -1302,81 +1263,73 @@ export async function getMembersWithAttendance(
     }
 
     if (!assignmentsError && assignments) {
-      for (const a of assignments) {
-        if (a.trainer) {
-          trainerByMember.set(a.member_id, a.trainer);
+      for (const assignment of assignments) {
+        if (assignment.trainer) {
+          trainerByMember.set(assignment.member_id, assignment.trainer);
         }
       }
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Build final member list
-  // ---------------------------------------------------------------------------
-
-  const result = (members ?? []).map((member) => {
+  const result = members.map((member) => {
     const memberType: "Normal" | "WalkIn" =
       member.profile_id !== null ? "Normal" : "WalkIn";
     const memberships = member.gym_memberships ?? [];
 
+    /*
+     * ============================================================
+     * 1. ACTIVE MEMBERSHIP
+     *
+     * This is the primary membership when currently active.
+     * ============================================================
+     */
     const currentMembership =
       memberships
-        .filter((membership) => {
-          return (
-            membership.start_date <= asOfDate &&
-            membership.end_date >= asOfDate &&
-            membership.status !== "Cancelled"
-          );
-        })
-        .sort((a, b) => {
-          return (
-            new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
-          );
-        })[0] ?? null;
+        .filter(
+          (m) =>
+            m.status === "Active" &&
+            m.start_date <= asOfDate &&
+            m.end_date >= asOfDate,
+        )
+        .sort(
+          (a, b) =>
+            new Date(b.start_date).getTime() - new Date(a.start_date).getTime(),
+        )[0] ?? null;
 
     const scheduledMembership =
       memberships
-        .filter((membership) => {
-          return (
-            membership.status === "Scheduled" &&
-            membership.start_date > asOfDate
-          );
-        })
-        .sort((a, b) => {
-          return (
-            new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
-          );
-        })[0] ?? null;
+        .filter((m) => m.status === "Scheduled" && m.start_date > asOfDate)
+        .sort(
+          (a, b) =>
+            new Date(a.start_date).getTime() - new Date(b.start_date).getTime(),
+        )[0] ?? null;
 
-    const latestMembership =
+    const latestStartedMembership =
       memberships
-        .filter((membership) => membership.status !== "Cancelled")
-        .sort((a, b) => {
-          const startDateCompare =
-            new Date(b.start_date).getTime() - new Date(a.start_date).getTime();
+        .filter((m) => m.start_date <= asOfDate)
+        .sort(
+          (a, b) =>
+            new Date(b.start_date).getTime() - new Date(a.start_date).getTime(),
+        )[0] ?? null;
 
-          if (startDateCompare !== 0) {
-            return startDateCompare;
-          }
-
-          return (
-            new Date(b.end_date).getTime() - new Date(a.end_date).getTime()
-          );
-        })[0] ?? null;
-
-    const membership =
-      currentMembership ?? scheduledMembership ?? latestMembership ?? null;
+    const membership = currentMembership ?? latestStartedMembership ?? null;
+    const joinedDate =
+      memberships
+        .filter((m) => m.start_date <= asOfDate)
+        .sort(
+          (a, b) =>
+            new Date(a.start_date).getTime() - new Date(b.start_date).getTime(),
+        )[0]?.start_date ?? null;
+    /*
+     * ============================================================
+     * 5. OTHER MEMBER DATA
+     * ============================================================
+     */
 
     const attendanceRate = attendanceByMember.get(member.id) ?? 0;
+
     const trainer = trainerByMember.get(member.id) ?? null;
 
-    // -------------------------------------------------------------------
-    // Physical membership QR card.
-    //
-    // Filtered server-side to is_active = true for this gym, so under
-    // normal operation there's at most one row. Defensively take the
-    // first if more than one somehow exists rather than throwing.
-    // -------------------------------------------------------------------
     const qrCode = member.membership_qr_codes?.[0] ?? null;
 
     return {
@@ -1386,13 +1339,23 @@ export async function getMembersWithAttendance(
       contact_phone: member.contact_phone,
       photo_url: member.photo_url,
       member_code: member.member_code,
+
       memberType,
+      joinedDate,
+      // Primary/current membership
       membership,
-      membershipStatus: membership?.status ?? null,
+
+      // Future renewal
       scheduledMembership,
+
       hasScheduledRenewal: scheduledMembership !== null,
+
+      membershipStatus: membership?.status ?? null,
+
       attendanceRate,
+
       trainer,
+
       qrCode,
     };
   });
@@ -1422,11 +1385,18 @@ export type MemberRow = {
   planPrice: string;
   trainer: string;
   joined: string;
+  startDate: string;
   expiry: string;
   daysLeft: number;
   attendance: number;
-  status: "Active" | "Expired" | "Expiring Soon" | "Pending";
+  status: "Active" | "Expired" | "Expiring Soon" | "Pending" | "Cancelled";
   memberType: "Normal" | "WalkIn";
+  scheduledMembership: {
+    plan: string;
+    price: string;
+    startDate: string;
+    endDate: string;
+  } | null;
 };
 
 const PENDING_STATUSES = [

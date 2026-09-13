@@ -27,6 +27,7 @@ import {
   RefreshCw,
   Clock,
   QrCodeIcon,
+  CircleX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -63,29 +64,44 @@ import {
 } from "@/hooks/queries/owner.query";
 import { useMembershipCardDownload } from "@/hooks/useMembershipCardDownload";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
-import { deleteMemberAction } from "@/actions/owner.action";
+import {
+  cancelMembershipAction,
+  cancelMembershipRenewalAction,
+} from "@/actions/owner.action";
 import {
   ManualAttendanceDialog,
   useManualAttendanceDialog,
 } from "../ManualAttendanceDialog";
 import { ConfirmDialog, useConfirmDialog } from "../Confirmdialog";
 import { useOwnerStore } from "@/stores/owner.store";
+import { useQueryClient } from "@tanstack/react-query";
 
-const statusOptions = ["All", "Active", "Expired", "Expiring Soon", "Pending"];
+const statusOptions = [
+  "All",
+  "Active",
+  "Expired",
+  "Expiring Soon",
+  "Pending",
+  "Cancelled",
+];
 const memberTypeOptions = ["All Types", "Normal", "WalkIn"] as const;
 
 const getStatusColor = (status: string) => {
   switch (status) {
     case "Active":
-      return "bg-green-100 text-green-700";
+      return "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400";
     case "Expired":
-      return "bg-red-100 text-red-700";
+      return "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400";
     case "Expiring Soon":
-      return "bg-yellow-100 text-yellow-700";
+      return "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400";
     case "Pending":
-      return "bg-gray-100 text-gray-700";
+      return "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400";
+    case "Cancelled":
+      return "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400";
+    case "Scheduled":
+      return "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400";
     default:
-      return "bg-gray-100 text-gray-700";
+      return "bg-gray-100 text-gray-700 dark:bg-zinc-800 dark:text-zinc-300";
   }
 };
 
@@ -103,7 +119,6 @@ function resolveStatus(member: MemberWithAttendance): MemberRow["status"] {
     case "PaymentPending":
     case "PaymentUploaded":
     case "PaymentRejected":
-    case "Scheduled":
       return "Pending";
     case "Expired":
       return "Expired";
@@ -111,6 +126,8 @@ function resolveStatus(member: MemberWithAttendance): MemberRow["status"] {
       const daysLeft = daysBetween(member.membership.end_date);
       return daysLeft <= 7 ? "Expiring Soon" : "Active";
     }
+    case "Cancelled":
+      return "Cancelled";
     default:
       return "Pending";
   }
@@ -118,6 +135,7 @@ function resolveStatus(member: MemberWithAttendance): MemberRow["status"] {
 
 function toMemberRow(member: MemberWithAttendance): MemberRow {
   const membership = member.membership;
+  const scheduled = member.scheduledMembership;
 
   return {
     id: member.id,
@@ -128,17 +146,41 @@ function toMemberRow(member: MemberWithAttendance): MemberRow {
     memberCode: member.member_code ?? "—",
     qrToken: member.qrCode?.token ?? null,
     memberType: member.memberType,
+
     plan: membership?.plan?.plan_name ?? "No Plan",
+
     planPrice:
       membership?.final_amount != null
         ? `₹${membership.final_amount.toLocaleString("en-IN")}`
         : "—",
+
     trainer: member.trainer?.full_name ?? "Unassigned",
-    joined: membership?.start_date ? formatDateStr(membership.start_date) : "—",
+
+    joined: member.joinedDate ? formatDateStr(member.joinedDate) : "—",
+
+    startDate: membership?.start_date
+      ? formatDateStr(membership.start_date)
+      : "—",
+
     expiry: membership?.end_date ? formatDateStr(membership.end_date) : "—",
+
     daysLeft: membership?.end_date ? daysBetween(membership.end_date) : 0,
-    attendance: Math.round(member.attendanceRate),
+
+    attendance: Math.round(member.attendanceRate ?? 0),
+
     status: resolveStatus(member),
+
+    scheduledMembership: scheduled
+      ? {
+          plan: scheduled.plan?.plan_name ?? "No Plan",
+          price:
+            scheduled.final_amount != null
+              ? `₹${scheduled.final_amount.toLocaleString("en-IN")}`
+              : "—",
+          startDate: formatDateStr(scheduled.start_date),
+          endDate: formatDateStr(scheduled.end_date),
+        }
+      : null,
   };
 }
 
@@ -201,7 +243,7 @@ function MembersTableError({
 
 export function MembersTable() {
   const router = useRouter();
-
+  const queryClient = useQueryClient();
   const {
     data: membersResponse,
     isLoading: membersLoading,
@@ -263,20 +305,41 @@ export function MembersTable() {
     toast.error("Edit function is not implemented yet");
 
   const deleteConfirm = useConfirmDialog<MemberRow>();
+  const cancelRenewalConfirm = useConfirmDialog<MemberRow>();
   const attendanceDialog = useManualAttendanceDialog<MemberRow>();
 
-  const handleDeleteMember = async (member: MemberRow) => {
-    const result = await deleteMemberAction(member.id);
+  const handleCancelMembership = async (member: MemberRow) => {
+    const result = await cancelMembershipAction(member.id);
     if (!result.success) {
-      throw new Error(result.error ?? "Failed to remove member.");
+      toast.error(result.error ?? "Failed to cancel membership.");
+      return;
     }
     toast.success(
       result.data?.memberName
-        ? `${result.data.memberName} was removed from the gym.`
-        : "Member removed successfully.",
+        ? `${result.data.memberName} membership was cancelled successfully.`
+        : "Member's membership cancelled successfully.",
     );
     setRowSelection({});
     refetchAll();
+    queryClient.invalidateQueries({ queryKey: ["gym-members"] });
+    queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
+  };
+
+  const handleCancelRenewal = async (member: MemberRow) => {
+    const result = await cancelMembershipRenewalAction(member.id);
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to cancel membership renewal.");
+      return;
+    }
+    toast.success(
+      result.data?.memberName
+        ? `${result.data.memberName}'s scheduled renewal was cancelled successfully.`
+        : "Scheduled renewal cancelled successfully.",
+    );
+    setRowSelection({});
+    refetchAll();
+    queryClient.invalidateQueries({ queryKey: ["gym-members"] });
+    queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
   };
 
   const handleDownloadCard = useCallback(
@@ -380,6 +443,7 @@ export function MembersTable() {
       "Plan",
       "Trainer",
       "Joined",
+      "Start Date",
       "Expiry",
       "Attendance",
       "Status",
@@ -392,6 +456,7 @@ export function MembersTable() {
       m.plan,
       m.trainer,
       m.joined,
+      m.startDate,
       m.expiry,
       `${m.attendance}%`,
       m.status,
@@ -485,16 +550,42 @@ export function MembersTable() {
       {
         accessorKey: "plan",
         header: "Membership",
-        cell: ({ row }) => (
-          <div>
-            <p className="font-medium text-foreground text-sm">
-              {row.original.plan}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {row.original.planPrice}
-            </p>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const { plan, planPrice, scheduledMembership } = row.original;
+          return (
+            <div className="space-y-1.5 min-w-[150px]">
+              <div>
+                <p className="font-medium text-foreground text-sm leading-tight">
+                  {plan}
+                </p>
+                <p className="text-xs text-muted-foreground">{planPrice}</p>
+              </div>
+
+              {scheduledMembership && (
+                <div className="pt-2 mt-2 border-t border-border/60">
+                  <p className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase mb-0.5">
+                    Scheduled Renewal
+                  </p>
+                  <p className="text-xs font-medium text-foreground">
+                    {scheduledMembership.plan}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {scheduledMembership.price}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap">
+                    {scheduledMembership.startDate} →{" "}
+                    {scheduledMembership.endDate}
+                  </p>
+                  <div className="mt-1">
+                    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50">
+                      Scheduled
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "trainer",
@@ -508,6 +599,13 @@ export function MembersTable() {
         header: "Joined",
         cell: ({ row }) => (
           <p className="text-sm text-foreground">{row.original.joined}</p>
+        ),
+      },
+      {
+        accessorKey: "startDate",
+        header: "Start Date",
+        cell: ({ row }) => (
+          <p className="text-sm text-foreground">{row.original.startDate}</p>
         ),
       },
       {
@@ -534,19 +632,22 @@ export function MembersTable() {
       {
         accessorKey: "attendance",
         header: "Attendance",
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            <div className="flex-1 bg-muted rounded-full h-2 min-w-[60px]">
-              <div
-                className="bg-green-600 rounded-full h-2 transition-all"
-                style={{ width: `${row.original.attendance}%` }}
-              />
+        cell: ({ row }) => {
+          const val = Math.max(0, Math.min(100, row.original.attendance ?? 0));
+          return (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-muted rounded-full h-2 min-w-[60px] overflow-hidden">
+                <div
+                  className="bg-green-600 rounded-full h-2 transition-all"
+                  style={{ width: `${val}%` }}
+                />
+              </div>
+              <span className="text-sm font-medium text-foreground">
+                {val}%
+              </span>
             </div>
-            <span className="text-sm font-medium text-foreground">
-              {row.original.attendance}%
-            </span>
-          </div>
-        ),
+          );
+        },
       },
       {
         accessorKey: "status",
@@ -592,12 +693,21 @@ export function MembersTable() {
                   <QrCodeIcon className="w-4 h-4 mr-2" />
                   Download Card
                 </DropdownMenuItem>
+                {member.scheduledMembership && (
+                  <DropdownMenuItem
+                    onClick={() => cancelRenewalConfirm.request(member)}
+                    className="text-amber-600 focus:text-amber-600"
+                  >
+                    <CircleX className="w-4 h-4 mr-2" />
+                    Cancel Renewal
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => deleteConfirm.request(member)}
                   className="text-red-600 focus:text-red-600"
                 >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete
+                  <CircleX className="w-4 h-4 mr-2" />
+                  Cancel Membership
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -977,12 +1087,21 @@ export function MembersTable() {
                           <QrCodeIcon className="w-4 h-4 mr-2" />
                           Download Card
                         </DropdownMenuItem>
+                        {member.scheduledMembership && (
+                          <DropdownMenuItem
+                            onClick={() => cancelRenewalConfirm.request(member)}
+                            className="text-amber-600 focus:text-amber-600"
+                          >
+                            <CircleX className="w-4 h-4 mr-2" />
+                            Cancel Renewal
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem
                           onClick={() => deleteConfirm.request(member)}
                           className="text-red-600 focus:text-red-600"
                         >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
+                          <CircleX className="w-4 h-4 mr-2" />
+                          Cancel Membership
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -1035,14 +1154,16 @@ export function MembersTable() {
                   </div>
 
                   <div className="flex items-center gap-2 mb-3">
-                    <div className="flex-1 bg-muted rounded-full h-2">
+                    <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-green-600 rounded-full h-2 transition-all"
-                        style={{ width: `${member.attendance}%` }}
+                        style={{
+                          width: `${Math.max(0, Math.min(100, member.attendance ?? 0))}%`,
+                        }}
                       />
                     </div>
                     <span className="text-sm font-medium text-foreground shrink-0">
-                      {member.attendance}%
+                      {Math.max(0, Math.min(100, member.attendance ?? 0))}%
                     </span>
                   </div>
 
@@ -1135,23 +1256,47 @@ export function MembersTable() {
       <ConfirmDialog
         open={deleteConfirm.isOpen}
         onOpenChange={(open) => !open && deleteConfirm.close()}
-        title="Remove this member?"
+        title="Cancel membership?"
         description={
           deleteConfirm.target
-            ? `This will remove ${deleteConfirm.target.name} from the gym. This can't be undone.`
+            ? `This will cancel ${deleteConfirm.target.name}'s membership. This can't be undone.`
             : ""
         }
         confirmLabel="Remove"
         onConfirm={async () => {
           if (!deleteConfirm.target) return;
           try {
-            await handleDeleteMember(deleteConfirm.target);
+            await handleCancelMembership(deleteConfirm.target);
           } catch (err) {
             console.error(err);
             toast.error(
               err instanceof Error ? err.message : "Something went wrong.",
             );
-            throw err; // re-throw so ConfirmDialog doesn't treat it as success... see note below
+            throw err;
+          }
+        }}
+        destructive
+      />
+      <ConfirmDialog
+        open={cancelRenewalConfirm.isOpen}
+        onOpenChange={(open) => !open && cancelRenewalConfirm.close()}
+        title="Cancel scheduled renewal?"
+        description={
+          cancelRenewalConfirm.target
+            ? `This will cancel ${cancelRenewalConfirm.target.name}'s future scheduled renewal. Their current membership will remain active.`
+            : ""
+        }
+        confirmLabel="Cancel Renewal"
+        onConfirm={async () => {
+          if (!cancelRenewalConfirm.target) return;
+          try {
+            await handleCancelRenewal(cancelRenewalConfirm.target);
+          } catch (err) {
+            console.error(err);
+            toast.error(
+              err instanceof Error ? err.message : "Something went wrong.",
+            );
+            throw err;
           }
         }}
         destructive

@@ -1849,15 +1849,15 @@ export async function addMemberAction(
   };
 }
 
-//Delete membership
+//Cancle membership
 
-type DeleteMemberResult = {
+type CancelMemberResult = {
   memberName: string;
 };
 
-export async function deleteMemberAction(
+export async function cancelMembershipAction(
   memberId: string,
-): Promise<ActionResult<DeleteMemberResult>> {
+): Promise<ActionResult<CancelMemberResult>> {
   // ============================================================
   // 1. AUTH
   // ============================================================
@@ -1874,7 +1874,7 @@ export async function deleteMemberAction(
   if (!isStaff || !ownerMeta.gymId) {
     return {
       success: false,
-      error: "Not authorized to remove members from a gym.",
+      error: "Not authorized to cancel a membership.",
     };
   }
 
@@ -1898,26 +1898,27 @@ export async function deleteMemberAction(
   const supabase = await createServerClient();
 
   // ============================================================
-  // 4. REMOVE MEMBER FROM THIS GYM
+  // 4. CANCEL MEMBERSHIP
   //
   // IMPORTANT:
   //
-  // This removes ONLY the gym_memberships relationship.
+  // This cancels the member's membership in this gym.
   //
   // It does NOT delete:
   // - members row
-  // - users row
-  // - global member account
+  // - users/profile row
+  // - gym_memberships row
+  // - attendance history
   //
   // The RPC is responsible for:
   // - authorization
-  // - verifying membership belongs to gym
-  // - deleting gym_memberships
+  // - verifying membership belongs to this gym
+  // - marking the membership as Cancelled
   // - cleaning trainer assignment
   // - clearing active_gym_membership_id
   // ============================================================
 
-  const { data, error } = await supabase.rpc("remove_member_from_gym", {
+  const { data, error } = await supabase.rpc("cancel_membership", {
     p_gym_id: gymId,
     p_member_id: memberId,
   });
@@ -1927,7 +1928,7 @@ export async function deleteMemberAction(
   // ============================================================
 
   if (error) {
-    console.error("Failed to remove member from gym:", {
+    console.error("Failed to cancel membership:", {
       memberId,
       gymId,
       error,
@@ -1935,7 +1936,7 @@ export async function deleteMemberAction(
 
     return {
       success: false,
-      error: error.message || "Failed to remove member. Please try again.",
+      error: error.message || "Failed to cancel membership. Please try again.",
     };
   }
 
@@ -1957,7 +1958,7 @@ export async function deleteMemberAction(
   if (!result?.success) {
     return {
       success: false,
-      error: "Failed to remove member.",
+      error: "Failed to cancel membership.",
     };
   }
 
@@ -1966,13 +1967,86 @@ export async function deleteMemberAction(
   // ============================================================
 
   revalidatePath("/owner/members");
-
-  // If this route exists:
   revalidatePath(`/owner/members/${memberId}`);
 
   // ============================================================
   // 8. SUCCESS
   // ============================================================
+
+  return {
+    success: true,
+    data: {
+      memberName: result.member_name,
+    },
+  };
+}
+
+//Cancle Sheduled membership
+type CancelMembershipRenewalResult = {
+  memberName: string;
+};
+
+export async function cancelMembershipRenewalAction(
+  memberId: string,
+): Promise<ActionResult<CancelMembershipRenewalResult>> {
+  const { sessionClaims } = await auth();
+
+  const ownerMeta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+
+  const isStaff = ownerMeta.role === "owner" || ownerMeta.role === "trainer";
+
+  if (!isStaff || !ownerMeta.gymId) {
+    return {
+      success: false,
+      error: "Not authorized to cancel membership renewals.",
+    };
+  }
+
+  const gymId = ownerMeta.gymId;
+
+  if (!memberId?.trim()) {
+    return {
+      success: false,
+      error: "Member ID is required.",
+    };
+  }
+
+  const supabase = await createServerClient();
+
+  const { data, error } = await supabase.rpc("cancel_membership_renewal", {
+    p_gym_id: gymId,
+    p_member_id: memberId,
+  });
+
+  if (error) {
+    console.error("Failed to cancel membership renewal:", {
+      memberId,
+      gymId,
+      error,
+    });
+
+    return {
+      success: false,
+      error:
+        error.message ||
+        "Failed to cancel membership renewal. Please try again.",
+    };
+  }
+
+  const result = data?.[0];
+
+  if (!result?.success) {
+    return {
+      success: false,
+      error: "Failed to cancel membership renewal.",
+    };
+  }
+
+  revalidatePath("/owner/members");
+  revalidatePath(`/owner/members/${memberId}`);
 
   return {
     success: true,
@@ -2344,31 +2418,6 @@ export async function verifyPaymentAction(input: {
   revalidatePath(`/owner/applications/`);
 
   return { success: true as const };
-}
-
-/**
- * Manually cancel a membership.
- */
-export async function cancelMembershipAction(
-  membershipId: string,
-  reason?: string,
-): Promise<ActionResult> {
-  const supabase = await createServerClient();
-
-  const { error } = await supabase
-    .from("gym_memberships")
-    .update({
-      status: "Cancelled",
-      cancelled_at: new Date().toISOString(),
-      cancellation_reason: reason,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", membershipId);
-
-  if (error) return { success: false, error: error.message };
-
-  revalidatePath("/dashboard/members");
-  return { success: true, data: undefined };
 }
 
 // ============================================================================

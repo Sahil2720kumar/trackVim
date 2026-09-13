@@ -39,6 +39,7 @@ import {
   validateImageMime,
   ALLOWED_IMAGE_TYPES,
 } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Real trainer/plan rows from getTrainersAndPlans — see that file's select()
 // for the exact columns fetched.
@@ -92,6 +93,7 @@ export default function InviteMemberForm({
   trainers,
   plans,
 }: InviteMemberFormProps) {
+  const queryClient = useQueryClient();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const photo = useSingleUpload(
@@ -228,6 +230,15 @@ export default function InviteMemberForm({
         }
 
         toast.success("Member added successfully.");
+
+        queryClient.invalidateQueries({
+          queryKey: ["members-with-attendance"],
+        });
+
+        queryClient.invalidateQueries({
+          queryKey: ["gym-member-stats"],
+        });
+
         router.push("/owner/members");
       } catch (err) {
         console.error(err);
