@@ -124,11 +124,24 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
   };
 
   const handleExport = () => {
-    const headers = ["Name", "Price", "Duration", "Active Members", "Status"];
+    if (!filteredPlans || filteredPlans.length === 0) {
+      toast.error("No plans available to export.");
+      return;
+    }
+
+    const headers = [
+      "Plan Name",
+      "Price (₹)",
+      "Duration (Months)",
+      "Joining Fee (₹)",
+      "Active Members",
+      "Status",
+    ];
     const rows = filteredPlans.map((p) => [
       p.plan_name,
       p.plan_price,
-      p.membership_duration,
+      p.duration_months,
+      p.joining_fee ?? 0,
       p.gym_memberships?.[0]?.count ?? 0,
       p.status,
     ]);
@@ -138,19 +151,22 @@ export function PlansGrid({ initialPlans }: PlansGridProps) {
       return `"${guarded.replace(/"/g, '""')}"`;
     };
 
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map(escapeCsv).join(","))
-      .join("\n");
+    const csvContent =
+      "\uFEFF" +
+      [headers, ...rows]
+        .map((row) => row.map(escapeCsv).join(","))
+        .join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", "plans-export.csv");
+    link.setAttribute("download", "membership-plans.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    toast.success("Membership plans exported!");
   };
   // const handleDuplicatePlan = (id: string) => {
   //   setOpenActionMenuId(null);

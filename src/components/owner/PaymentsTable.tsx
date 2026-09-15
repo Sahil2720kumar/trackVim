@@ -46,7 +46,9 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { getInitials } from "@/lib/utils";
+import { EntityAvatar } from "@/components/EntityAvatar";
 import { RecordPaymentDialog } from "@/components/owner/payments/RecordPaymentDialog";
+import { ReceiptDialog } from "@/components/receipts";
 import {
   recordWalkinPaymentAction,
   verifyPaymentAction,
@@ -114,6 +116,7 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
   const [recordDialogPaymentId, setRecordDialogPaymentId] = useState<
     string | null
   >(null);
+  const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
 
   // Advanced filter popover state
   const [showFilterPanel, setShowFilterPanel] = useState(false);
@@ -264,9 +267,7 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
   };
 
   const handleDownloadReceipt = (id: string) => {
-    const payment = payments.find((p) => p.id === id);
-    if (!payment) return;
-    toast.error("Download receipt is not implemented yet");
+    setReceiptPaymentId(id);
   };
 
   const handleSendReminder = (id: string) => {
@@ -319,9 +320,11 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
           const payment = row.original;
           return (
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                {getInitials(payment.memberName ?? "?")}
-              </div>
+              <EntityAvatar
+                name={payment.memberName ?? "?"}
+                photoUrl={payment.memberPhotoUrl}
+                size="md"
+              />
               <div className="min-w-0">
                 <p className="font-medium text-foreground truncate">
                   {payment.memberName ?? "—"}
@@ -712,9 +715,11 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
                         aria-label="Select row"
                         className="shrink-0"
                       />
-                      <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                        {getInitials(payment.memberName ?? "?")}
-                      </div>
+                      <EntityAvatar
+                        name={payment.memberName ?? "?"}
+                        photoUrl={payment.memberPhotoUrl}
+                        size="md"
+                      />
                       <div className="min-w-0">
                         <p className="font-medium text-foreground truncate">
                           {payment.memberName ?? "—"}
@@ -898,6 +903,13 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
         open={recordDialogPaymentId !== null}
         onOpenChange={(open) => !open && setRecordDialogPaymentId(null)}
         onRecorded={handleRecorded}
+      />
+
+      <ReceiptDialog
+        paymentId={receiptPaymentId}
+        gymId={gymId}
+        open={!!receiptPaymentId}
+        onOpenChange={(open) => !open && setReceiptPaymentId(null)}
       />
     </>
   );

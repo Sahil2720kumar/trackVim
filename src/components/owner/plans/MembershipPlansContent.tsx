@@ -9,6 +9,7 @@ import {
   Loader2,
   RefreshCw,
 } from "lucide-react";
+import { toast } from "sonner";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -181,6 +182,67 @@ export function MembershipPlansContent() {
       return planCount > maxCount ? plan : max;
     }, null) ?? null;
 
+  const handleExportPlans = () => {
+    if (!initialPlans || initialPlans.length === 0) {
+      toast.error("No plans available to export.");
+      return;
+    }
+
+    const headers = [
+      "Plan Name",
+      "Price (₹)",
+      "Duration (Months)",
+      "Joining Fee (₹)",
+      "Active Members",
+      "Status",
+      "Created Date",
+    ];
+
+    const rows = initialPlans.map((p) => [
+      p.plan_name,
+      p.plan_price,
+      p.duration_months,
+      p.joining_fee ?? 0,
+      p.gym_memberships?.[0]?.count ?? 0,
+      p.status,
+      p.created_at ? new Date(p.created_at).toLocaleDateString("en-IN") : "—",
+    ]);
+
+    const escapeCsv = (value: unknown) => {
+      const str = String(value ?? "");
+      const guarded = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+      return `"${guarded.replace(/"/g, '""')}"`;
+    };
+
+    const csvContent =
+      "\uFEFF" +
+      [headers, ...rows]
+        .map((row) => row.map(escapeCsv).join(","))
+        .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "membership-plans.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success("Membership plans exported successfully!");
+  };
+
+  const customQuickActions = plansQuickActions.map((action) => {
+    if (action.label === "Export Plans") {
+      return {
+        ...action,
+        route: undefined,
+        onClick: handleExportPlans,
+      };
+    }
+    return action;
+  });
+
   return (
     <>
       {/* Stats Cards */}
@@ -293,7 +355,7 @@ export function MembershipPlansContent() {
         <h2 className="mb-4 text-lg font-semibold text-foreground">
           Quick Actions
         </h2>
-        <QuickActionsGrid actions={plansQuickActions} columns={4} />
+        <QuickActionsGrid actions={customQuickActions} columns={4} />
       </div>
     </>
   );

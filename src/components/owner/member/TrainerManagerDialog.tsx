@@ -39,17 +39,33 @@ export function TrainerManagerDialog({
   gymId,
   assignedTrainers,
   availableTrainers,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
 }: {
   memberId: string;
   gymId: string;
   assignedTrainers: AssignedTrainer[];
-  availableTrainers: TrainerList; // fetched server-side, passed down
+  availableTrainers: TrainerList;
+  /** Optional: control open state externally */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [isPending, startTransition] = useTransition();
   const [pendingId, setPendingId] = useState<string | null>(null);
+
+  // Support controlled (external) or uncontrolled (internal) open state
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp : internalOpen;
+  const setOpen = (v: boolean) => {
+    if (isControlled) {
+      onOpenChangeProp?.(v);
+    } else {
+      setInternalOpen(v);
+    }
+  };
 
   const assignedIds = new Set(assignedTrainers.map((t) => t.id));
 
@@ -165,15 +181,18 @@ export function TrainerManagerDialog({
         if (!v) setQuery("");
       }}
     >
-      <Button
-        variant="outline"
-        size="sm"
-        className="flex-1"
-        onClick={() => setOpen(true)}
-      >
-        <UserPlus className="mr-2 h-4 w-4" />
-        {assignedTrainers.length ? "Manage Trainers" : "Assign Trainer"}
-      </Button>
+      {/* Only render the trigger button when uncontrolled */}
+      {!isControlled && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1"
+          onClick={() => setOpen(true)}
+        >
+          <UserPlus className="mr-2 h-4 w-4" />
+          {assignedTrainers.length ? "Manage Trainers" : "Assign Trainer"}
+        </Button>
+      )}
 
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
         <DialogHeader className="space-y-1 border-b border-gray-100 px-5 py-4">

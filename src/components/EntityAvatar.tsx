@@ -10,15 +10,24 @@ export function EntityAvatar({
 }: {
   name: string;
   photoUrl?: string | null;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   className?: string;
 }) {
-  const sz = size === "sm" ? "h-7 w-7 text-xs" : "h-9 w-9 text-sm";
+  const sz =
+    size === "sm"
+      ? "h-8 w-8 text-xs"
+      : size === "lg"
+        ? "h-10 w-10 text-sm"
+        : "h-9 w-9 text-sm";
 
   return (
     <Avatar className={cn(sz, "shrink-0", className)}>
-      <AvatarImage src={photoUrl ?? undefined} alt={name} />
-      <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600 text-white font-semibold">
+      <AvatarImage
+        src={photoUrl ?? undefined}
+        alt={name}
+        className="object-cover"
+      />
+      <AvatarFallback className="bg-primary/10 text-primary font-semibold">
         {getInitials(name)}
       </AvatarFallback>
     </Avatar>

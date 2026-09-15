@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo, useCallback } from "react";
+import { toast } from "sonner";
 import {
   Wallet,
   CreditCard,
@@ -18,6 +20,13 @@ import { paymentsQuickActions } from "@/components/owner/quick-actions-data";
 import { PieChartCard } from "@/components/PieChartCard";
 import { useGymPaymentsOverview } from "@/hooks/queries/owner.query";
 import { useOwnerStore } from "@/stores/owner.store";
+
+const STATUS_LABELS: Record<string, string> = {
+  Pending: "Pending",
+  PendingVerification: "Pending Verification",
+  Rejected: "Rejected",
+  Verified: "Verified",
+};
 
 // ─── Loading skeleton — flat blocks, matches DashboardSkeleton style ───────
 
@@ -94,6 +103,72 @@ export function PaymentsPageContent() {
     isFetching,
   } = useGymPaymentsOverview();
 
+  const payments = paymentsOverview?.payments;
+
+  const handleExportAllPayments = useCallback(() => {
+    if (!payments || payments.length === 0) {
+      toast.error("No payment records to export");
+      return;
+    }
+
+    const headers = [
+      "Receipt No",
+      "Member",
+      "Phone",
+      "Plan",
+      "Amount (₹)",
+      "Method",
+      "Payment Date",
+      "Due Date",
+      "Status",
+    ];
+
+    const rows = payments.map((p) => [
+      p.receiptId ?? p.id.slice(0, 8),
+      p.memberName ?? "—",
+      p.memberPhone ?? "—",
+      p.plan ?? "—",
+      p.amount,
+      p.method ?? "—",
+      p.paymentDate ?? "—",
+      p.dueDate ?? "—",
+      STATUS_LABELS[p.status] ?? p.status,
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((row) =>
+        row.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(","),
+      )
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute(
+      "download",
+      `revenue-report-${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success("Revenue report exported successfully!");
+  }, [payments]);
+
+  const customPaymentsQuickActions = useMemo(() => {
+    return paymentsQuickActions.map((action) => {
+      if (action.label === "Export Revenue Report") {
+        return {
+          ...action,
+          route: undefined,
+          onClick: handleExportAllPayments,
+        };
+      }
+      return action;
+    });
+  }, [handleExportAllPayments]);
+
   if (isLoading) {
     return <PaymentsSkeleton />;
   }
@@ -109,7 +184,6 @@ export function PaymentsPageContent() {
   }
 
   const {
-    payments,
     stats,
     revenueChangePercent,
     monthlyRevenue,
@@ -185,7 +259,7 @@ export function PaymentsPageContent() {
       </div>
 
       <div className="mt-4 sm:mt-6">
-        <QuickActionsGrid actions={paymentsQuickActions} columns={4} />
+        <QuickActionsGrid actions={customPaymentsQuickActions} columns={4} />
       </div>
     </>
   );

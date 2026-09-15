@@ -223,7 +223,7 @@ export function TrainersTable() {
       "Phone",
       "Specializations",
       "Experience",
-      "Members Trained",
+      "Assigned Members",
       "Rating",
       "Status",
     ];
@@ -233,7 +233,7 @@ export function TrainersTable() {
       t.contact_phone ?? "",
       (t.specializations ?? []).join("; "),
       `${t.experience_years ?? 0} years`,
-      t.members_trained ?? 0,
+      t.assigned_members ?? t.members_trained ?? 0,
       t.average_rating ?? "0.0",
       t.status,
     ]);
@@ -356,11 +356,12 @@ export function TrainersTable() {
         ),
       },
       {
-        accessorKey: "members_trained",
-        header: "Members Trained",
+        id: "assigned_members",
+        accessorKey: "assigned_members",
+        header: "Assigned Members",
         cell: ({ row }) => (
-          <p className="text-sm text-foreground">
-            {row.original.members_trained ?? 0}
+          <p className="text-sm font-medium text-foreground">
+            {row.original.assigned_members ?? row.original.members_trained ?? 0}
           </p>
         ),
       },

@@ -1,7 +1,7 @@
 // components/owner/RecordPaymentForm.tsx
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -50,6 +50,8 @@ interface RenewMembershipFormProps {
   memberships: Membership[];
   plans: Plan[];
   ownerName?: string;
+  /** Pre-select the member with this profile ID (members.id) */
+  defaultMemberId?: string;
 }
 
 // ---------------------------------------------------------------------
@@ -86,6 +88,7 @@ export default function RenewMembershipForm({
   memberships,
   plans,
   ownerName,
+  defaultMemberId,
 }: RenewMembershipFormProps) {
   const [showDialog, setShowDialog] = useState(false);
   const [memberSearch, setMemberSearch] = useState("");
@@ -115,6 +118,16 @@ export default function RenewMembershipForm({
       notes: "",
     },
   });
+
+  // Auto-select member when defaultMemberId is passed via URL
+  useEffect(() => {
+    if (!defaultMemberId || memberships.length === 0) return;
+    const match = memberships.find((m) => m.members?.id === defaultMemberId);
+    if (match) {
+      setValue("gymMembershipId", match.id, { shouldValidate: true });
+      setValue("planId", match.plan_id, { shouldValidate: true });
+    }
+  }, [defaultMemberId, memberships, setValue]);
 
   const gymMembershipId = watch("gymMembershipId");
   const planId = watch("planId");

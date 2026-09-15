@@ -24,6 +24,7 @@ import { formatDateStr, formatDateTime, getInitials } from "@/lib/utils";
 import { PaymentHeaderActions } from "@/components/owner/payments/PaymentHeaderActions";
 import { PaymentActionsCard } from "@/components/owner/payments/PaymentActionsCard";
 import { usePaymentById } from "@/hooks/queries/owner.query";
+import { MembershipPaymentReceipt } from "@/components/receipts";
 
 const STATUS_LABELS: Record<string, string> = {
   Pending: "Pending",
@@ -226,250 +227,19 @@ export function PaymentDetailsContent({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* Left Column */}
+        {/* Left Column - Official Payment Receipt */}
         <div className="lg:col-span-2 space-y-6">
-          <Card className="border-border">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" />
-                Payment Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Receipt Number
-                  </p>
-                  <p className="font-semibold text-foreground">
-                    {payment.receiptId ?? payment.id.slice(0, 8)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Payment Date
-                  </p>
-                  <p className="font-semibold text-foreground flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
-                    {payment.paymentDate
-                      ? formatDateStr(payment.paymentDate)
-                      : "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Payment Method
-                  </p>
-                  <p className="font-semibold text-foreground flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-muted-foreground" />
-                    {payment.method ?? "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Transaction Reference
-                  </p>
-                  <p className="font-semibold text-foreground">
-                    {payment.transactionRef ?? "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Collected By
-                  </p>
-                  <p className="font-semibold text-foreground">
-                    {payment.collectedByName ?? "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Due Date</p>
-                  <p className="font-semibold text-foreground">
-                    {payment.dueDate ? formatDateStr(payment.dueDate) : "—"}
-                  </p>
-                </div>
-              </div>
+          <MembershipPaymentReceipt payment={payment} />
 
-              <Separator className="my-4" />
-
-              <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-muted/50 p-4">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Payment Status
-                  </p>
-                  <Badge className={statusBadgeClass(payment.status)}>
-                    {STATUS_LABELS[payment.status] ?? payment.status}
-                  </Badge>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground mb-1">Amount</p>
-                  <p className="font-bold text-2xl text-primary flex items-center gap-1 justify-end">
-                    <IndianRupee className="w-5 h-5" />
-                    {payment.amount.toLocaleString("en-IN")}
-                  </p>
-                </div>
-              </div>
-
-              {payment.status === "Rejected" && payment.rejectionReason && (
-                <div className="rounded-xl border border-red-200 bg-red-500/5 p-3 dark:border-red-900">
-                  <p className="text-sm font-medium text-red-700 dark:text-red-400">
-                    Rejection Reason
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {payment.rejectionReason}
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-border">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">
-                Member Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-4 mb-6">
-                <Avatar className="w-16 h-16 ring-2 ring-border">
-                  <AvatarImage
-                    src={member.photoUrl ?? undefined}
-                    alt={member.fullName ?? ""}
-                  />
-                  <AvatarFallback>
-                    {getInitials(member.fullName ?? "?")}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-foreground">
-                    {member.fullName ?? "—"}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    ID: {member.memberCode ?? member.id.slice(0, 8)}
-                  </p>
-                  <Badge
-                    variant="outline"
-                    className={
-                      member.memberType === "WalkIn"
-                        ? "text-purple-600 border-purple-200 dark:text-purple-400 dark:border-purple-800"
-                        : "text-sky-600 border-sky-200 dark:text-sky-400 dark:border-sky-800"
-                    }
-                  >
-                    {member.memberType === "WalkIn"
-                      ? "Walk-in Member"
-                      : "App Member"}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Phone</p>
-                  <p className="font-semibold text-foreground flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-muted-foreground" />
-                    {member.contactPhone ?? "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Email</p>
-                  <p className="font-semibold text-foreground flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-muted-foreground" />
-                    {member.contactEmail ?? "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Member Since
-                  </p>
-                  <p className="font-semibold text-foreground">
-                    {formatDateStr(member.createdAt)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {membership && (
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle className="text-base font-semibold">
-                  Membership Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Membership Plan
-                    </p>
-                    <p className="font-semibold text-foreground">
-                      {membership.plan?.planName ?? "—"}
-                    </p>
-                  </div>
-                  {membership.plan?.planCategory && (
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">
-                        Category
-                      </p>
-                      <Badge
-                        variant="outline"
-                        className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800"
-                      >
-                        {membership.plan.planCategory}
-                      </Badge>
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Duration
-                    </p>
-                    <p className="font-semibold text-foreground">
-                      {membership.plan?.membershipDuration ??
-                        `${membership.durationMonths} months`}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Joining Fee
-                    </p>
-                    <p className="font-semibold text-foreground flex items-center">
-                      <IndianRupee className="w-4 h-4 mr-1" />
-                      {membership.joiningFee}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Start Date
-                    </p>
-                    <p className="font-semibold text-foreground">
-                      {formatDateStr(membership.startDate)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Expiry Date
-                    </p>
-                    <p className="font-semibold text-foreground">
-                      {formatDateStr(membership.endDate)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Discount
-                    </p>
-                    <p className="font-semibold text-emerald-600 dark:text-emerald-400">
-                      ₹{membership.discount}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Final Amount
-                    </p>
-                    <p className="font-bold text-lg text-primary flex items-center">
-                      <IndianRupee className="w-5 h-5 mr-1" />
-                      {membership.finalAmount}
-                    </p>
-                  </div>
-                </div>
+          {payment.status === "Rejected" && payment.rejectionReason && (
+            <Card className="border-red-200 bg-red-500/5 dark:border-red-900">
+              <CardContent className="p-4">
+                <p className="text-sm font-medium text-red-700 dark:text-red-400">
+                  Rejection Reason
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {payment.rejectionReason}
+                </p>
               </CardContent>
             </Card>
           )}

@@ -50,7 +50,10 @@ import { Progress } from "@/components/ui/progress";
 import { StatCard } from "@/components/StatCard";
 import { MonthlySessionsChart } from "@/components/owner/MonthlySessionsChart";
 import { QuickActionsGrid } from "@/components/QuickActionsGrid";
-import { trainerDetailQuickActions } from "@/components/owner/quick-actions-data";
+import {
+  trainerDetailQuickActions,
+  getTrainerQuickActions,
+} from "@/components/owner/quick-actions-data";
 import { bigSquareButton } from "@/lib/styles";
 import { TrainerAssignedMembersTable } from "@/components/owner/TrainerAssignedMembersTable";
 import {
@@ -768,10 +771,13 @@ export function TrainerProfileClient({
 
           {/* Quick Actions — single card, no longer wrapped in an empty 2-col grid */}
           <Card className="p-4 sm:p-6">
-            <h3 className="font-semibold text-foreground mb-4">
+            {/* <h3 className="font-semibold text-foreground mb-4">
               Quick Actions
-            </h3>
-            <QuickActionsGrid actions={trainerDetailQuickActions} columns={2} />
+            </h3> */}
+            {/* <QuickActionsGrid
+              actions={getTrainerQuickActions(trainer.id)}
+              columns={2}
+            /> */}
           </Card>
         </div>
 

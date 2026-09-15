@@ -22,11 +22,11 @@ const columns = [
   columnHelper.accessor("member", {
     header: "Member",
     cell: (info) => (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <EntityAvatar
           name={info.getValue()}
           photoUrl={info.row.original.memberPhotoUrl}
-          size="sm"
+          size="md"
         />
         <span className="text-foreground font-medium whitespace-nowrap">
           {info.getValue()}
