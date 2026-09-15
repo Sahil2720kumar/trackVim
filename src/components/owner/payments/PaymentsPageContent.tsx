@@ -137,7 +137,13 @@ export function PaymentsPageContent() {
 
     const csvContent = [headers, ...rows]
       .map((row) =>
-        row.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(","),
+        row
+          .map((val) => {
+            const value = String(val ?? "");
+            const guarded = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+            return `"${guarded.replace(/"/g, '""')}"`;
+          })
+          .join(","),
       )
       .join("\n");
 
@@ -183,12 +189,8 @@ export function PaymentsPageContent() {
     );
   }
 
-  const {
-    stats,
-    revenueChangePercent,
-    monthlyRevenue,
-    statusDistribution,
-  } = paymentsOverview;
+  const { stats, revenueChangePercent, monthlyRevenue, statusDistribution } =
+    paymentsOverview;
 
   return (
     <>

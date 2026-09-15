@@ -739,7 +739,7 @@ export async function getAllTrainers(
 ) {
   const [
     { data: trainers, error: trainersError },
-    { data: assignments },
+    { data: assignments, error: assignmentsError },
   ] = await Promise.all([
     supabase
       .from("trainers")
@@ -759,6 +759,10 @@ export async function getAllTrainers(
 
   if (trainersError) {
     return { success: false as const, error: trainersError.message };
+  }
+
+  if (assignmentsError) {
+    return { success: false as const, error: assignmentsError.message };
   }
 
   const assignmentCountMap = new Map<string, number>();

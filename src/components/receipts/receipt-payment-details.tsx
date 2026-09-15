@@ -5,11 +5,8 @@ export function ReceiptPaymentDetails({
 }: {
   payment: MembershipPaymentReceiptData["payment"];
 }) {
-  const isVerified = payment.status === "Verified";
-  const collectedByText =
-    payment.collectedBy ?? (isVerified ? "System / Staff" : "—");
-  const verifiedByText =
-    payment.verifiedBy ?? (isVerified ? "Gym Management" : "Not Verified");
+  const collectedByText = payment.collectedBy ?? "—";
+  const verifiedByText = payment.verifiedBy ?? "—";
 
   return (
     <div className="space-y-2 pt-2">

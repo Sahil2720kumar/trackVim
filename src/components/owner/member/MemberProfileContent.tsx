@@ -710,7 +710,7 @@ export function MemberProfileContent({
                     </div>
                   ))
                 )}
-                <Separator />
+
                 <Separator />
                 <Button
                   variant="outline"

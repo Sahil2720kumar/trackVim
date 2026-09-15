@@ -51,9 +51,23 @@ export function mapPaymentToReceiptData(
   const receiptNumber =
     payment.receiptId || `TVM-${payment.id.slice(0, 8).toUpperCase()}`;
 
-  // Customer facing status wording: 'PAID' for verified payments
-  const isPaid = payment.status === "Verified";
-  const customerFacingStatus = isPaid ? "PAID" : payment.status;
+  // Customer facing status wording mapping
+  const statusMap: Record<string, string> = {
+    Verified: "PAID",
+    PendingVerification: "PENDING VERIFICATION",
+    Pending: "PENDING",
+    PaymentPending: "PENDING",
+    PaymentUploaded: "PAYMENT UPLOADED",
+    Rejected: "REJECTED",
+    PaymentRejected: "REJECTED",
+    Refunded: "REFUNDED",
+    Cancelled: "CANCELLED",
+    Overdue: "OVERDUE",
+  };
+
+  const customerFacingStatus =
+    statusMap[payment.status] ??
+    (payment.status ? payment.status.toUpperCase() : "UNKNOWN");
 
   return {
     receiptNumber,

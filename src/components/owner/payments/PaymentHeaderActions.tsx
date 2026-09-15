@@ -39,27 +39,47 @@ export function PaymentHeaderActions({
       const receiptFilename = `${payment.receiptId || `TVM-${payment.id.slice(0, 8).toUpperCase()}`}.pdf`;
 
       if (element) {
-        // High quality DOM to canvas export for 100% visual fidelity
-        const dataUrl = await toPng(element, {
-          quality: 0.98,
-          pixelRatio: 2,
-          cacheBust: true,
-        });
+        try {
+          // High quality DOM to canvas export for 100% visual fidelity
+          const dataUrl = await toPng(element, {
+            quality: 0.98,
+            pixelRatio: 2,
+            cacheBust: true,
+          });
 
-        const pdf = new jsPDF({
-          orientation: "portrait",
-          unit: "mm",
-          format: "a4",
-        });
+          const pdf = new jsPDF({
+            orientation: "portrait",
+            unit: "mm",
+            format: "a4",
+          });
 
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const imgProps = pdf.getImageProperties(dataUrl);
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          const imgProps = pdf.getImageProperties(dataUrl);
+          const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-        pdf.addImage(dataUrl, "PNG", 0, 0, pdfWidth, pdfHeight);
-        pdf.save(receiptFilename);
-        toast.success("Receipt downloaded successfully");
-        return;
+          let heightLeft = pdfHeight;
+          let position = 0;
+
+          pdf.addImage(dataUrl, "PNG", 0, position, pdfWidth, pdfHeight);
+          heightLeft -= pageHeight;
+
+          while (heightLeft > 0) {
+            position = heightLeft - pdfHeight;
+            pdf.addPage();
+            pdf.addImage(dataUrl, "PNG", 0, position, pdfWidth, pdfHeight);
+            heightLeft -= pageHeight;
+          }
+
+          pdf.save(receiptFilename);
+          toast.success("Receipt downloaded successfully");
+          return;
+        } catch (domExportError) {
+          console.warn(
+            "DOM-to-PNG export failed, falling back to manual PDF generation",
+            domExportError,
+          );
+        }
       }
 
       // Fallback manual PDF generation matching TrackVim design
@@ -87,8 +107,6 @@ export function PaymentHeaderActions({
         .join(", ");
 
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(90, 90, 90);
       cursorY += 16;
       doc.text(gymAddress || "—", marginX, cursorY, { maxWidth: 280 });
       cursorY += 26;
@@ -157,20 +175,33 @@ export function PaymentHeaderActions({
       }
 
       const planName = membership?.plan?.planName ?? "Gym Membership Fee";
-      const planPrice = membership?.planPrice ?? payment.amount + (payment.discount ?? 0);
+      const joiningFee = membership?.joiningFee ?? 0;
       const discount = membership?.discount ?? payment.discount ?? 0;
+      const planPrice =
+        membership?.planPrice ?? payment.amount + discount - joiningFee;
+
+      const bodyRows = [
+        [
+          planName,
+          `₹${planPrice.toLocaleString("en-IN")}`,
+          discount > 0 ? `-₹${discount.toLocaleString("en-IN")}` : "₹0",
+          `₹${(joiningFee > 0 ? planPrice - discount : payment.amount).toLocaleString("en-IN")}`,
+        ],
+      ];
+
+      if (joiningFee > 0) {
+        bodyRows.push([
+          "One-time Joining Fee",
+          `₹${joiningFee.toLocaleString("en-IN")}`,
+          "₹0",
+          `₹${joiningFee.toLocaleString("en-IN")}`,
+        ]);
+      }
 
       autoTable(doc, {
         startY: cursorY,
         head: [["Description", "Amount", "Discount", "Total"]],
-        body: [
-          [
-            planName,
-            `₹${planPrice.toLocaleString("en-IN")}`,
-            discount > 0 ? `-₹${discount.toLocaleString("en-IN")}` : "₹0",
-            `₹${payment.amount.toLocaleString("en-IN")}`,
-          ],
-        ],
+        body: bodyRows,
         theme: "grid",
         headStyles: { fillColor: primaryColor, textColor: 255, fontSize: 9 },
         bodyStyles: { fontSize: 9, textColor: [40, 40, 40] },

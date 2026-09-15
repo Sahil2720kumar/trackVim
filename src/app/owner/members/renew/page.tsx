@@ -12,10 +12,11 @@ import { createServerClient } from "@/lib/supabase/server";
 export default async function CreateRenewMembershipPage({
   searchParams,
 }: {
-  searchParams: Promise<{ memberId?: string }>;
+  searchParams: Promise<{ memberId?: string | string[] }>;
 }) {
-  const { memberId } = await searchParams;
-
+  const { memberId: memberIdParam } = await searchParams;
+  const memberId =
+    typeof memberIdParam === "string" ? memberIdParam : undefined;
   const user = await currentUser();
   const ownerName = user?.fullName ?? user?.username ?? "";
   const { sessionClaims } = await auth();
@@ -55,7 +56,11 @@ export default async function CreateRenewMembershipPage({
           </div>
           <div className="flex flex-row gap-3">
             <Button variant="outline" className={bigSquareButton} asChild>
-              <Link href={memberId ? `/owner/members/${memberId}` : "/owner/members"}>
+              <Link
+                href={
+                  memberId ? `/owner/members/${memberId}` : "/owner/members"
+                }
+              >
                 Cancel
               </Link>
             </Button>
