@@ -43,6 +43,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useTrainerStore } from "@/stores/trainer-store";
+import { TrackVimIcon } from "@/components/icons/TrackVimIcon";
 
 // ── Breadcrumb ──────────────────────────────────────────────────────────────
 import type { BreadcrumbItem } from "@/lib/breadcrumbs-config";
@@ -567,11 +568,16 @@ export function Header({
       <div className="flex items-center justify-between gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-3 md:py-4">
         <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
           {onSidebarToggle && <SidebarToggle onClick={onSidebarToggle} />}
-          <div className="flex flex-col gap-1 min-w-0">
-            <h1 className="text-base sm:text-lg font-semibold tracking-tight text-foreground leading-none truncate pb-2">
-              {currentPage}
-            </h1>
-            {showBreadcrumbs && <Breadcrumb items={breadcrumbItems!} />}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex md:hidden h-7 w-7 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 p-1 shrink-0">
+              <TrackVimIcon size={20} className="w-full h-full" />
+            </div>
+            <div className="flex flex-col gap-1 min-w-0">
+              <h1 className="text-base sm:text-lg font-semibold tracking-tight text-foreground leading-none truncate pb-2">
+                {currentPage}
+              </h1>
+              {showBreadcrumbs && <Breadcrumb items={breadcrumbItems!} />}
+            </div>
           </div>
         </div>
 

@@ -557,7 +557,11 @@ export function BillingOverview() {
           return;
         }
 
-        const paymentData = result.order;
+        const paymentData = result.order ?? (result as any).data?.order;
+        if (!paymentData || !paymentData.id || paymentData.amount == null) {
+          toast.error("Failed to retrieve order details from payment gateway.");
+          return;
+        }
 
         const razorpay = new (window as any).Razorpay({
           key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,

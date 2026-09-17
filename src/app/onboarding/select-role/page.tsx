@@ -13,6 +13,7 @@ import {
 import { setUserRole } from "@/actions/onboarding.action";
 import { toast } from "sonner";
 import { useClerk } from "@clerk/nextjs";
+import { TrackVimIcon } from "@/components/icons/TrackVimIcon";
 
 interface Role {
   id: "gym_owner" | "member";
@@ -150,8 +151,8 @@ export default function SelectRolePage() {
       <div className="relative mx-auto flex min-h-screen max-w-4xl flex-col items-center justify-center px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
         {/* Logo Section */}
         <div className="mb-8 flex flex-col items-center sm:mb-12">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <div className="text-lg font-bold">V</div>
+          <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 p-2.5 shadow-sm">
+            <TrackVimIcon size={32} className="h-full w-full" />
           </div>
           <h1 className="text-2xl font-bold text-foreground">TrackVim</h1>
           <p className="text-sm text-muted-foreground">

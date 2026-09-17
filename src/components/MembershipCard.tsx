@@ -3,6 +3,7 @@
 import { Ref } from "react";
 import Image from "next/image";
 import { getInitials } from "@/lib/application-status";
+import { TrackVimIcon } from "@/components/icons/TrackVimIcon";
 
 export type MembershipCardProps = {
   memberName: string;
@@ -149,9 +150,10 @@ export function MembershipCard({
         <p className="text-[11px] text-indigo-300">
           Present this card at check-in
         </p>
-        <p className="text-[11px] font-semibold tracking-wide text-indigo-200">
-          Powered by TrackVim
-        </p>
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-indigo-200">
+          <TrackVimIcon size={14} className="w-3.5 h-3.5" />
+          <span>Powered by TrackVim</span>
+        </div>
       </div>
     </div>
   );

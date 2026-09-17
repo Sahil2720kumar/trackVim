@@ -139,8 +139,23 @@ export async function createSubscriptionPaymentOrderAction(input: {
     };
   }
 
+  if (!data || data.success === false) {
+    return {
+      success: false as const,
+      error: data?.error ?? "Failed to create payment order. Please try again.",
+    };
+  }
+
   return {
     success: true as const,
+    paymentId: data.paymentId as string,
+    order: data.order as {
+      id: string;
+      amount: number;
+      currency?: string;
+      status?: string;
+      receipt?: string;
+    },
     data,
   };
 }

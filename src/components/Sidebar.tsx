@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import { useTrainerStore } from "@/stores/trainer-store";
 import { useMemberStore } from "@/stores/member.store";
 import { useOwnerStore } from "@/stores/owner.store";
+import { TrackVimIcon } from "@/components/icons/TrackVimIcon";
 
 // Types
 interface NavItem {
@@ -486,23 +487,22 @@ export function Sidebar({
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed  left-0 top-0 z-50 h-screen bg-background border-r border-border/60 flex flex-col transition-all duration-300 ease-in-out ",
+          "fixed left-0 top-0 z-50 h-screen max-h-screen overflow-hidden bg-background border-r border-border/60 flex flex-col transition-all duration-300 ease-in-out ",
           isCollapsed ? "w-[72px]" : "w-[232px]",
           "md:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
         )}
       >
         {/* Logo Section */}
-        <div className="px-3 py-4 border-b border-border/60">
+        <div className="px-3 py-4 border-b border-border/60 flex-shrink-0">
           <div className="flex items-center gap-3">
             {/* Collapse toggle (only desktop pointer-events allowed) */}
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="flex items-center justify-center h-9 w-9 rounded-xl flex-shrink-0 bg-primary hover:bg-primary/90 transition-all duration-200 shadow-md shadow-primary/25 pointer-events-none md:pointer-events-auto"
+              className="flex items-center justify-center h-9 w-9 rounded-xl flex-shrink-0 bg-primary/10 hover:bg-primary/20 border border-primary/20 transition-all duration-200 shadow-sm pointer-events-none md:pointer-events-auto p-1.5"
+              aria-label="Toggle sidebar collapse"
             >
-              <span className="text-primary-foreground font-bold text-base leading-none">
-                T
-              </span>
+              <TrackVimIcon size={24} className="h-full w-full" />
             </button>
             {!isCollapsed && (
               <div className="flex flex-col min-w-0 flex-1">
@@ -537,7 +537,7 @@ export function Sidebar({
         </div>
 
         {/* Navigation */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0 w-full">
           <nav
             className={cn(
               "p-2.5 space-y-0.5",
@@ -563,7 +563,7 @@ export function Sidebar({
         </ScrollArea>
 
         {/* Footer */}
-        <div className="border-t border-border/60 p-2.5">
+        <div className="border-t border-border/60 p-2.5 flex-shrink-0">
           {isCollapsed ? (
             <TooltipProvider>
               <Tooltip>
