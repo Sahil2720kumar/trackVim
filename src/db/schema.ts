@@ -81,7 +81,7 @@ import {
   check,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { authenticatedRole } from "drizzle-orm/supabase";
+import { authenticatedRole, anonRole } from "drizzle-orm/supabase";
 
 // ============================================================================
 // RLS helpers (unchanged)
@@ -315,6 +315,27 @@ export const gatewayPaymentStatusEnum = pgEnum("gateway_payment_status", [
 ]);
 
 export const billingModelEnum = pgEnum("billing_model", ["PerMember", "Flat"]);
+
+export const contactStatusEnum = pgEnum("contact_status", [
+  "Pending",
+  "In Progress",
+  "Resolved",
+  "Closed",
+]);
+
+export const bugReportSeverityEnum = pgEnum("bug_report_severity", [
+  "low",
+  "medium",
+  "high",
+  "critical",
+]);
+
+export const bugReportStatusEnum = pgEnum("bug_report_status", [
+  "Open",
+  "In Progress",
+  "Resolved",
+  "Closed",
+]);
 
 // ============================================================================
 // Core identity
@@ -2121,6 +2142,161 @@ export const systemSettings = pgTable(
 ).enableRLS();
 
 // ============================================================================
+// Contact Submissions & Bug Reports
+// ============================================================================
+
+export const contactSubmissions = pgTable(
+  "contact_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+
+    userId: uuid("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+
+    name: varchar("name", { length: 255 }).notNull(),
+    email: varchar("email", { length: 255 }).notNull(),
+    role: varchar("role", { length: 100 }).notNull(),
+    topic: varchar("topic", { length: 100 }).notNull(),
+    subject: varchar("subject", { length: 255 }),
+    message: text("message").notNull(),
+
+    status: contactStatusEnum("status").default("Pending").notNull(),
+
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("contact_submissions_email_idx").on(t.email),
+    index("contact_submissions_status_idx").on(t.status),
+    index("contact_submissions_user_id_idx").on(t.userId),
+
+    // -------------------------------------------------------
+    // INSERT
+    // Guests + authenticated users can submit
+    // -------------------------------------------------------
+    pgPolicy("Anyone can submit a contact form", {
+      for: "insert",
+      to: [anonRole, authenticatedRole],
+      withCheck: sql`true`,
+    }),
+
+    // -------------------------------------------------------
+    // SELECT
+    // Authenticated users can view only their own submissions
+    // -------------------------------------------------------
+    pgPolicy("Users can view their own contact submissions", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`user_id = ${CURRENT_USER_ID}`,
+    }),
+  ],
+).enableRLS();
+
+export const bugReports = pgTable(
+  "bug_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+
+    reportId: varchar("report_id", {
+      length: 50,
+    })
+      .notNull()
+      .unique(),
+
+    userId: uuid("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+
+    title: varchar("title", { length: 255 }).notNull(),
+
+    category: varchar("category", {
+      length: 100,
+    }).notNull(),
+
+    severity: bugReportSeverityEnum("severity").default("medium").notNull(),
+
+    whereOccurred: varchar("where_occurred", {
+      length: 255,
+    }),
+
+    description: text("description").notNull(),
+
+    stepsToReproduce: text("steps_to_reproduce"),
+
+    expectedBehavior: text("expected_behavior"),
+
+    actualBehavior: text("actual_behavior"),
+
+    contactEmail: varchar("contact_email", {
+      length: 255,
+    }).notNull(),
+
+    browserInfo: varchar("browser_info", {
+      length: 255,
+    }),
+
+    osInfo: varchar("os_info", {
+      length: 100,
+    }),
+
+    reportedPath: varchar("reported_path", {
+      length: 500,
+    }),
+
+    screenshotUrl: text("screenshot_url"),
+
+    status: bugReportStatusEnum("status").default("Open").notNull(),
+
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("bug_reports_report_id_idx").on(t.reportId),
+    index("bug_reports_contact_email_idx").on(t.contactEmail),
+    index("bug_reports_status_idx").on(t.status),
+    index("bug_reports_user_id_idx").on(t.userId),
+
+    // -------------------------------------------------------
+    // INSERT
+    // Guests + authenticated users can submit
+    // -------------------------------------------------------
+    pgPolicy("Anyone can submit a bug report", {
+      for: "insert",
+      to: [anonRole, authenticatedRole],
+      withCheck: sql`true`,
+    }),
+
+    // -------------------------------------------------------
+    // SELECT
+    // Authenticated users can view only their own reports
+    // -------------------------------------------------------
+    pgPolicy("Users can view their own bug reports", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`user_id = ${CURRENT_USER_ID}`,
+    }),
+  ],
+).enableRLS();
+// ============================================================================
 // Relations (unchanged)
 // ============================================================================
 
@@ -2134,6 +2310,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   sentMessages: many(messages, { relationName: "sender" }),
   receivedMessages: many(messages, { relationName: "receiver" }),
   notifications: many(notifications),
+  contactSubmissions: many(contactSubmissions),
+  bugReports: many(bugReports),
 }));
 
 export const gymsRelations = relations(gyms, ({ one, many }) => ({
@@ -2427,4 +2605,21 @@ export const subscriptionPaymentsRelations = relations(
 
 export const systemSettingsRelations = relations(systemSettings, ({ one }) => ({
   gym: one(gyms, { fields: [systemSettings.gymId], references: [gyms.id] }),
+}));
+
+export const contactSubmissionsRelations = relations(
+  contactSubmissions,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [contactSubmissions.userId],
+      references: [users.id],
+    }),
+  }),
+);
+
+export const bugReportsRelations = relations(bugReports, ({ one }) => ({
+  user: one(users, {
+    fields: [bugReports.userId],
+    references: [users.id],
+  }),
 }));

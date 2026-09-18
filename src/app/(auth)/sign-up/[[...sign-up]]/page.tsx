@@ -1,14 +1,20 @@
-import { SignUp } from "@clerk/nextjs";
-import { clerkAuthAppearance } from "@/lib/clerk-theme";
+import type { Metadata } from "next";
+import { AuthBrandHeader } from "@/components/auth/AuthBrandHeader";
+import { AuthLegalLinks } from "@/components/auth/AuthLegalLinks";
+import { SignUpContainer } from "@/components/auth/SignUpContainer";
+
+export const metadata: Metadata = {
+  title: "Create Account | TrackVim",
+  description: "Create your TrackVim account.",
+};
 
 export default function SignUpPage() {
   return (
-    <SignUp
-      appearance={clerkAuthAppearance}
-      path="/sign-up"
-      routing="path"
-      signInUrl="/sign-in"
-      forceRedirectUrl="/onboarding/select-role"
-    />
+    <div className="w-full flex flex-col items-center">
+      <div className="w-full max-w-md">
+        <SignUpContainer />
+      </div>
+      <AuthLegalLinks />
+    </div>
   );
 }

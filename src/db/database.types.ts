@@ -136,6 +136,130 @@ export type Database = {
           },
         ]
       }
+      bug_reports: {
+        Row: {
+          actual_behavior: string | null
+          browser_info: string | null
+          category: string
+          contact_email: string
+          created_at: string
+          description: string
+          expected_behavior: string | null
+          id: string
+          os_info: string | null
+          report_id: string
+          reported_path: string | null
+          screenshot_url: string | null
+          severity: Database["public"]["Enums"]["bug_report_severity"]
+          status: Database["public"]["Enums"]["bug_report_status"]
+          steps_to_reproduce: string | null
+          title: string
+          updated_at: string
+          user_id: string | null
+          where_occurred: string | null
+        }
+        Insert: {
+          actual_behavior?: string | null
+          browser_info?: string | null
+          category: string
+          contact_email: string
+          created_at?: string
+          description: string
+          expected_behavior?: string | null
+          id?: string
+          os_info?: string | null
+          report_id: string
+          reported_path?: string | null
+          screenshot_url?: string | null
+          severity?: Database["public"]["Enums"]["bug_report_severity"]
+          status?: Database["public"]["Enums"]["bug_report_status"]
+          steps_to_reproduce?: string | null
+          title: string
+          updated_at?: string
+          user_id?: string | null
+          where_occurred?: string | null
+        }
+        Update: {
+          actual_behavior?: string | null
+          browser_info?: string | null
+          category?: string
+          contact_email?: string
+          created_at?: string
+          description?: string
+          expected_behavior?: string | null
+          id?: string
+          os_info?: string | null
+          report_id?: string
+          reported_path?: string | null
+          screenshot_url?: string | null
+          severity?: Database["public"]["Enums"]["bug_report_severity"]
+          status?: Database["public"]["Enums"]["bug_report_status"]
+          steps_to_reproduce?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string | null
+          where_occurred?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bug_reports_user_id_users_id_fk"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_submissions: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          message: string
+          name: string
+          role: string
+          status: Database["public"]["Enums"]["contact_status"]
+          subject: string | null
+          topic: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          message: string
+          name: string
+          role: string
+          status?: Database["public"]["Enums"]["contact_status"]
+          subject?: string | null
+          topic: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string
+          name?: string
+          role?: string
+          status?: Database["public"]["Enums"]["contact_status"]
+          subject?: string | null
+          topic?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_submissions_user_id_users_id_fk"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exercises: {
         Row: {
           created_at: string
@@ -2084,6 +2208,20 @@ export type Database = {
         Returns: string
       }
       cancel_gym_billing: { Args: never; Returns: undefined }
+      cancel_membership: {
+        Args: { p_gym_id: string; p_member_id: string }
+        Returns: {
+          member_name: string
+          success: boolean
+        }[]
+      }
+      cancel_membership_renewal: {
+        Args: { p_gym_id: string; p_member_id: string }
+        Returns: {
+          member_name: string
+          success: boolean
+        }[]
+      }
       change_gym_subscription_plan: {
         Args: { p_gym_id: string; p_new_plan_id: string }
         Returns: undefined
@@ -2262,6 +2400,7 @@ export type Database = {
       }
       current_member_id: { Args: never; Returns: string }
       current_user_id: { Args: never; Returns: string }
+      debug_auth_context: { Args: never; Returns: Json }
       debug_jwt: { Args: never; Returns: Json }
       debug_my_gym_ids: {
         Args: never
@@ -2341,7 +2480,7 @@ export type Database = {
         Returns: number
       }
       get_member_attendance_stats: {
-        Args: { p_as_of?: string; p_gym_id: string; p_member_ids: string[] }
+        Args: { p_as_of: string; p_gym_id: string; p_member_ids: string[] }
         Returns: {
           attendance_rate: number
           current_streak: number
@@ -2367,6 +2506,7 @@ export type Database = {
           month_start: string
         }[]
       }
+      get_members_and_plans: { Args: { p_gym_id: string }; Returns: Json }
       get_membership_application_page_data: {
         Args: { p_gym_id: string; p_plan_id: string }
         Returns: Json
@@ -2444,6 +2584,7 @@ export type Database = {
           trainer_count: number
         }[]
       }
+      get_public_homepage_stats: { Args: never; Returns: Json }
       get_trainer_activity: {
         Args: { p_as_of?: string; p_gym_id: string }
         Returns: {
@@ -2550,13 +2691,6 @@ export type Database = {
         Args: { p_payment_id: string; p_reason: string }
         Returns: undefined
       }
-      remove_member_from_gym: {
-        Args: { p_gym_id: string; p_member_id: string }
-        Returns: {
-          member_name: string
-          success: boolean
-        }[]
-      }
       renew_membership: {
         Args: {
           p_collected_by?: string
@@ -2630,6 +2764,9 @@ export type Database = {
       attendance_status: "CheckedIn" | "CheckedOut"
       billing_model: "PerMember" | "Flat"
       blood_group: "A+" | "A-" | "B+" | "B-" | "O+" | "O-" | "AB+" | "AB-"
+      bug_report_severity: "low" | "medium" | "high" | "critical"
+      bug_report_status: "Open" | "In Progress" | "Resolved" | "Closed"
+      contact_status: "Pending" | "In Progress" | "Resolved" | "Closed"
       difficulty_level: "Beginner" | "Intermediate" | "Advanced"
       discount_type: "Percentage" | "Amount"
       employment_type: "Full Time" | "Part Time" | "Contract"
@@ -2871,6 +3008,9 @@ export const Constants = {
       attendance_status: ["CheckedIn", "CheckedOut"],
       billing_model: ["PerMember", "Flat"],
       blood_group: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"],
+      bug_report_severity: ["low", "medium", "high", "critical"],
+      bug_report_status: ["Open", "In Progress", "Resolved", "Closed"],
+      contact_status: ["Pending", "In Progress", "Resolved", "Closed"],
       difficulty_level: ["Beginner", "Intermediate", "Advanced"],
       discount_type: ["Percentage", "Amount"],
       employment_type: ["Full Time", "Part Time", "Contract"],

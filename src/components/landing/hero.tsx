@@ -61,7 +61,10 @@ export function Hero() {
                 size="lg"
                 className="w-full sm:w-auto rounded-xl px-7 py-6 text-base font-semibold shadow-md gap-2 group"
               >
-                <Link href="/sign-up">
+                <Link
+                  className="flex flex-row gap-2 items-center justify-center"
+                  href="/sign-up"
+                >
                   Get Started
                   <ArrowRight className="h-4.5 w-4.5 group-hover:translate-x-1 transition-transform" />
                 </Link>
@@ -194,7 +197,7 @@ export function Hero() {
                           style={{ height: `${val * 0.7}%` }}
                         />
                       </div>
-                    )
+                    ),
                   )}
                 </div>
               </div>
