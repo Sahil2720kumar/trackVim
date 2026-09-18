@@ -27,11 +27,6 @@ export function AuthVisualShowcase() {
   const [activeTab, setActiveTab] = useState<RoleTab>("owner");
   const { data: stats, isLoading } = usePublicHomepageStats();
 
-  const todayScans = stats?.today_scans ?? 842;
-  const scanChangePercent = stats?.scan_change_percent ?? 18;
-  const activeMemberships = stats?.active_memberships ?? 1248;
-  const attendanceRate = stats?.attendance_rate ?? 99.4;
-
   const tabHighlights: Record<
     RoleTab,
     {
@@ -166,26 +161,34 @@ export function AuthVisualShowcase() {
                 <span className="text-base sm:text-lg font-bold text-foreground">
                   {isLoading && !stats ? (
                     <span className="animate-pulse">Loading…</span>
+                  ) : !stats ? (
+                    <span className="text-xs sm:text-sm font-medium text-muted-foreground">Unavailable</span>
                   ) : (
-                    `${todayScans.toLocaleString("en-IN")} Verified`
+                    `${stats.today_scans.toLocaleString("en-IN")} Verified`
                   )}
                 </span>
-                <span
-                  className={`text-[10px] font-semibold flex items-center ${
-                    scanChangePercent >= 0
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-rose-600 dark:text-rose-400"
-                  }`}
-                >
-                  {scanChangePercent >= 0
-                    ? `+${scanChangePercent}%`
-                    : `${scanChangePercent}%`}
-                  {scanChangePercent >= 0 ? (
-                    <ArrowUpRight className="h-3 w-3 ml-0.5" />
-                  ) : (
-                    <ArrowDownRight className="h-3 w-3 ml-0.5" />
-                  )}
-                </span>
+                {stats ? (
+                  <span
+                    className={`text-[10px] font-semibold flex items-center ${
+                      stats.scan_change_percent >= 0
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-rose-600 dark:text-rose-400"
+                    }`}
+                  >
+                    {stats.scan_change_percent >= 0
+                      ? `+${stats.scan_change_percent}%`
+                      : `${stats.scan_change_percent}%`}
+                    {stats.scan_change_percent >= 0 ? (
+                      <ArrowUpRight className="h-3 w-3 ml-0.5" />
+                    ) : (
+                      <ArrowDownRight className="h-3 w-3 ml-0.5" />
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-semibold text-muted-foreground">
+                    --
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -207,13 +210,21 @@ export function AuthVisualShowcase() {
                 <span className="text-base sm:text-lg font-bold text-foreground">
                   {isLoading && !stats ? (
                     <span className="animate-pulse">Loading…</span>
+                  ) : !stats ? (
+                    <span className="text-xs sm:text-sm font-medium text-muted-foreground">Unavailable</span>
                   ) : (
-                    `${activeMemberships.toLocaleString("en-IN")} Active`
+                    `${stats.active_memberships.toLocaleString("en-IN")} Active`
                   )}
                 </span>
-                <span className="text-[10px] font-semibold text-primary flex items-center">
-                  {attendanceRate}% Rate
-                </span>
+                {stats ? (
+                  <span className="text-[10px] font-semibold text-primary flex items-center">
+                    {stats.attendance_rate}% Rate
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-semibold text-muted-foreground">
+                    --
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -363,4 +374,3 @@ export function AuthVisualShowcase() {
     </div>
   );
 }
-

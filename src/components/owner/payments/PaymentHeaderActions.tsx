@@ -176,7 +176,7 @@ export function PaymentHeaderActions({
 
       const planName = membership?.plan?.planName ?? "Gym Membership Fee";
       const joiningFee = membership?.joiningFee ?? 0;
-      const discount = membership?.discount ?? payment.discount ?? 0;
+      const discount = membership?.discount ?? 0;
       const planPrice =
         membership?.planPrice ?? payment.amount + discount - joiningFee;
 

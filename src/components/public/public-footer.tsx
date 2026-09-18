@@ -45,9 +45,6 @@ export function PublicFooter() {
             <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
               Smart gym management software for owners, trainers, and members.
             </p>
-            <p className="text-xs text-muted-foreground/70">
-              © {new Date().getFullYear()} TrackVim. All rights reserved.
-            </p>
           </div>
 
           {/* Col 2 — Product */}

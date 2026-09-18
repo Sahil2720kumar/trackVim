@@ -167,13 +167,14 @@ export default function DataDeletionPage() {
           </div>
         </div>
 
-        {/* Business Process Placeholder */}
-        <div className="p-4 rounded-xl bg-muted/40 border border-dashed border-primary/40 space-y-2 text-xs">
-          <span className="font-mono font-semibold text-primary uppercase tracking-wider text-[10px] block">
-            [Business Process Placeholder — Final Review Required]
-          </span>
-          <p className="text-muted-foreground">
-            <code className="text-foreground bg-muted px-1.5 py-0.5 rounded font-mono">[Describe the official TrackVim account deletion request form or in-app account deletion settings button]</code>
+        {/* Deletion Request Submission Details */}
+        <div className="p-4 rounded-xl bg-card border border-border/80 space-y-2 text-xs">
+          <div className="flex items-center gap-2 font-bold text-foreground">
+            <Info className="h-4 w-4 text-primary shrink-0" />
+            <span>Submitting Your Deletion Request</span>
+          </div>
+          <p className="text-muted-foreground leading-relaxed">
+            To submit an official account deletion request, email <a href="mailto:support@trackvim.com?subject=Data%20Deletion%20Request" className="text-primary underline hover:opacity-80">support@trackvim.com</a> from your registered email address with the subject line <strong>&quot;Data Deletion Request&quot;</strong>. Include your full name, registered email address, and user role (Member, Trainer, or Gym Owner). You can also initiate a deletion inquiry through our support channel.
           </p>
         </div>
       </LegalSection>
@@ -206,13 +207,14 @@ export default function DataDeletionPage() {
           <li>You will receive a final confirmation message upon completion.</li>
         </ol>
 
-        {/* Business Timeline Placeholder */}
-        <div className="p-4 rounded-xl bg-muted/40 border border-dashed border-primary/40 space-y-2 my-3 text-xs">
-          <span className="font-mono font-semibold text-primary uppercase tracking-wider text-[10px] block">
-            [Business Timeline Placeholder — Final Review Required]
-          </span>
-          <p className="text-muted-foreground">
-            <code className="text-foreground bg-muted px-1.5 py-0.5 rounded font-mono">[Specify the expected processing period — e.g. 14 to 30 business days following request verification]</code>
+        {/* Processing Timeline */}
+        <div className="p-4 rounded-xl bg-card border border-border/80 space-y-2 my-3 text-xs">
+          <div className="flex items-center gap-2 font-bold text-foreground">
+            <Info className="h-4 w-4 text-primary shrink-0" />
+            <span>Processing Timeline & Deadlines</span>
+          </div>
+          <p className="text-muted-foreground leading-relaxed">
+            TrackVim processes and completes all verified data deletion requests within <strong>30 calendar days</strong> of receiving identity verification. Upon completion, you will receive a final confirmation email confirming that your account credentials and personal data have been permanently removed or anonymized.
           </p>
         </div>
       </LegalSection>
@@ -303,13 +305,14 @@ export default function DataDeletionPage() {
           If you submit a deletion request by mistake, you may cancel your request prior to identity verification and processing by contacting support immediately.
         </p>
 
-        {/* Business Cancellation Placeholder */}
-        <div className="p-4 rounded-xl bg-muted/40 border border-dashed border-primary/40 space-y-2 my-3 text-xs">
-          <span className="font-mono font-semibold text-primary uppercase tracking-wider text-[10px] block">
-            [Business Term Placeholder — Final Review Required]
-          </span>
-          <p className="text-muted-foreground">
-            <code className="text-foreground bg-muted px-1.5 py-0.5 rounded font-mono">[Specify grace period during which a user can cancel a pending deletion request before permanent purge occurs]</code>
+        {/* Grace Period & Cancellation */}
+        <div className="p-4 rounded-xl bg-card border border-border/80 space-y-2 my-3 text-xs">
+          <div className="flex items-center gap-2 font-bold text-foreground">
+            <Info className="h-4 w-4 text-primary shrink-0" />
+            <span>Grace Period & Cancellation Process</span>
+          </div>
+          <p className="text-muted-foreground leading-relaxed">
+            You may cancel a pending data deletion request within a <strong>7-day grace period</strong> following submission, or at any time prior to identity verification and final data purging. To cancel your request, email <a href="mailto:support@trackvim.com?subject=Cancel%20Data%20Deletion%20Request" className="text-primary underline hover:opacity-80">support@trackvim.com</a> with the subject line <strong>&quot;Cancel Data Deletion Request&quot;</strong> from your registered email address.
           </p>
         </div>
       </LegalSection>

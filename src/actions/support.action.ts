@@ -55,24 +55,6 @@ export async function submitContactFormAction(
     }
     const input = parsed.data;
 
-    console.log({
-      user_id: internalUserId,
-      name: input.name,
-      email: input.email,
-      role: input.role,
-      topic: input.topic,
-      subject: input.subject || null,
-      message: input.message,
-      status: "Pending",
-    });
-
-    const { data: authContext, error: authContextError } =
-      await supabase.rpc("debug_auth_context");
-
-    console.log("Supabase auth context:", {
-      authContext,
-      authContextError,
-    });
     // 3. Insert row
     const { error } = await supabase.from("contact_submissions").insert({
       user_id: internalUserId,
@@ -165,8 +147,7 @@ export async function submitBugReportAction(
     }
 
     // 4. Generate unique report identifier
-    const randomDigits = Math.floor(100000 + Math.random() * 900000);
-    const reportId = `TV-BUG-${randomDigits}`;
+    const reportId = `TV-BUG-${crypto.randomUUID()}`;
 
     // 5. Insert row
     const { data: inserted, error } = await supabase

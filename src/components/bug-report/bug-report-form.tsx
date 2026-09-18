@@ -137,17 +137,17 @@ export function BugReportForm() {
     if (typeof window !== "undefined") {
       const ua = navigator.userAgent;
       let browser = "Web Browser";
-      if (ua.includes("Chrome")) browser = "Google Chrome";
-      else if (ua.includes("Safari")) browser = "Apple Safari";
+      if (ua.includes("Edg")) browser = "Microsoft Edge";
+      else if (ua.includes("Chrome")) browser = "Google Chrome";
       else if (ua.includes("Firefox")) browser = "Mozilla Firefox";
-      else if (ua.includes("Edg")) browser = "Microsoft Edge";
+      else if (ua.includes("Safari")) browser = "Apple Safari";
 
       let os = "Desktop";
-      if (ua.includes("Win")) os = "Windows";
+      if (ua.includes("Android")) os = "Android";
+      else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
+      else if (ua.includes("Win")) os = "Windows";
       else if (ua.includes("Mac")) os = "macOS";
       else if (ua.includes("Linux")) os = "Linux";
-      else if (ua.includes("Android")) os = "Android";
-      else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
 
       setValue(
         "browserInfo",

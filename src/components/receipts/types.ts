@@ -48,8 +48,7 @@ export function mapPaymentToReceiptData(
     payment.gym.postalCode,
   ].filter(Boolean);
 
-  const receiptNumber =
-    payment.receiptId || `TVM-${payment.id.slice(0, 8).toUpperCase()}`;
+  const receiptNumber = payment.receiptId || `TVM-${payment.id.toUpperCase()}`;
 
   // Customer facing status wording mapping
   const statusMap: Record<string, string> = {
@@ -80,7 +79,8 @@ export function mapPaymentToReceiptData(
     },
     member: {
       name: payment.member.fullName ?? "Member",
-      memberId: payment.member.memberCode ?? `ID-${payment.member.id.slice(0, 8)}`,
+      memberId:
+        payment.member.memberCode ?? `ID-${payment.member.id.slice(0, 8)}`,
       phone: payment.member.contactPhone ?? null,
       email: payment.member.contactEmail ?? null,
     },

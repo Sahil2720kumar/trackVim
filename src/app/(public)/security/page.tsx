@@ -26,7 +26,7 @@ const securityPrinciples = [
     icon: Lock,
     title: "Data Encryption",
     description:
-      "All data is encrypted at rest using AES-256 and in transit via TLS 1.3. Your gym data and member records are protected end-to-end.",
+      "TrackVim uses encryption to protect data at rest and secure TLS connections to protect data while it is transmitted between your browser and our services.",
   },
   {
     icon: Key,

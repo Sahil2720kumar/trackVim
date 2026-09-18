@@ -207,7 +207,7 @@ export function PublicHeader() {
                   </SheetTitle>
                 </SheetHeader>
 
-                <div className="flex flex-col h-[calc(100%-5rem)]">
+                <div className="flex flex-col h-[calc(100%_-_5rem)]">
                   {/* Nav Links */}
                   <nav
                     className="flex-1 px-4 py-4 space-y-1"

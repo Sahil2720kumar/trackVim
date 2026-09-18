@@ -107,15 +107,14 @@ export default function RefundPolicyPage() {
           Exact subscription charges, member count tiers, and renewal dates depend on the specific plan chosen in the owner dashboard.
         </p>
 
-        {/* Business Rule Placeholder */}
-        <div className="p-4 rounded-xl bg-muted/40 border border-dashed border-primary/40 space-y-2 my-3 text-xs">
-          <span className="font-mono font-semibold text-primary uppercase tracking-wider text-[10px] block">
-            [Business Term Placeholder — Final Review Required]
-          </span>
-          <p className="text-muted-foreground">
-            <code className="text-foreground bg-muted px-1.5 py-0.5 rounded font-mono">[Describe applicable TrackVim subscription billing cycle]</code>
-            <br />
-            <code className="text-foreground bg-muted px-1.5 py-0.5 rounded font-mono">[Describe whether subscription charges are automatically non-refundable or eligible for initial trial refunds]</code>
+        {/* Subscription Terms */}
+        <div className="p-4 rounded-xl bg-card border border-border/80 space-y-2 my-3 text-xs">
+          <div className="flex items-center gap-2 font-bold text-foreground">
+            <Info className="h-4 w-4 text-primary shrink-0" />
+            <span>Billing Cycles & Trial Period</span>
+          </div>
+          <p className="text-muted-foreground leading-relaxed">
+            TrackVim subscriptions are billed on a monthly billing cycle based on active member counts. New gym registrations receive an initial 1-month free trial period. Subscription charges billed after trial expiration are non-refundable, except as expressly provided in our refund eligibility criteria below.
           </p>
         </div>
       </LegalSection>
@@ -144,13 +143,14 @@ export default function RefundPolicyPage() {
           Cancelling a subscription prevents future automatic renewal charges at the end of the current billing period. Cancelling a subscription does not automatically issue a refund for previously billed billing periods.
         </p>
 
-        {/* Business Rule Placeholder */}
-        <div className="p-4 rounded-xl bg-muted/40 border border-dashed border-primary/40 space-y-2 my-3 text-xs">
-          <span className="font-mono font-semibold text-primary uppercase tracking-wider text-[10px] block">
-            [Business Term Placeholder — Final Review Required]
-          </span>
-          <p className="text-muted-foreground">
-            <code className="text-foreground bg-muted px-1.5 py-0.5 rounded font-mono">[Specify exact cancellation effective date policy — e.g. end of current billing cycle or immediate access loss]</code>
+        {/* Effective Date Policy */}
+        <div className="p-4 rounded-xl bg-card border border-border/80 space-y-2 my-3 text-xs">
+          <div className="flex items-center gap-2 font-bold text-foreground">
+            <Info className="h-4 w-4 text-primary shrink-0" />
+            <span>Cancellation Effective Date</span>
+          </div>
+          <p className="text-muted-foreground leading-relaxed">
+            When you cancel your TrackVim subscription, your cancellation takes effect at the end of your current paid billing period. You will retain full access to TrackVim platform features until the end of that billing period, after which no further recurring subscription charges will occur.
           </p>
         </div>
       </LegalSection>
@@ -167,9 +167,12 @@ export default function RefundPolicyPage() {
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               Refunds May Be Considered When:
             </h4>
-            <div className="p-3 rounded-lg bg-muted/30 border border-dashed border-border text-xs text-muted-foreground font-mono space-y-1">
-              <p><code className="text-foreground">[Insert approved TrackVim refund conditions — e.g., duplicate billing error, technical service unavailability, or accidental renewal within specified window]</code></p>
-            </div>
+            <ul className="list-disc pl-5 text-xs text-muted-foreground space-y-1.5 leading-relaxed">
+              <li>A technical error resulted in a duplicate subscription charge for the same billing cycle.</li>
+              <li>A billing calculation error occurred regarding active membership count tiers.</li>
+              <li>TrackVim experienced extended, unscheduled platform unavailability preventing service usage for more than 48 consecutive hours.</li>
+              <li>A refund request is submitted within 48 hours of an accidental initial plan upgrade before platform features are utilized.</li>
+            </ul>
           </div>
 
           <div className="p-4 rounded-xl bg-card border border-border/70 space-y-2">
@@ -177,9 +180,12 @@ export default function RefundPolicyPage() {
               <XCircle className="h-4 w-4 text-rose-500" />
               Refunds Are Generally Excluded When:
             </h4>
-            <div className="p-3 rounded-lg bg-muted/30 border border-dashed border-border text-xs text-muted-foreground font-mono space-y-1">
-              <p><code className="text-foreground">[Insert approved exclusions — e.g., partial billing cycle usage, user error, or requests submitted past applicable window]</code></p>
-            </div>
+            <ul className="list-disc pl-5 text-xs text-muted-foreground space-y-1.5 leading-relaxed">
+              <li>A request is made for partial billing cycle usage or unused subscription days after the cancellation effective date.</li>
+              <li>A gym owner fails to cancel a subscription prior to the monthly billing renewal date.</li>
+              <li>A dispute arises between a gym owner and a gym member regarding local gym membership payments.</li>
+              <li>Account suspension occurs due to a violation of TrackVim Terms of Service.</li>
+            </ul>
           </div>
         </div>
       </LegalSection>
@@ -190,13 +196,14 @@ export default function RefundPolicyPage() {
           Certain fees and charges incurred on the platform may be non-refundable once processed or rendered.
         </p>
         
-        {/* Business Rule Placeholder */}
-        <div className="p-4 rounded-xl bg-muted/40 border border-dashed border-primary/40 space-y-2 my-3 text-xs">
-          <span className="font-mono font-semibold text-primary uppercase tracking-wider text-[10px] block">
-            [Business Term Placeholder — Final Review Required]
-          </span>
-          <p className="text-muted-foreground">
-            <code className="text-foreground bg-muted px-1.5 py-0.5 rounded font-mono">[Specify any non-refundable fees — e.g. setup fees, custom integration charges, or payment processor gateway fees]</code>
+        {/* Non-Refundable Items */}
+        <div className="p-4 rounded-xl bg-card border border-border/80 space-y-2 my-3 text-xs">
+          <div className="flex items-center gap-2 font-bold text-foreground">
+            <Info className="h-4 w-4 text-primary shrink-0" />
+            <span>Excluded Charges</span>
+          </div>
+          <p className="text-muted-foreground leading-relaxed">
+            One-time setup fees, custom integration charges, data migration fees, and third-party payment gateway transaction fees (such as Razorpay processing fees) are strictly non-refundable under all circumstances.
           </p>
         </div>
       </LegalSection>
@@ -247,13 +254,14 @@ export default function RefundPolicyPage() {
           TrackVim may occasionally offer promotional pricing, introductory trial periods, or discounted subscription bundles.
         </p>
         
-        {/* Business Rule Placeholder */}
-        <div className="p-4 rounded-xl bg-muted/40 border border-dashed border-primary/40 space-y-2 my-3 text-xs">
-          <span className="font-mono font-semibold text-primary uppercase tracking-wider text-[10px] block">
-            [Business Term Placeholder — Final Review Required]
-          </span>
-          <p className="text-muted-foreground">
-            <code className="text-foreground bg-muted px-1.5 py-0.5 rounded font-mono">[Specify refund rules for promotional plans, coupons, or trial-to-paid conversions]</code>
+        {/* Promotional Terms */}
+        <div className="p-4 rounded-xl bg-card border border-border/80 space-y-2 my-3 text-xs">
+          <div className="flex items-center gap-2 font-bold text-foreground">
+            <Info className="h-4 w-4 text-primary shrink-0" />
+            <span>Promotional Refund Terms</span>
+          </div>
+          <p className="text-muted-foreground leading-relaxed">
+            Subscriptions purchased with promotional discounts, coupon codes, or special introductory rates are final and non-refundable. Paid subscriptions resulting from trial-to-paid conversions follow our standard subscription refund eligibility criteria.
           </p>
         </div>
       </LegalSection>
@@ -274,13 +282,14 @@ export default function RefundPolicyPage() {
           Approved refunds will be credited back to the original payment method used during checkout (e.g., credit card, debit card, UPI, or Razorpay payment account).
         </p>
 
-        {/* Business Rule Placeholder */}
-        <div className="p-4 rounded-xl bg-muted/40 border border-dashed border-primary/40 space-y-2 my-3 text-xs">
-          <span className="font-mono font-semibold text-primary uppercase tracking-wider text-[10px] block">
-            [Business Term Placeholder — Final Review Required]
-          </span>
-          <p className="text-muted-foreground">
-            <code className="text-foreground bg-muted px-1.5 py-0.5 rounded font-mono">[Specify expected refund processing timeframe — e.g. 5–10 business days depending on payment gateway and card issuer]</code>
+        {/* Processing Timeframe */}
+        <div className="p-4 rounded-xl bg-card border border-border/80 space-y-2 my-3 text-xs">
+          <div className="flex items-center gap-2 font-bold text-foreground">
+            <Info className="h-4 w-4 text-primary shrink-0" />
+            <span>Processing Timeframes & Method</span>
+          </div>
+          <p className="text-muted-foreground leading-relaxed">
+            Once approved, refunds are processed within <strong>5 to 10 business days</strong>. Refund amounts are credited back to the original payment method (via Razorpay to your card, bank account, or UPI handle). Exact arrival time in your account depends on your financial institution or card issuer.
           </p>
         </div>
       </LegalSection>
