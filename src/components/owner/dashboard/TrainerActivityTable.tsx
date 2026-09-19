@@ -12,11 +12,11 @@ const columns = [
   columnHelper.accessor("full_name", {
     header: "Trainer",
     cell: (info) => (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <EntityAvatar
           name={info.getValue()}
           photoUrl={info.row.original.photo_url}
-          size="sm"
+          size="md"
         />
         <span className="text-foreground font-medium whitespace-nowrap">
           {info.getValue()}

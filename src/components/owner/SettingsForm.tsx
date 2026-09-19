@@ -144,8 +144,8 @@ export default function SettingsForm({
     (initialData?.payment_qr_url as string) || undefined,
   );
 
-  const [existingGalleryUrls, setExistingGalleryUrls] = useState<string[]>(
-    () => getInitialGalleryUrls(initialData),
+  const [existingGalleryUrls, setExistingGalleryUrls] = useState<string[]>(() =>
+    getInitialGalleryUrls(initialData),
   );
 
   const gallery = useMultiUpload(
@@ -197,10 +197,7 @@ export default function SettingsForm({
     currentExistingGalleryJson !== initialGalleryJson;
 
   const hasChanges =
-    isDirty ||
-    logo.file != null ||
-    paymentQr.file != null ||
-    galleryChanged;
+    isDirty || logo.file != null || paymentQr.file != null || galleryChanged;
 
   const toggleAmenity = (value: string, checked: boolean) => {
     const current = amenities ?? [];

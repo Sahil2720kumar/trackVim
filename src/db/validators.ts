@@ -141,6 +141,8 @@ import {
   gymSubscriptions,
   subscriptionPayments,
   systemSettings,
+  contactSubmissions,
+  bugReports,
   genderEnum,
   bloodGroupEnum,
 } from "./schema";
@@ -1343,3 +1345,37 @@ export type CreateSystemSettingInput = z.infer<
 export type UpdateSystemSettingInput = z.infer<
   typeof updateSystemSettingSchema
 >;
+
+// ============================================================================
+// Contact Submissions & Bug Reports
+// ============================================================================
+
+export const createContactSubmissionSchema = z.object({
+  name: z.string().trim().min(1, "Please enter your name.").max(255),
+  email: email,
+  role: z.string().trim().min(1, "Please select an option describing who you are.").max(100),
+  topic: z.string().trim().min(1, "Please select a topic for your inquiry.").max(100),
+  subject: z.string().trim().max(255).optional().or(z.literal("")),
+  message: z.string().trim().min(10, "Your message must be at least 10 characters long."),
+});
+
+export const createBugReportSchema = z.object({
+  title: z.string().trim().min(5, "Title must be at least 5 characters long.").max(255),
+  category: z.string().trim().min(1, "Please select a category.").max(100),
+  severity: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+  whereOccurred: z.string().trim().max(255).optional().or(z.literal("")),
+  description: z.string().trim().min(10, "Description must be at least 10 characters long."),
+  stepsToReproduce: z.string().trim().optional().or(z.literal("")),
+  expectedBehavior: z.string().trim().optional().or(z.literal("")),
+  actualBehavior: z.string().trim().optional().or(z.literal("")),
+  contactEmail: email,
+  browserInfo: z.string().trim().max(255).optional().or(z.literal("")),
+  osInfo: z.string().trim().max(100).optional().or(z.literal("")),
+  reportedPath: z.string().trim().max(500).optional().or(z.literal("")),
+  screenshotUrl: z.string().trim().optional().or(z.literal("")),
+});
+
+export type CreateContactSubmissionInput = z.infer<
+  typeof createContactSubmissionSchema
+>;
+export type CreateBugReportInput = z.infer<typeof createBugReportSchema>;

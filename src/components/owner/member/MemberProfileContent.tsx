@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { AttendanceAnalyticsChart } from "@/components/owner/AttendanceAnalyticsChart";
-import { memberQuickActions } from "@/components/owner/quick-actions-data";
+import {
+  memberQuickActions,
+  getMemberQuickActions,
+} from "@/components/owner/quick-actions-data";
 import { QuickActionsGrid } from "@/components/QuickActionsGrid";
 import { StatCard } from "@/components/StatCard";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -21,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Activity,
   Calendar,
+  CalendarClock,
   Check,
   Clock,
   CreditCard,
@@ -39,8 +44,9 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { daysBetween, getInitials } from "@/lib/utils";
+import { daysBetween, formatDateStr, getInitials } from "@/lib/utils";
 import { TrainerManagerDialog } from "@/components/owner/member/TrainerManagerDialog";
+import { ManualAttendanceDialog } from "@/components/ManualAttendanceDialog";
 import {
   useAllTrainers,
   useMemberByIdWithAttendance,
@@ -197,6 +203,11 @@ export function MemberProfileContent({
   const isError = memberError || trainersError;
   const isFetching = memberFetching || trainersFetching;
 
+  // Manual attendance dialog state
+  const [attendanceDialogOpen, setAttendanceDialogOpen] = useState(false);
+  // Trainer assignment dialog state (shared by quick-action button + inline button)
+  const [trainerDialogOpen, setTrainerDialogOpen] = useState(false);
+
   const refetchAll = () => {
     refetchMember();
     refetchTrainers();
@@ -349,6 +360,31 @@ export function MemberProfileContent({
         </div>
       </div>
 
+      {/* Upcoming Plan banner — only shown when a paid renewal is
+          sitting in Scheduled status waiting for the current plan to end */}
+      {scheduledMembership && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-orange-200 bg-orange-50 px-5 py-4 my-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
+              <CalendarClock className="w-5 h-5 text-orange-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {scheduledMembership.plan?.plan_name ?? "New plan"} scheduled to
+                start
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Begins {formatDateStr(scheduledMembership.start_date)}, right
+                after current plan ends
+              </p>
+            </div>
+          </div>
+          <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100 self-start sm:self-auto">
+            Scheduled
+          </Badge>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left Column */}
         <div className="flex flex-col gap-6 lg:col-span-2">
@@ -473,14 +509,24 @@ export function MemberProfileContent({
                   <div>
                     <p className="text-xs text-muted-foreground">Start Date</p>
                     <p className="font-medium">
-                      {membership?.start_date ?? "—"}
+                      {formatDateStr(membership?.start_date)}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Expiry Date</p>
-                    <p className="font-medium">{membership?.end_date ?? "—"}</p>
+                    <p className="font-medium">
+                      {formatDateStr(membership?.end_date)}
+                    </p>
                   </div>
                 </div>
+                {scheduledMembership && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Next Plan</span>
+                    <span className="font-semibold text-orange-600">
+                      {scheduledMembership.plan?.plan_name ?? "—"}
+                    </span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Days Remaining</span>
@@ -521,40 +567,52 @@ export function MemberProfileContent({
             </Card>
 
             {scheduledMembership && (
-              <Card className="border-blue-100 bg-blue-50/40">
-                <CardHeader>
-                  <CardTitle className="text-base">
-                    Upcoming Membership
-                  </CardTitle>
-                  <CardDescription>
-                    Scheduled to start once the current plan ends
-                  </CardDescription>
+              <Card className="border-orange-200 bg-orange-50/40">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                        <CalendarClock className="w-4 h-4 text-orange-600" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-base font-semibold">
+                          Upcoming Membership
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          Scheduled to start once current plan ends
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100">
+                      Scheduled
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-xs text-muted-foreground">Plan</p>
-                    <p className="font-medium">
+                    <p className="text-xs text-muted-foreground">Plan Name</p>
+                    <p className="font-semibold text-foreground">
                       {scheduledMembership.plan?.plan_name ?? "—"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Price</p>
-                    <p className="font-medium">
+                    <p className="text-xs text-muted-foreground">Plan Price</p>
+                    <p className="font-semibold text-foreground">
                       ₹
                       {scheduledMembership.plan?.plan_price ??
                         scheduledMembership.plan_price}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Starts</p>
-                    <p className="font-medium">
-                      {scheduledMembership.start_date}
+                    <p className="text-xs text-muted-foreground">Starts On</p>
+                    <p className="font-medium text-foreground">
+                      {formatDateStr(scheduledMembership.start_date)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Ends</p>
-                    <p className="font-medium">
-                      {scheduledMembership.end_date}
+                    <p className="text-xs text-muted-foreground">Ends On</p>
+                    <p className="font-medium text-foreground">
+                      {formatDateStr(scheduledMembership.end_date)}
                     </p>
                   </div>
                 </CardContent>
@@ -652,12 +710,24 @@ export function MemberProfileContent({
                     </div>
                   ))
                 )}
+
                 <Separator />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setTrainerDialogOpen(true)}
+                >
+                  <Users className="mr-2 h-4 w-4" />
+                  {trainers.length ? "Manage Trainers" : "Assign Trainer"}
+                </Button>
                 <TrainerManagerDialog
                   memberId={memberDetails.id}
                   gymId={gymId}
                   assignedTrainers={trainers}
                   availableTrainers={allTrainers}
+                  open={trainerDialogOpen}
+                  onOpenChange={setTrainerDialogOpen}
                 />
               </CardContent>
             </Card>
@@ -963,9 +1033,26 @@ export function MemberProfileContent({
           <CardTitle>Quick Actions</CardTitle>
         </CardHeader>
         <CardContent>
-          <QuickActionsGrid actions={memberQuickActions} columns={4} />
+          <QuickActionsGrid
+            actions={getMemberQuickActions(
+              memberDetails.id,
+              () => setAttendanceDialogOpen(true),
+              () => setTrainerDialogOpen(true),
+            )}
+            columns={4}
+          />
         </CardContent>
       </Card>
+
+      {/* Manual Attendance Dialog */}
+      <ManualAttendanceDialog
+        open={attendanceDialogOpen}
+        onOpenChange={setAttendanceDialogOpen}
+        gymId={gymId}
+        memberId={memberDetails.id}
+        memberName={memberDetails.full_name ?? "Member"}
+        onSuccess={() => refetchMember()}
+      />
     </>
   );
 }

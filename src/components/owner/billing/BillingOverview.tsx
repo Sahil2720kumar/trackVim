@@ -557,7 +557,11 @@ export function BillingOverview() {
           return;
         }
 
-        const paymentData = result.order;
+        const paymentData = result.order ?? (result as any).data?.order;
+        if (!paymentData || !paymentData.id || paymentData.amount == null) {
+          toast.error("Failed to retrieve order details from payment gateway.");
+          return;
+        }
 
         const razorpay = new (window as any).Razorpay({
           key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
@@ -771,6 +775,29 @@ export function BillingOverview() {
                   </div>
                   <Sparkles className="text-primary" />
                 </div>
+                {plan &&
+                  Array.isArray((plan as any).features) &&
+                  ((plan as any).features as string[]).length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-border/50">
+                      <p className="text-xs font-semibold text-muted-foreground mb-1.5">
+                        Included Features:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {((plan as any).features as string[]).map(
+                          (feature, i) => (
+                            <Badge
+                              key={i}
+                              variant="secondary"
+                              className="text-[11px] font-medium gap-1 bg-background/80 border border-border/60 text-foreground"
+                            >
+                              <Check className="size-3 text-emerald-500" />
+                              <span>{feature}</span>
+                            </Badge>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  )}
               </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-3">
                 <div>
@@ -1144,6 +1171,25 @@ export function BillingOverview() {
                           ? `Up to ${p.max_members} members`
                           : "Unlimited members"}
                       </p>
+                      {Array.isArray(p.features) &&
+                        (p.features as string[]).length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-border/40 space-y-1">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                              Features
+                            </p>
+                            <ul className="space-y-1 text-xs text-muted-foreground">
+                              {(p.features as string[]).map((feature, idx) => (
+                                <li
+                                  key={idx}
+                                  className="flex items-center gap-1.5 text-foreground/90"
+                                >
+                                  <Check className="size-3 text-emerald-500 shrink-0" />
+                                  <span className="truncate">{feature}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                     </button>
                   ))
                 )}

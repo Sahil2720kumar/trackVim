@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="37 89 395 345" fill="none">
+  <defs>
+    <linearGradient id="trackvimGradient" x1="88" y1="82" x2="402" y2="438" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B5CF6"/>
+      <stop offset="0.48" stop-color="#6D28D9"/>
+      <stop offset="1" stop-color="#312E81"/>
+    </linearGradient>
+  </defs>
+
+  <!-- TrackVim abstract T/ribbon icon -->
+  <path
+    d="M88 94C82 94 77 98 74 103L42 158C37 167 44 178 54 178H237L180 218C164 229 151 244 143 263L82 408C78 418 86 429 97 427L166 414C178 412 188 404 193 393L241 286C247 273 256 262 268 254L393 170C405 162 413 150 416 137L425 105C427 99 422 94 416 94H88Z"
+    fill="url(#trackvimGradient)"
+  />
+</svg>

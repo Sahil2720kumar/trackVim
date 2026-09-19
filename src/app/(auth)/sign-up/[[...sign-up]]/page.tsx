@@ -1,30 +1,20 @@
-import { SignUp } from "@clerk/nextjs";
+import type { Metadata } from "next";
+import { AuthBrandHeader } from "@/components/auth/AuthBrandHeader";
+import { AuthLegalLinks } from "@/components/auth/AuthLegalLinks";
+import { SignUpContainer } from "@/components/auth/SignUpContainer";
+
+export const metadata: Metadata = {
+  title: "Create Account | TrackVim",
+  description: "Create your TrackVim account.",
+};
 
 export default function SignUpPage() {
   return (
-    <SignUp
-      appearance={{
-        elements: {
-          rootBox: "w-full",
-          card: "w-full rounded-3xl border border-border bg-card p-5 shadow-none",
-          headerTitle: "text-foreground",
-          headerSubtitle: "text-muted-foreground",
-          socialButtonsBlockButton:
-            "border border-border rounded-xl hover:bg-accent",
-          dividerLine: "bg-border",
-          dividerText: "text-muted-foreground",
-          formFieldLabel: "text-foreground",
-          formFieldInput:
-            "rounded-xl border border-input bg-background px-3 py-2 text-sm",
-          formButtonPrimary:
-            "rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 text-sm normal-case",
-          footerActionLink: "text-primary hover:text-primary/90",
-        },
-      }}
-      path="/sign-up"
-      routing="path"
-      signInUrl="/sign-in"
-      forceRedirectUrl="/onboarding/select-role"
-    />
+    <div className="w-full flex flex-col items-center">
+      <div className="w-full max-w-md">
+        <SignUpContainer />
+      </div>
+      <AuthLegalLinks />
+    </div>
   );
 }

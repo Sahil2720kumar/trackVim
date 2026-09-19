@@ -1,0 +1,1 @@
+DROP POLICY "Any signed-in user can view subscription plans" ON "subscription_plans" CASCADE;

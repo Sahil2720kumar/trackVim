@@ -1,0 +1,1 @@
+CREATE POLICY "Anyone can view active subscription plans" ON "subscription_plans" AS PERMISSIVE FOR SELECT TO "anon", "authenticated" USING (is_active = true);

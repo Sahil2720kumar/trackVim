@@ -28,25 +28,29 @@ function toQrCode(row: any): QrCode {
   };
 }
 
+function authorizeOwner(sessionClaims: any, gymId: string): string | null {
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== gymId) {
+    return "You are not authorized for this gym.";
+  }
+  return null;
+}
+
 export async function ensureActiveQrCodeAction(
   gymId: string,
 ): Promise<ActionResult> {
   const { userId, sessionClaims } = await auth();
 
   if (!userId) {
-    return {
-      success: false,
-      error: "You must be signed in.",
-    };
+    return { success: false, error: "You must be signed in." };
   }
 
-  const claimGymId = (sessionClaims?.publicMetadata as any)?.gymId;
-
-  if (claimGymId !== gymId) {
-    return {
-      success: false,
-      error: "You are not authorized for this gym.",
-    };
+  const authError = authorizeOwner(sessionClaims, gymId);
+  if (authError) {
+    return { success: false, error: authError };
   }
 
   const supabase = await createServerClient();
@@ -60,39 +64,23 @@ export async function ensureActiveQrCodeAction(
 
   if (existingError) {
     console.error("[ensureActiveQrCodeAction]", existingError);
-
-    return {
-      success: false,
-      error: "Failed to load QR code.",
-    };
+    return { success: false, error: "Failed to load QR code." };
   }
 
   if (existing) {
-    return {
-      success: true,
-      qrCode: toQrCode(existing),
-    };
+    return { success: true, qrCode: toQrCode(existing) };
   }
 
   const { data, error } = await supabase
-    .rpc("regenerate_gym_qr_code", {
-      p_gym_id: gymId,
-    })
+    .rpc("regenerate_gym_qr_code", { p_gym_id: gymId })
     .single();
 
   if (error || !data) {
     console.error("[ensureActiveQrCodeAction]", error);
-
-    return {
-      success: false,
-      error: "Failed to create QR code.",
-    };
+    return { success: false, error: "Failed to create QR code." };
   }
 
-  return {
-    success: true,
-    qrCode: toQrCode(data),
-  };
+  return { success: true, qrCode: toQrCode(data) };
 }
 
 export async function regenerateQrCodeAction(
@@ -101,42 +89,26 @@ export async function regenerateQrCodeAction(
   const { userId, sessionClaims } = await auth();
 
   if (!userId) {
-    return {
-      success: false,
-      error: "You must be signed in.",
-    };
+    return { success: false, error: "You must be signed in." };
   }
 
-  const claimGymId = (sessionClaims?.publicMetadata as any)?.gymId;
-
-  if (claimGymId !== gymId) {
-    return {
-      success: false,
-      error: "You are not authorized for this gym.",
-    };
+  const authError = authorizeOwner(sessionClaims, gymId);
+  if (authError) {
+    return { success: false, error: authError };
   }
 
   const supabase = await createServerClient();
 
   const { data, error } = await supabase
-    .rpc("regenerate_gym_qr_code", {
-      p_gym_id: gymId,
-    })
+    .rpc("regenerate_gym_qr_code", { p_gym_id: gymId })
     .single();
 
   if (error || !data) {
     console.error("[regenerateQrCodeAction]", error);
-
-    return {
-      success: false,
-      error: "Failed to regenerate QR code.",
-    };
+    return { success: false, error: "Failed to regenerate QR code." };
   }
 
   revalidatePath("/owner/qr-codes");
 
-  return {
-    success: true,
-    qrCode: toQrCode(data),
-  };
+  return { success: true, qrCode: toQrCode(data) };
 }

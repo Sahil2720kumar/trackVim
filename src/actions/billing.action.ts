@@ -2,6 +2,7 @@
 
 import { createServerClient } from "@/lib/supabase/server";
 import { auth } from "@clerk/nextjs/server";
+import { logAndSanitizeError } from "@/lib/error-handler";
 
 export async function changeGymSubscriptionPlanAction(input: {
   gymId: string;
@@ -17,7 +18,11 @@ export async function changeGymSubscriptionPlanAction(input: {
   if (error) {
     return {
       success: false as const,
-      error: error.message,
+      error: logAndSanitizeError(
+        error,
+        "changeGymSubscriptionPlanAction",
+        "Failed to change subscription plan.",
+      ),
     };
   }
 
@@ -139,8 +144,27 @@ export async function createSubscriptionPaymentOrderAction(input: {
     };
   }
 
+  if (!data || data.success === false) {
+    return {
+      success: false as const,
+      error: logAndSanitizeError(
+        data?.error,
+        "createSubscriptionPaymentOrderAction",
+        "Failed to create payment order. Please try again.",
+      ),
+    };
+  }
+
   return {
     success: true as const,
+    paymentId: data.paymentId as string,
+    order: data.order as {
+      id: string;
+      amount: number;
+      currency?: string;
+      status?: string;
+      receipt?: string;
+    },
     data,
   };
 }
@@ -155,7 +179,11 @@ export async function reactivateGymSubscriptionAction(gymId: string) {
   if (error) {
     return {
       success: false as const,
-      error: error.message,
+      error: logAndSanitizeError(
+        error,
+        "reactivateGymSubscriptionAction",
+        "Failed to reactivate subscription.",
+      ),
     };
   }
 
@@ -173,7 +201,11 @@ export async function cancelGymBillingAction() {
   if (error) {
     return {
       success: false as const,
-      error: error.message,
+      error: logAndSanitizeError(
+        error,
+        "cancelGymBillingAction",
+        "Failed to cancel subscription.",
+      ),
     };
   }
 

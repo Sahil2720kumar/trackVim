@@ -1,4 +1,5 @@
 import RegisterGymForm from "@/components/onboarding/RegisterGymForm";
+import { TrackVimIcon } from "@/components/icons/TrackVimIcon";
 
 export default async function RegisterGymPage() {
   return (
@@ -15,8 +16,8 @@ export default async function RegisterGymPage() {
           {/* Header */}
           <div className="mb-12 text-center">
             <div className="mb-4 flex justify-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <div className="text-lg font-bold">V</div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 p-2 shadow-sm">
+                <TrackVimIcon size={28} className="h-full w-full" />
               </div>
             </div>
             <h1 className="text-3xl font-bold text-foreground sm:text-4xl">

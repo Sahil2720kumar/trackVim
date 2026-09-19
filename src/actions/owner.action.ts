@@ -26,6 +26,7 @@ import {
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { PaymentMethod } from "./staff.action";
+import { logAndSanitizeError } from "@/lib/error-handler";
 
 // ============================================================================
 // Types
@@ -84,7 +85,8 @@ export async function createGymAction(
   // 3. FILES
   // ------------------------------------------------------------
 
-  const { logo, paymentQr, gallery = [] } = files;
+  const { logo, paymentQr } = files;
+  const gallery = files.gallery ?? [];
 
   if (gallery.length > MAX_GALLERY_IMAGES) {
     return {
@@ -548,6 +550,17 @@ export async function changeGymSubscriptionPlanAction(
   gymId: string,
   newPlanId: string,
 ): Promise<ActionResult> {
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== gymId) {
+    return {
+      success: false,
+      error: "Not authorized to change this gym's subscription plan.",
+    };
+  }
   const supabase = await createServerClient();
 
   const { error } = await supabase.rpc("change_gym_subscription_plan", {
@@ -555,7 +568,16 @@ export async function changeGymSubscriptionPlanAction(
     p_new_plan_id: newPlanId,
   });
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        error,
+        "changeGymSubscriptionPlanAction",
+        "Failed to change subscription plan.",
+      ),
+    };
+  }
 
   revalidatePath("/dashboard/billing");
   return { success: true, data: undefined };
@@ -571,6 +593,18 @@ export async function createGymLocationAction(payload: {
   address?: string;
   isPrimary?: boolean;
 }): Promise<ActionResult<{ id: string }>> {
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== payload.gymId) {
+    return {
+      success: false,
+      error: "Not authorized to manage this gym's locations.",
+    };
+  }
+
   const supabase = await createServerClient();
 
   const { data, error } = await supabase
@@ -584,15 +618,33 @@ export async function createGymLocationAction(payload: {
     .select("id")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "createGymLocationAction"),
+    };
+  }
   revalidatePath("/dashboard/settings");
   return { success: true, data: { id: data.id } };
 }
 
 export async function updateGymLocationAction(
   locationId: string,
+  gymId: string, // add this param — needed to authorize
   payload: Partial<{ name: string; address: string; isPrimary: boolean }>,
 ): Promise<ActionResult> {
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== gymId) {
+    return {
+      success: false,
+      error: "Not authorized to manage this gym's locations.",
+    };
+  }
+
   const supabase = await createServerClient();
 
   const { error } = await supabase
@@ -602,9 +654,15 @@ export async function updateGymLocationAction(
       address: payload.address,
       is_primary: payload.isPrimary,
     })
-    .eq("id", locationId);
+    .eq("id", locationId)
+    .eq("gym_id", gymId); // scope the write, don't just filter by id
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "updateGymLocationAction"),
+    };
+  }
   revalidatePath("/dashboard/settings");
   return { success: true, data: undefined };
 }
@@ -620,6 +678,18 @@ export async function createGymQrCodeAction(payload: {
   qrIdentifier: string;
   signatureSecret: string;
 }): Promise<ActionResult<{ id: string }>> {
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== payload.gymId) {
+    return {
+      success: false,
+      error: "Not authorized to create QR codes for this gym.",
+    };
+  }
+
   const supabase = await createServerClient();
 
   const { data, error } = await supabase
@@ -636,23 +706,47 @@ export async function createGymQrCodeAction(payload: {
     .select("id")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "createGymQrCodeAction"),
+    };
+  }
   revalidatePath("/dashboard/settings");
   return { success: true, data: { id: data.id } };
 }
 
 export async function toggleQrCodeActiveAction(
   qrCodeId: string,
+  gymId: string, // add this param — needed to authorize
   isActive: boolean,
 ): Promise<ActionResult> {
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== gymId) {
+    return {
+      success: false,
+      error: "Not authorized to manage this gym's QR codes.",
+    };
+  }
+
   const supabase = await createServerClient();
 
   const { error } = await supabase
     .from("gym_qr_codes")
     .update({ is_active: isActive, updated_at: new Date().toISOString() })
-    .eq("id", qrCodeId);
+    .eq("id", qrCodeId)
+    .eq("gym_id", gymId);
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "toggleQrCodeActiveAction"),
+    };
+  }
   revalidatePath("/dashboard/settings");
   return { success: true, data: undefined };
 }
@@ -783,11 +877,20 @@ export async function updateMembershipPlanAction(
     maxActiveMembers: number;
   }>,
 ): Promise<ActionResult> {
-  const supabase = await createServerClient();
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || !meta.gymId) {
+    return { success: false, error: "Not authorized to update this plan." };
+  }
 
+  const supabase = await createServerClient();
   const update: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
+
   if (payload.planName !== undefined) update.plan_name = payload.planName;
   if (payload.shortDescription !== undefined)
     update.short_description = payload.shortDescription;
@@ -834,19 +937,33 @@ export async function updateMembershipPlanAction(
   const { error } = await supabase
     .from("membership_plans")
     .update(update as any)
-    .eq("id", planId);
-  if (error) return { success: false, error: error.message };
+    .eq("id", planId)
+    .eq("gym_id", meta?.gymId); // scope, don't trust planId alone
 
+  if (error) {
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "updateMembershipPlanAction"),
+    };
+  }
   revalidatePath("/dashboard/plans");
   return { success: true, data: undefined };
 }
 
 export async function deleteMembershipPlanAction(
   planId: string,
+  gymId: string,
 ): Promise<ActionResult> {
-  const supabase = await createServerClient();
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== gymId) {
+    return { success: false, error: "Not authorized to delete this plan." };
+  }
 
-  // Soft-delete: set to Hidden so existing memberships on this plan still reference it.
+  const supabase = await createServerClient();
   const { error } = await supabase
     .from("membership_plans")
     .update({
@@ -854,9 +971,15 @@ export async function deleteMembershipPlanAction(
       deleted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq("id", planId);
+    .eq("id", planId)
+    .eq("gym_id", gymId);
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "deleteMembershipPlanAction"),
+    };
+  }
   revalidatePath("/dashboard/plans");
   return { success: true, data: undefined };
 }
@@ -2063,6 +2186,7 @@ export async function cancelMembershipRenewalAction(
  */
 export async function updateTrainerOwnerFieldsAction(
   trainerId: string,
+  gymId: string,
   payload: Partial<{
     salary: number;
     status: "Invited" | "Active" | "Busy" | "On Leave" | "Offline" | "Inactive";
@@ -2070,8 +2194,16 @@ export async function updateTrainerOwnerFieldsAction(
     maxMembers: number;
   }>,
 ): Promise<ActionResult> {
-  const supabase = await createServerClient();
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== gymId) {
+    return { success: false, error: "Not authorized to update this trainer." };
+  }
 
+  const supabase = await createServerClient();
   const update: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
@@ -2083,9 +2215,15 @@ export async function updateTrainerOwnerFieldsAction(
   const { error } = await supabase
     .from("trainers")
     .update(update)
-    .eq("id", trainerId);
-  if (error) return { success: false, error: error.message };
+    .eq("id", trainerId)
+    .eq("gym_id", gymId); // this is the one guarding salary — scope it
 
+  if (error) {
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "updateTrainerOwnerFieldsAction"),
+    };
+  }
   revalidatePath("/dashboard/trainers");
   return { success: true, data: undefined };
 }
@@ -2149,7 +2287,8 @@ export async function removeTrainerAssignment(input: {
   const { error } = await supabase
     .from("trainer_assignments")
     .update({ is_active: false, unassigned_at: new Date().toISOString() })
-    .eq("id", input.assignmentId);
+    .eq("id", input.assignmentId)
+    .eq("gym_id", input.gymId);
 
   if (error) {
     return {
@@ -2190,7 +2329,8 @@ export async function setPrimaryTrainerAssignment(input: {
   const { error: primaryError } = await supabase
     .from("trainer_assignments")
     .update({ is_primary: true })
-    .eq("id", input.assignmentId);
+    .eq("id", input.assignmentId)
+    .eq("gym_id", input.gymId);
   if (primaryError || error) {
     return {
       success: false,
@@ -2430,17 +2570,57 @@ export async function verifyPaymentAction(input: {
  */
 export async function setMemberAccountStatusAction(
   memberId: string,
+  gymId: string, // add this param
   status: "Active" | "Inactive" | "Suspended",
 ): Promise<ActionResult> {
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== gymId) {
+    return {
+      success: false,
+      error: "Not authorized to update this member's status.",
+    };
+  }
+
   const supabase = await createServerClient();
+
+  // members has no direct gym_id — scope via gym_memberships instead,
+  // or confirm this member belongs to gymId before writing. Cheapest
+  // correct check: verify an active gym_membership row exists.
+  const { data: membership, error: membershipError } = await supabase
+    .from("gym_memberships")
+    .select("id")
+    .eq("gym_id", gymId)
+    .eq("member_id", memberId)
+    .maybeSingle();
+
+  if (membershipError) {
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        membershipError,
+        "setMemberAccountStatusAction:lookup",
+      ),
+    };
+  }
+  if (!membership) {
+    return { success: false, error: "Member not found in this gym." };
+  }
 
   const { error } = await supabase
     .from("members")
     .update({ account_status: status, updated_at: new Date().toISOString() })
     .eq("id", memberId);
 
-  if (error) return { success: false, error: error.message };
-
+  if (error) {
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "setMemberAccountStatusAction:update"),
+    };
+  }
   revalidatePath("/dashboard/members");
   return { success: true, data: undefined };
 }

@@ -8,6 +8,7 @@ import { generateMemberCode } from "@/lib/utils";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 
 import { revalidatePath } from "next/cache";
+import { logAndSanitizeError } from "@/lib/error-handler";
 
 // ============================================================================
 // Types
@@ -63,10 +64,11 @@ export async function createMemberProfileAction(
   } catch (err) {
     return {
       success: false,
-      error:
-        err instanceof Error
-          ? err.message
-          : "Failed to upload photo. Please try again.",
+      error: logAndSanitizeError(
+        err,
+        "createMemberProfileAction:photoUpload",
+        "Failed to upload photo. Please try again.",
+      ),
     };
   }
 
@@ -89,7 +91,15 @@ export async function createMemberProfileAction(
     .select("id,email")
     .maybeSingle();
 
-  if (userError) return { success: false, error: userError.message };
+  if (userError)
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        userError,
+        "createMemberProfileAction:userUpdate",
+      ),
+    };
+
   if (!userData) {
     return {
       success: false,
@@ -155,7 +165,15 @@ export async function createMemberProfileAction(
     .eq("profile_id", internalUserId)
     .maybeSingle();
 
-  if (existingError) return { success: false, error: existingError.message };
+  if (existingError) {
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        existingError,
+        "createMemberProfileAction:existingLookup",
+      ),
+    };
+  }
 
   let member: { id: string };
 
@@ -167,7 +185,15 @@ export async function createMemberProfileAction(
       .select("id")
       .single();
 
-    if (updateError) return { success: false, error: updateError.message };
+    if (updateError) {
+      return {
+        success: false,
+        error: logAndSanitizeError(
+          updateError,
+          "createMemberProfileAction:memberUpdate",
+        ),
+      };
+    }
     member = updated;
   } else {
     const { data: inserted, error: insertError } = await supabase
@@ -180,7 +206,15 @@ export async function createMemberProfileAction(
       .select("id")
       .single();
 
-    if (insertError) return { success: false, error: insertError.message };
+    if (insertError) {
+      return {
+        success: false,
+        error: logAndSanitizeError(
+          insertError,
+          "createMemberProfileAction:memberInsert",
+        ),
+      };
+    }
     member = inserted;
   }
 
@@ -200,10 +234,11 @@ export async function createMemberProfileAction(
     console.error(" error from auth update", err);
     return {
       success: false,
-      error:
-        err instanceof Error
-          ? err.message
-          : "Failed to finalize onboarding. Please retry.",
+      error: logAndSanitizeError(
+        err,
+        "createMemberProfileAction:clerkMetadata",
+        "Failed to finalize onboarding. Please retry.",
+      ),
     };
   }
 
@@ -253,7 +288,15 @@ export async function updateMemberProfileAction(
     .eq("clerk_id", userId)
     .maybeSingle();
 
-  if (userError) return { success: false, error: userError.message };
+  if (userError) {
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        userError,
+        "updateMemberProfileAction:userLookup",
+      ),
+    };
+  }
   if (!userData) {
     return {
       success: false,
@@ -270,7 +313,15 @@ export async function updateMemberProfileAction(
     .eq("id", memberId)
     .maybeSingle();
 
-  if (existingError) return { success: false, error: existingError.message };
+  if (existingError) {
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        existingError,
+        "updateMemberProfileAction:existingLookup",
+      ),
+    };
+  }
   if (!existing || existing.profile_id !== userData.id) {
     return { success: false, error: "Member profile not found." };
   }
@@ -288,10 +339,11 @@ export async function updateMemberProfileAction(
   } catch (err) {
     return {
       success: false,
-      error:
-        err instanceof Error
-          ? err.message
-          : "Failed to upload photo. Please try again.",
+      error: logAndSanitizeError(
+        err,
+        "updateMemberProfileAction:photoUpload",
+        "Failed to upload photo. Please try again.",
+      ),
     };
   }
 
@@ -306,8 +358,15 @@ export async function updateMemberProfileAction(
     })
     .eq("id", userData.id);
 
-  if (userUpdateError)
-    return { success: false, error: userUpdateError.message };
+  if (userUpdateError) {
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        userUpdateError,
+        "updateMemberProfileAction:userUpdate",
+      ),
+    };
+  }
 
   // 7. Same field set as create, minus the create-only columns
   // (profile_id, member_code) and account_status.
@@ -359,7 +418,15 @@ export async function updateMemberProfileAction(
     .update(definedMemberFields)
     .eq("id", memberId);
 
-  if (updateError) return { success: false, error: updateError.message };
+  if (updateError) {
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        updateError,
+        "updateMemberProfileAction:memberUpdate",
+      ),
+    };
+  }
 
   revalidatePath("/member/settings");
   return { success: true, data: { id: memberId } };
@@ -384,7 +451,11 @@ export async function switchActiveGymMembershipAction(
     })
     .eq("id", memberId);
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "switchActiveGymMembershipAction"),
+    };
 
   revalidatePath("/");
   return { success: true, data: undefined };
@@ -473,7 +544,15 @@ async function syncSessionStatusFromExercises(
     .eq("id", sessionId)
     .single();
 
-  if (sessionError) return { success: false, error: sessionError.message };
+  if (sessionError) {
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        sessionError,
+        "syncSessionStatusFromExercises:fetchSession",
+      ),
+    };
+  }
   if (session.status === "Cancelled") return { success: true, data: undefined };
 
   const { data: exercises, error: exercisesError } = await supabase
@@ -481,7 +560,15 @@ async function syncSessionStatusFromExercises(
     .select("completed")
     .eq("session_id", sessionId);
 
-  if (exercisesError) return { success: false, error: exercisesError.message };
+  if (exercisesError) {
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        exercisesError,
+        "syncSessionStatusFromExercises:fetchExercises",
+      ),
+    };
+  }
 
   const total = exercises.length;
   const doneCount = exercises.filter((e) => e.completed).length;
@@ -504,7 +591,15 @@ async function syncSessionStatusFromExercises(
     })
     .eq("id", sessionId);
 
-  if (updateError) return { success: false, error: updateError.message };
+  if (updateError) {
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        updateError,
+        "syncSessionStatusFromExercises:updateStatus",
+      ),
+    };
+  }
   return { success: true, data: undefined };
 }
 
@@ -523,7 +618,14 @@ export async function toggleSessionExerciseCompletionAction(
     })
     .eq("id", sessionExerciseId);
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        error,
+        "toggleMemberSessionExerciseCompletionAction",
+      ),
+    };
 
   const syncResult = await syncSessionStatusFromExercises(supabase, sessionId);
   if (!syncResult.success) return syncResult;
@@ -548,7 +650,14 @@ export async function markAllSessionExercisesCompletedAction(
     .update({ completed: true, completed_at: new Date().toISOString() })
     .in("id", sessionExerciseIds);
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        error,
+        "markAllSessionExercisesCompletedAction",
+      ),
+    };
 
   const syncResult = await syncSessionStatusFromExercises(supabase, sessionId);
   if (!syncResult.success) return syncResult;
@@ -752,7 +861,11 @@ export async function checkInOrOutAction(qrIdentifier: string): Promise<
     qr_identifier: qrIdentifier,
   });
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "checkInOrOutByQrAction"),
+    };
 
   revalidatePath("/my/attendance");
   return { success: true, data: data as any };
@@ -790,7 +903,11 @@ export async function sendMessageAction(payload: {
     .select("id")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "sendMessageAction"),
+    };
   return { success: true, data: { id: data.id } };
 }
 
@@ -804,6 +921,10 @@ export async function markMessageReadAction(
     .update({ is_read: true, read_at: new Date().toISOString() })
     .eq("id", messageId);
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "markMessageReadAction"),
+    };
   return { success: true, data: undefined };
 }

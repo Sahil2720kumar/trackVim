@@ -144,6 +144,7 @@ export async function getOwnerDashboardData(
       { data: growth, error: growthError },
       { data: distribution, error: distributionError },
       { data: trainerActivity, error: trainerError },
+      { data: trainersList },
       { data: expiringMemberships, error: expiringError },
       { data: recentRegistrations, error: registrationsError },
       { data: recentPayments, error: paymentsError },
@@ -170,6 +171,12 @@ export async function getOwnerDashboardData(
         p_gym_id: gymId,
         p_as_of: asOfDate,
       }),
+
+      supabase
+        .from("trainers")
+        .select("id, photo_url")
+        .eq("gym_id", gymId)
+        .is("deleted_at", null),
 
       supabase
         .from("gym_memberships")
@@ -277,6 +284,10 @@ export async function getOwnerDashboardData(
         0,
       );
 
+    const trainerPhotoMap = new Map(
+      (trainersList ?? []).map((t) => [t.id, t.photo_url]),
+    );
+
     return {
       success: true as const,
       data: {
@@ -304,7 +315,13 @@ export async function getOwnerDashboardData(
 
         planDistribution: (distribution ?? []) as PlanDistributionPoint[],
 
-        trainerActivity: (trainerActivity ?? []) as TrainerActivityRow[],
+        trainerActivity: (trainerActivity ?? []).map((t) => ({
+          ...t,
+          photo_url:
+            (t as { photo_url?: string | null }).photo_url ??
+            trainerPhotoMap.get(t.trainer_id) ??
+            null,
+        })) as TrainerActivityRow[],
 
         expiringMemberships: (expiringMemberships ?? []).map((m) => ({
           id: m.id,
@@ -720,18 +737,48 @@ export async function getAllTrainers(
   supabase: TypedSupabaseClient,
   gymId: string,
 ) {
-  const { data, error } = await supabase
-    .from("trainers")
-    .select(
-      "id, full_name, contact_email, contact_phone, photo_url, professional_title, specializations, experience_years, members_trained, completed_sessions, average_rating, status",
-    )
-    .eq("gym_id", gymId)
-    .is("deleted_at", null)
-    .order("full_name", { ascending: true });
+  const [
+    { data: trainers, error: trainersError },
+    { data: assignments, error: assignmentsError },
+  ] = await Promise.all([
+    supabase
+      .from("trainers")
+      .select(
+        "id, full_name, contact_email, contact_phone, photo_url, professional_title, specializations, experience_years, members_trained, completed_sessions, average_rating, status",
+      )
+      .eq("gym_id", gymId)
+      .is("deleted_at", null)
+      .order("full_name", { ascending: true }),
 
-  if (error) {
-    return { success: false as const, error: error.message };
+    supabase
+      .from("trainer_assignments")
+      .select("trainer_id")
+      .eq("gym_id", gymId)
+      .eq("is_active", true),
+  ]);
+
+  if (trainersError) {
+    return { success: false as const, error: trainersError.message };
   }
+
+  if (assignmentsError) {
+    return { success: false as const, error: assignmentsError.message };
+  }
+
+  const assignmentCountMap = new Map<string, number>();
+  for (const a of assignments ?? []) {
+    if (a.trainer_id) {
+      assignmentCountMap.set(
+        a.trainer_id,
+        (assignmentCountMap.get(a.trainer_id) ?? 0) + 1,
+      );
+    }
+  }
+
+  const data = (trainers ?? []).map((t) => ({
+    ...t,
+    assigned_members: assignmentCountMap.get(t.id) ?? 0,
+  }));
 
   return { success: true as const, data };
 }
@@ -1721,6 +1768,7 @@ export type PaymentRow = {
   memberId: string;
   memberName: string | null;
   memberPhone: string | null;
+  memberPhotoUrl?: string | null;
   plan: string | null;
   amount: number;
   method: string | null;
@@ -1745,7 +1793,7 @@ export async function getGymPayments(
       due_date,
       method,
       status,
-      member:members ( id, full_name, contact_phone ),
+      member:members ( id, full_name, contact_phone, photo_url ),
       gym_membership:gym_memberships ( plan:membership_plans ( plan_name ) )
       `,
     )
@@ -1763,6 +1811,7 @@ export async function getGymPayments(
     memberId: p.member?.id ?? "",
     memberName: p.member?.full_name ?? null,
     memberPhone: p.member?.contact_phone ?? null,
+    memberPhotoUrl: p.member?.photo_url ?? null,
     plan: p.gym_membership?.plan?.plan_name ?? null,
     amount: Number(p.amount),
     method: p.method,
@@ -1892,6 +1941,7 @@ export type PaymentDetailData = {
     postalCode: string | null;
     contactPhone: string | null;
     contactEmail: string | null;
+    logoUrl?: string | null;
   };
   membership: {
     id: string;
@@ -1952,7 +2002,8 @@ export async function getPaymentById(
         state,
         postal_code,
         contact_phone,
-        contact_email
+        contact_email,
+        logo_url
       ),
       gym_membership:gym_memberships (
         id,
@@ -2020,6 +2071,7 @@ export async function getPaymentById(
       postalCode: data.gym.postal_code,
       contactPhone: data.gym.contact_phone,
       contactEmail: data.gym.contact_email,
+      logoUrl: data.gym.logo_url,
     },
     membership: data.gym_membership
       ? {

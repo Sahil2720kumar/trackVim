@@ -7,6 +7,7 @@ import { InviteMemberFormInput, inviteMemberFormSchema } from "@/db/validators";
 import { ActionResult } from "./member.action";
 import { uploadFile } from "@/lib/cloudinary/upload";
 import { generateMemberCode } from "@/lib/utils";
+import { logAndSanitizeError } from "@/lib/error-handler";
 
 // This mirrors the real walk-in flow implemented in Postgres:
 //   create_walkin_member -> [profile update] -> create_walkin_membership
@@ -91,7 +92,11 @@ export async function inviteMemberAction(
   if (memberError || !member) {
     return {
       success: false,
-      error: memberError?.message ?? "Failed to create member.",
+      error: logAndSanitizeError(
+        memberError,
+        "inviteMemberAction",
+        "Failed to create member.",
+      ),
     };
   }
 
@@ -110,7 +115,11 @@ export async function inviteMemberAction(
   if (membershipError || !membershipId) {
     return {
       success: false,
-      error: membershipError?.message ?? "Failed to create membership.",
+      error: logAndSanitizeError(
+        membershipError,
+        "inviteMemberAction",
+        "Failed to create membership.",
+      ),
     };
   }
 
@@ -125,10 +134,11 @@ export async function inviteMemberAction(
     } catch (err) {
       return {
         success: false,
-        error:
-          err instanceof Error
-            ? err.message
-            : "Failed to upload photo. Please try again.",
+        error: logAndSanitizeError(
+          err,
+          "inviteMemberAction",
+          "Failed to upload photo. Please try again.",
+        ),
       };
     }
   }
@@ -187,7 +197,10 @@ export async function inviteMemberAction(
     .eq("id", member.id);
 
   if (profileError) {
-    return { success: false, error: profileError.message };
+    return {
+      success: false,
+      error: logAndSanitizeError(profileError, "inviteMemberAction"),
+    };
   }
 
   // 6. Optional trainer assignment — not part of this flow's RPCs, plain
@@ -202,7 +215,10 @@ export async function inviteMemberAction(
         trainer_id: memberData.trainerId,
       });
     if (assignmentError) {
-      return { success: false, error: assignmentError.message };
+      return {
+        success: false,
+        error: logAndSanitizeError(assignmentError, "inviteMemberAction"),
+      };
     }
   }
 
@@ -224,9 +240,11 @@ export async function inviteMemberAction(
     if (paymentLookupError || !payment) {
       return {
         success: false,
-        error:
-          paymentLookupError?.message ??
+        error: logAndSanitizeError(
+          paymentLookupError,
+          "inviteMemberAction",
           "Could not find the pending payment to record.",
+        ),
       };
     }
 
@@ -237,7 +255,10 @@ export async function inviteMemberAction(
     });
 
     if (recordError) {
-      return { success: false, error: recordError.message };
+      return {
+        success: false,
+        error: logAndSanitizeError(recordError, "inviteMemberAction"),
+      };
     }
   }
 
@@ -264,7 +285,11 @@ export async function inviteMemberAction(
         .from("members")
         .update({ clerk_invitation_id: invitation.id })
         .eq("id", member.id);
-      if (clerkIdError) return { success: false, error: clerkIdError.message };
+      if (clerkIdError)
+        return {
+          success: false,
+          error: logAndSanitizeError(clerkIdError, "inviteMemberAction"),
+        };
     } catch (err) {
       console.error("Failed to send member invitation email:", err);
     }
@@ -304,7 +329,11 @@ export async function recordWalkinPaymentAction(
     p_transaction_ref: transactionRef || "",
   });
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "recordWalkinPaymentAction"),
+    };
 
   revalidatePath("/owner/payments");
   revalidatePath("/owner/members");
