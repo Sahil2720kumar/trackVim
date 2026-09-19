@@ -37,3 +37,40 @@ export type PublicHomepageStatsResult = Extract<
   Awaited<ReturnType<typeof getPublicHomepageStats>>,
   { success: true }
 >["data"];
+
+export async function getPublicSubscriptionPlans(
+  supabase: TypedSupabaseClient,
+) {
+  const { data, error } = await supabase
+    .from("subscription_plans")
+    .select(
+      `
+      id,
+      name,
+      billing_model,
+      max_members,
+      price_per_member,
+      flat_price,
+      features
+    `,
+    )
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    return {
+      success: false as const,
+      error: error.message,
+    };
+  }
+
+  return {
+    success: true as const,
+    data: data ?? [],
+  };
+}
+
+export type PublicSubscriptionPlansResult = Extract<
+  Awaited<ReturnType<typeof getPublicSubscriptionPlans>>,
+  { success: true }
+>["data"];

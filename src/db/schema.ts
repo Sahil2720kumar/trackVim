@@ -1989,10 +1989,10 @@ export const subscriptionPlans = pgTable(
         )
       `,
     ),
-    pgPolicy("Any signed-in user can view subscription plans", {
+    pgPolicy("Anyone can view active subscription plans", {
       for: "select",
-      to: authenticatedRole,
-      using: sql`true`,
+      to: [anonRole, authenticatedRole],
+      using: sql`is_active = true`,
     }),
   ],
 ).enableRLS();

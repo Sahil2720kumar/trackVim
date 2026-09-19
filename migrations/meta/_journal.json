@@ -225,6 +225,20 @@
       "when": 1789751666295,
       "tag": "0031_wide_polaris",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789795496901,
+      "tag": "0032_large_changeling",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789795859616,
+      "tag": "0033_quiet_smasher",
+      "breakpoints": true
     }
   ]
 }
