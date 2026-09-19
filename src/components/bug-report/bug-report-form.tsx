@@ -24,6 +24,8 @@ export function BugReportForm() {
   const { user, isSignedIn } = useUser();
   const searchParams = useSearchParams();
   const fromParam = searchParams.get("from") || "";
+  const errorParam = searchParams.get("error") || "";
+  const digestParam = searchParams.get("digest") || "";
 
   const [isPending, startTransition] = useTransition();
   const [submittedReportId, setSubmittedReportId] = useState<string | null>(
@@ -98,6 +100,28 @@ export function BugReportForm() {
     },
   ] as const;
 
+  // Build a nicely formatted auto-captured description block when the
+  // user arrives here via an error boundary redirect (?error=...&digest=...)
+  const buildAutoDescription = (message: string, digest: string) => {
+    if (!message) return "";
+    const lines = [
+      "🔴 Auto-captured error report",
+      "",
+      `Error message: ${message}`,
+    ];
+    if (digest) {
+      lines.push(`Reference ID: ${digest}`);
+    }
+    lines.push(
+      "",
+      "— Please add any additional details about what you were doing below —",
+      "",
+    );
+    return lines.join("\n");
+  };
+
+  const autoDescription = buildAutoDescription(errorParam, digestParam);
+
   const {
     register,
     handleSubmit,
@@ -108,14 +132,14 @@ export function BugReportForm() {
   } = useForm<CreateBugReportInput>({
     resolver: zodResolver(createBugReportSchema),
     defaultValues: {
-      title: "",
+      title: errorParam ? `Error: ${errorParam}`.slice(0, 120) : "",
       category: "",
-      severity: "medium",
+      severity: errorParam ? "high" : "medium",
       whereOccurred: "",
-      description: "",
+      description: autoDescription,
       stepsToReproduce: "",
       expectedBehavior: "",
-      actualBehavior: "",
+      actualBehavior: errorParam ? `App crashed with: "${errorParam}"` : "",
       contactEmail: "",
       reportedPath: fromParam,
       browserInfo: "",
@@ -279,6 +303,22 @@ export function BugReportForm() {
         </p>
       </div>
 
+      {/* Auto-captured error notice */}
+      {errorParam && (
+        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-semibold">
+              We auto-filled this report from an error that just occurred.
+            </p>
+            <p className="opacity-90">
+              Feel free to edit any field below, then add extra details before
+              submitting.
+            </p>
+          </div>
+        </div>
+      )}
+
       {submitError && (
         <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex items-start gap-2">
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -432,7 +472,7 @@ export function BugReportForm() {
         </label>
         <textarea
           id="bug-description"
-          rows={3}
+          rows={errorParam ? 6 : 3}
           placeholder="Describe what went wrong when performing the action..."
           {...register("description")}
           className={`w-full px-3.5 py-2.5 rounded-xl bg-background border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none ${
