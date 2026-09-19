@@ -92,7 +92,11 @@ export async function inviteMemberAction(
   if (memberError || !member) {
     return {
       success: false,
-      error: logAndSanitizeError(memberError, "inviteMemberAction", "Failed to create member."),
+      error: logAndSanitizeError(
+        memberError,
+        "inviteMemberAction",
+        "Failed to create member.",
+      ),
     };
   }
 
@@ -111,7 +115,11 @@ export async function inviteMemberAction(
   if (membershipError || !membershipId) {
     return {
       success: false,
-      error: membershipError?.message ?? "Failed to create membership.",
+      error: logAndSanitizeError(
+        membershipError,
+        "inviteMemberAction",
+        "Failed to create membership.",
+      ),
     };
   }
 
@@ -126,10 +134,11 @@ export async function inviteMemberAction(
     } catch (err) {
       return {
         success: false,
-        error:
-          err instanceof Error
-            ? err.message
-            : "Failed to upload photo. Please try again.",
+        error: logAndSanitizeError(
+          err,
+          "inviteMemberAction",
+          "Failed to upload photo. Please try again.",
+        ),
       };
     }
   }
@@ -188,7 +197,10 @@ export async function inviteMemberAction(
     .eq("id", member.id);
 
   if (profileError) {
-    return { success: false, error: logAndSanitizeError(profileError, "inviteMemberAction") };
+    return {
+      success: false,
+      error: logAndSanitizeError(profileError, "inviteMemberAction"),
+    };
   }
 
   // 6. Optional trainer assignment — not part of this flow's RPCs, plain
@@ -203,7 +215,10 @@ export async function inviteMemberAction(
         trainer_id: memberData.trainerId,
       });
     if (assignmentError) {
-      return { success: false, error: logAndSanitizeError(assignmentError, "inviteMemberAction") };
+      return {
+        success: false,
+        error: logAndSanitizeError(assignmentError, "inviteMemberAction"),
+      };
     }
   }
 
@@ -228,7 +243,7 @@ export async function inviteMemberAction(
         error: logAndSanitizeError(
           paymentLookupError,
           "inviteMemberAction",
-          "Could not find the pending payment to record."
+          "Could not find the pending payment to record.",
         ),
       };
     }
@@ -240,7 +255,10 @@ export async function inviteMemberAction(
     });
 
     if (recordError) {
-      return { success: false, error: logAndSanitizeError(recordError, "inviteMemberAction") };
+      return {
+        success: false,
+        error: logAndSanitizeError(recordError, "inviteMemberAction"),
+      };
     }
   }
 
@@ -267,7 +285,11 @@ export async function inviteMemberAction(
         .from("members")
         .update({ clerk_invitation_id: invitation.id })
         .eq("id", member.id);
-      if (clerkIdError) return { success: false, error: logAndSanitizeError(clerkIdError, "inviteMemberAction") };
+      if (clerkIdError)
+        return {
+          success: false,
+          error: logAndSanitizeError(clerkIdError, "inviteMemberAction"),
+        };
     } catch (err) {
       console.error("Failed to send member invitation email:", err);
     }
@@ -307,7 +329,11 @@ export async function recordWalkinPaymentAction(
     p_transaction_ref: transactionRef || "",
   });
 
-  if (error) return { success: false, error: logAndSanitizeError(error, "recordWalkinPaymentAction") };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "recordWalkinPaymentAction"),
+    };
 
   revalidatePath("/owner/payments");
   revalidatePath("/owner/members");

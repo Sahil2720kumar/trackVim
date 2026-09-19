@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { BugReportForm } from "@/components/bug-report/bug-report-form";
 import { BugReportGuidance } from "@/components/bug-report/bug-report-guidance";
 import { Bug } from "lucide-react";
@@ -12,6 +12,36 @@ export const metadata = {
     follow: true,
   },
 };
+
+function BugReportFormSkeleton() {
+  return (
+    <div className="p-6 sm:p-8 rounded-2xl bg-card border border-border/70 shadow-sm space-y-6 animate-pulse">
+      <div className="space-y-1 pb-3 border-b border-border/50">
+        <div className="h-6 w-40 bg-muted rounded-lg" />
+        <div className="h-3 w-full max-w-xs bg-muted rounded-lg mt-2" />
+      </div>
+      <div className="space-y-1.5">
+        <div className="h-3 w-24 bg-muted rounded" />
+        <div className="h-10 w-full bg-muted rounded-xl" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <div className="h-3 w-20 bg-muted rounded" />
+          <div className="h-10 w-full bg-muted rounded-xl" />
+        </div>
+        <div className="space-y-1.5">
+          <div className="h-3 w-28 bg-muted rounded" />
+          <div className="h-10 w-full bg-muted rounded-xl" />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <div className="h-3 w-32 bg-muted rounded" />
+        <div className="h-20 w-full bg-muted rounded-xl" />
+      </div>
+      <div className="h-11 w-40 bg-muted rounded-xl" />
+    </div>
+  );
+}
 
 export default function ReportBugPage() {
   return (
@@ -50,7 +80,9 @@ export default function ReportBugPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10">
           {/* Left Column: Bug Report Form */}
           <div className="lg:col-span-7">
-            <BugReportForm />
+            <Suspense fallback={<BugReportFormSkeleton />}>
+              <BugReportForm />
+            </Suspense>
           </div>
 
           {/* Right Column: Before You Submit Guidance */}

@@ -85,7 +85,8 @@ export async function createGymAction(
   // 3. FILES
   // ------------------------------------------------------------
 
-  const { logo, paymentQr, gallery = [] } = files;
+  const { logo, paymentQr } = files;
+  const gallery = files.gallery ?? [];
 
   if (gallery.length > MAX_GALLERY_IMAGES) {
     return {
@@ -549,6 +550,17 @@ export async function changeGymSubscriptionPlanAction(
   gymId: string,
   newPlanId: string,
 ): Promise<ActionResult> {
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if (meta.role !== "owner" || meta.gymId !== gymId) {
+    return {
+      success: false,
+      error: "Not authorized to change this gym's subscription plan.",
+    };
+  }
   const supabase = await createServerClient();
 
   const { error } = await supabase.rpc("change_gym_subscription_plan", {
@@ -2275,7 +2287,8 @@ export async function removeTrainerAssignment(input: {
   const { error } = await supabase
     .from("trainer_assignments")
     .update({ is_active: false, unassigned_at: new Date().toISOString() })
-    .eq("id", input.assignmentId);
+    .eq("id", input.assignmentId)
+    .eq("gym_id", input.gymId);
 
   if (error) {
     return {
@@ -2316,7 +2329,8 @@ export async function setPrimaryTrainerAssignment(input: {
   const { error: primaryError } = await supabase
     .from("trainer_assignments")
     .update({ is_primary: true })
-    .eq("id", input.assignmentId);
+    .eq("id", input.assignmentId)
+    .eq("gym_id", input.gymId);
   if (primaryError || error) {
     return {
       success: false,
