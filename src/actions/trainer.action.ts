@@ -2,8 +2,8 @@
 
 import { createServerClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import { logAndSanitizeError } from "@/lib/error-handler";
 
 import {
   createTrainerSchema,
@@ -121,7 +121,11 @@ export async function completeTrainerProfileAction(
     .select("id,photo_url,full_name,contact_phone")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "completeTrainerProfileAction"),
+    };
 
   const { error: userError } = await supabase
     .from("users")
@@ -135,7 +139,13 @@ export async function completeTrainerProfileAction(
     .eq("clerk_id", userId);
 
   if (userError) {
-    return { success: false, error: userError.message };
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        userError,
+        "completeTrainerProfileAction:userSync",
+      ),
+    };
   }
 
   try {
@@ -291,7 +301,11 @@ export async function updateMyTrainerProfile(
     .select("id, photo_url, full_name, contact_phone")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "updateTrainerProfile"),
+    };
 
   // Keep users row in sync, same as completeTrainerProfileAction.
   if (payload.fullName || payload.contactPhone || photoUrl) {
@@ -306,7 +320,11 @@ export async function updateMyTrainerProfile(
       })
       .eq("clerk_id", userId);
 
-    if (userError) return { success: false, error: userError.message };
+    if (userError)
+      return {
+        success: false,
+        error: logAndSanitizeError(userError, "updateTrainerProfile"),
+      };
   }
 
   revalidatePath("/trainer/settings");
@@ -340,6 +358,21 @@ export async function createExercise(payload: {
     | "Traps";
   description?: string;
 }): Promise<ActionResult<{ id: string }>> {
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+    trainerId?: string;
+  };
+  if (
+    (meta.role !== "owner" && meta.role !== "trainer") ||
+    meta.gymId !== payload.gymId
+  ) {
+    return {
+      success: false,
+      error: "Not authorized to add exercises for this gym.",
+    };
+  }
   const supabase = await createServerClient();
 
   const { data, error } = await supabase
@@ -354,7 +387,11 @@ export async function createExercise(payload: {
     .select("id")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "createExercise"),
+    };
   revalidatePath("/dashboard/trainer/exercises");
   return { success: true, data: { id: data.id } };
 }
@@ -368,6 +405,15 @@ export async function updateExercise(
     description: string;
   }>,
 ): Promise<ActionResult> {
+  const { sessionClaims } = await auth();
+  const meta = (sessionClaims?.publicMetadata ?? {}) as {
+    role?: string;
+    gymId?: string;
+  };
+  if ((meta.role !== "owner" && meta.role !== "trainer") || !meta.gymId) {
+    return { success: false, error: "Not authorized to edit this exercise." };
+  }
+
   const supabase = await createServerClient();
 
   const update: Record<string, unknown> = {};
@@ -381,8 +427,14 @@ export async function updateExercise(
   const { error } = await supabase
     .from("exercises")
     .update(update as any)
-    .eq("id", exerciseId);
-  if (error) return { success: false, error: error.message };
+    .eq("id", exerciseId)
+    .eq("gym_id", meta.gymId); // scope it
+
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "updateExercise"),
+    };
 
   revalidatePath("/dashboard/trainer/exercises");
   return { success: true, data: undefined };
@@ -418,13 +470,21 @@ export async function createWorkoutTemplate(payload: {
   status?: "Active" | "Draft" | "Archived";
   additionalNotes?: string;
 }): Promise<ActionResult<{ id: string }>> {
-  const supabase = await createServerClient();
+  const { sessionClaims } = await auth();
+  const { trainerId, gymId } = (sessionClaims?.publicMetadata ?? {}) as {
+    trainerId?: string;
+    gymId?: string;
+  };
+  if (!trainerId || !gymId) {
+    return { success: false, error: "Trainer or Gym not found." };
+  }
 
+  const supabase = await createServerClient();
   const { data, error } = await supabase
     .from("workout_templates")
     .insert({
-      gym_id: payload.gymId,
-      trainer_id: payload.trainerId,
+      gym_id: gymId, // from session, not payload
+      trainer_id: trainerId, // from session, not payload
       name: payload.name,
       category: payload.category,
       description: payload.description,
@@ -439,7 +499,11 @@ export async function createWorkoutTemplate(payload: {
     .select("id")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "createWorkoutTemplate"),
+    };
   revalidatePath("/dashboard/trainer/templates");
   return { success: true, data: { id: data.id } };
 }
@@ -459,8 +523,13 @@ export async function updateWorkoutTemplate(
     additionalNotes: string;
   }>,
 ): Promise<ActionResult> {
-  const supabase = await createServerClient();
+  const { sessionClaims } = await auth();
+  const { gymId } = (sessionClaims?.publicMetadata ?? {}) as { gymId?: string };
+  if (!gymId) {
+    return { success: false, error: "Not authorized to update this template." };
+  }
 
+  const supabase = await createServerClient();
   const update: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
@@ -485,9 +554,14 @@ export async function updateWorkoutTemplate(
   const { error } = await supabase
     .from("workout_templates")
     .update(update as any)
-    .eq("id", templateId);
-  if (error) return { success: false, error: error.message };
+    .eq("id", templateId)
+    .eq("gym_id", gymId); // scope — was missing
 
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "updateWorkoutTemplate"),
+    };
   revalidatePath("/dashboard/trainer/templates");
   return { success: true, data: undefined };
 }
@@ -593,7 +667,11 @@ export async function createWorkoutTemplateWithExercises(
     .select("id")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "createWorkoutTemplateWithExercises"),
+    };
 
   const { error: exercisesError } = await supabase
     .from("template_exercises")
@@ -602,7 +680,13 @@ export async function createWorkoutTemplateWithExercises(
   if (exercisesError) {
     // Don't leave an empty draft template behind if the exercise insert fails.
     await supabase.from("workout_templates").delete().eq("id", template.id);
-    return { success: false, error: exercisesError.message };
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        exercisesError,
+        "createWorkoutTemplateWithExercises",
+      ),
+    };
   }
 
   revalidatePath("/trainer/templates");
@@ -655,7 +739,11 @@ export async function updateWorkoutTemplateWithExercises(
     .select("id")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "updateWorkoutTemplateWithExercises"),
+    };
 
   const { error: exercisesError } = await supabase.rpc(
     "replace_template_exercises",
@@ -672,7 +760,14 @@ export async function updateWorkoutTemplateWithExercises(
     },
   );
 
-  if (exercisesError) return { success: false, error: exercisesError.message };
+  if (exercisesError)
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        exercisesError,
+        "updateWorkoutTemplateWithExercises",
+      ),
+    };
 
   revalidatePath("/trainer/templates");
   revalidatePath(`/trainer/templates/${templateId}`);
@@ -682,7 +777,35 @@ export async function updateWorkoutTemplateWithExercises(
 export async function removeExerciseFromTemplate(
   templateExerciseId: string,
 ): Promise<ActionResult> {
+  const { sessionClaims } = await auth();
+  const { gymId } = (sessionClaims?.publicMetadata ?? {}) as { gymId?: string };
+  if (!gymId) {
+    return { success: false, error: "Not authorized." };
+  }
+
   const supabase = await createServerClient();
+
+  // template_exercises has no gym_id column directly, so verify via the
+  // parent template before deleting — same shape as updateMemberProfileAction's
+  // ownership lookup.
+  const { data: link, error: lookupError } = await supabase
+    .from("template_exercises")
+    .select("template_id, workout_templates!inner(gym_id)")
+    .eq("id", templateExerciseId)
+    .maybeSingle();
+
+  if (lookupError) {
+    return {
+      success: false,
+      error: logAndSanitizeError(
+        lookupError,
+        "removeExerciseFromTemplate:lookup",
+      ),
+    };
+  }
+  if (!link || (link as any).workout_templates?.gym_id !== gymId) {
+    return { success: false, error: "Exercise not found." };
+  }
 
   const { data, error } = await supabase
     .from("template_exercises")
@@ -691,7 +814,11 @@ export async function removeExerciseFromTemplate(
     .select("template_id")
     .maybeSingle();
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "removeExerciseFromTemplate"),
+    };
   revalidatePath("/trainer/templates");
   if (data?.template_id)
     revalidatePath(`/trainer/templates/${data.template_id}`);
@@ -719,8 +846,6 @@ export type SessionExerciseInput = {
 };
 
 export async function createTrainingSessionWithExercises(payload: {
-  gymId: string;
-  trainerId: string;
   memberId: string;
   templateId?: string;
   sessionName: string;
@@ -750,13 +875,22 @@ export async function createTrainingSessionWithExercises(payload: {
   seedFromTemplate?: boolean;
   exercises?: SessionExerciseInput[];
 }): Promise<ActionResult<{ id: string }>> {
+  const { sessionClaims } = await auth();
+  const { trainerId, gymId } = (sessionClaims?.publicMetadata ?? {}) as {
+    trainerId?: string;
+    gymId?: string;
+  };
+  if (!trainerId || !gymId) {
+    return { success: false, error: "Trainer or Gym not found." };
+  }
+
   const supabase = await createServerClient();
 
   const { data, error } = await supabase.rpc(
     "create_training_session_with_exercises",
     {
-      p_gym_id: payload.gymId,
-      p_trainer_id: payload.trainerId,
+      p_gym_id: gymId,
+      p_trainer_id: trainerId,
       p_member_id: payload.memberId,
       p_template_id: payload.templateId ?? null,
       p_session_name: payload.sessionName,
@@ -785,7 +919,11 @@ export async function createTrainingSessionWithExercises(payload: {
     },
   );
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "createTrainingSessionWithExercises"),
+    };
   revalidatePath("/trainer/sessions");
   return { success: true, data: { id: data as string } };
 }
@@ -822,13 +960,19 @@ export async function updateTrainingSessionWithExercises(
     exercises: SessionExerciseInput[];
   },
 ): Promise<ActionResult<{ id: string }>> {
+  const { sessionClaims } = await auth();
+  const { gymId } = (sessionClaims?.publicMetadata ?? {}) as { gymId?: string };
+  if (!gymId) {
+    return { success: false, error: "Not authorized to update this session." };
+  }
+
   const supabase = await createServerClient();
 
   const { data, error } = await supabase.rpc(
     "update_training_session_with_exercises",
     {
       p_session_id: sessionId,
-      p_gym_id: payload.gymId,
+      p_gym_id: gymId,
       p_member_id: payload.memberId,
       p_template_id: payload.templateId ?? null,
       p_session_name: payload.sessionName,
@@ -854,7 +998,11 @@ export async function updateTrainingSessionWithExercises(
     },
   );
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "updateTrainingSessionWithExercises"),
+    };
   revalidatePath("/trainer/sessions");
   revalidatePath(`/trainer/sessions/${sessionId}`);
   return { success: true, data: { id: data as string } };
@@ -866,6 +1014,12 @@ export async function updateTrainingSessionWithExercises(
 export async function completeTrainingSession(
   sessionId: string,
 ): Promise<ActionResult> {
+  const { sessionClaims } = await auth();
+  const { gymId } = (sessionClaims?.publicMetadata ?? {}) as { gymId?: string };
+  if (!gymId) {
+    return { success: false, error: "Not authorized." };
+  }
+
   const supabase = await createServerClient();
 
   const { error } = await supabase
@@ -875,9 +1029,14 @@ export async function completeTrainingSession(
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq("id", sessionId);
+    .eq("id", sessionId)
+    .eq("gym_id", gymId); // scope
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "completeTrainingSession"),
+    };
   revalidatePath("/dashboard/trainer/sessions");
   return { success: true, data: undefined };
 }
@@ -886,6 +1045,12 @@ export async function toggleSessionExerciseCompletion(
   sessionExerciseId: string,
   completed: boolean,
 ): Promise<ActionResult> {
+  const { sessionClaims } = await auth();
+  const { gymId } = (sessionClaims?.publicMetadata ?? {}) as { gymId?: string };
+  if (!gymId) {
+    return { success: false, error: "Not authorized." };
+  }
+
   const supabase = await createServerClient();
 
   const { data, error } = await supabase
@@ -898,7 +1063,11 @@ export async function toggleSessionExerciseCompletion(
     .select("session_id")
     .maybeSingle();
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "toggleSessionExerciseCompletion"),
+    };
   if (data?.session_id) revalidatePath(`/trainer/sessions/${data.session_id}`);
   return { success: true, data: undefined };
 }
@@ -913,6 +1082,12 @@ export async function updateSessionExercise(
     restSeconds: number;
   }>,
 ): Promise<ActionResult> {
+  const { sessionClaims } = await auth();
+  const { gymId } = (sessionClaims?.publicMetadata ?? {}) as { gymId?: string };
+  if (!gymId) {
+    return { success: false, error: "Not authorized." };
+  }
+
   const supabase = await createServerClient();
 
   const update: Record<string, unknown> = {};
@@ -928,13 +1103,23 @@ export async function updateSessionExercise(
     .update(update as any)
     .eq("id", sessionExerciseId);
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "updateSessionExercise"),
+    };
   return { success: true, data: undefined };
 }
 
 export async function removeSessionExercise(
   sessionExerciseId: string,
 ): Promise<ActionResult> {
+  const { sessionClaims } = await auth();
+  const { gymId } = (sessionClaims?.publicMetadata ?? {}) as { gymId?: string };
+  if (!gymId) {
+    return { success: false, error: "Not authorized." };
+  }
+
   const supabase = await createServerClient();
 
   const { error } = await supabase
@@ -942,7 +1127,11 @@ export async function removeSessionExercise(
     .delete()
     .eq("id", sessionExerciseId);
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return {
+      success: false,
+      error: logAndSanitizeError(error, "removeSessionExercise"),
+    };
   return { success: true, data: undefined };
 }
 
@@ -956,15 +1145,26 @@ export async function sendMessage(payload: {
   subject?: string;
   body: string;
 }): Promise<ActionResult<{ id: string }>> {
+  const { userId } = await auth();
+  if (!userId) {
+    return { success: false, error: "You must be signed in." };
+  }
+
   const supabase = await createServerClient();
 
   const { data: currentUser, error: userError } = await supabase
     .from("users")
     .select("id")
-    .single();
+    .eq("clerk_id", userId)
+    .maybeSingle();
 
-  if (userError || !currentUser)
-    return { success: false, error: "User not found." };
+  if (userError) {
+    return {
+      success: false,
+      error: logAndSanitizeError(userError, "sendMessage:userLookup"),
+    };
+  }
+  if (!currentUser) return { success: false, error: "User not found." };
 
   const { data, error } = await supabase
     .from("messages")
@@ -978,6 +1178,7 @@ export async function sendMessage(payload: {
     .select("id")
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error)
+    return { success: false, error: logAndSanitizeError(error, "sendMessage") };
   return { success: true, data: { id: data.id } };
 }
