@@ -99,7 +99,11 @@ export function generateImportTemplateCsv(): string {
 /**
  * Triggers browser file download for template or reports.
  */
-export function downloadFile(filename: string, content: string, mimeType = "text/csv;charset=utf-8;") {
+export function downloadFile(
+  filename: string,
+  content: string,
+  mimeType = "text/csv;charset=utf-8;",
+) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -115,7 +119,10 @@ export function downloadFile(filename: string, content: string, mimeType = "text
  * Parses a raw CSV string into headers and array of row objects.
  * Handles quoted fields, escaped quotes, newlines inside quotes, and empty cells.
  */
-export function parseCsvContent(csvText: string): { headers: string[]; rows: Record<string, string>[] } {
+export function parseCsvContent(csvText: string): {
+  headers: string[];
+  rows: Record<string, string>[];
+} {
   const lines: string[] = [];
   let currentLine = "";
   let insideQuotes = false;
@@ -197,7 +204,12 @@ export function autoDetectColumnMapping(headers: string[]): ColumnMappingState {
     const clean = header.toLowerCase().replace(/[^a-z0-9]/g, "");
 
     // 1. Full Name
-    if (clean.includes("fullname") || clean === "name" || clean === "membername" || clean.includes("full_name")) {
+    if (
+      clean.includes("fullname") ||
+      clean === "name" ||
+      clean === "membername" ||
+      clean.includes("full_name")
+    ) {
       mapping[header] = "fullName";
     }
     // 2. Gender (check BEFORE dates because 'gender' contains 'end' -> g-END-er)
@@ -228,19 +240,39 @@ export function autoDetectColumnMapping(headers: string[]): ColumnMappingState {
       mapping[header] = "endDate";
     }
     // 5. Payment Date
-    else if (clean.includes("paydate") || clean.includes("paymentdate") || clean.includes("payment_date")) {
+    else if (
+      clean.includes("paydate") ||
+      clean.includes("paymentdate") ||
+      clean.includes("payment_date")
+    ) {
       mapping[header] = "paymentDate";
     }
     // 6. Payment Method
-    else if (clean.includes("paymentmethod") || clean.includes("paymethod") || clean.includes("payment_method") || clean === "method" || clean === "mode") {
+    else if (
+      clean.includes("paymentmethod") ||
+      clean.includes("paymethod") ||
+      clean.includes("payment_method") ||
+      clean === "method" ||
+      clean === "mode"
+    ) {
       mapping[header] = "paymentMethod";
     }
     // 7. Payment Amount
-    else if (clean.includes("paymentamount") || clean.includes("amount") || clean.includes("paid") || clean.includes("fee") || clean.includes("price")) {
+    else if (
+      clean.includes("paymentamount") ||
+      clean.includes("amount") ||
+      clean.includes("paid") ||
+      clean.includes("fee") ||
+      clean.includes("price")
+    ) {
       mapping[header] = "paymentAmount";
     }
     // 8. Date of Birth
-    else if (clean.includes("dateofbirth") || clean.includes("dob") || clean.includes("birth")) {
+    else if (
+      clean.includes("dateofbirth") ||
+      clean.includes("dob") ||
+      clean.includes("birth")
+    ) {
       mapping[header] = "dateOfBirth";
     }
     // 9. Contact Email
@@ -248,11 +280,19 @@ export function autoDetectColumnMapping(headers: string[]): ColumnMappingState {
       mapping[header] = "contactEmail";
     }
     // 10. Contact Phone
-    else if (clean.includes("phone") || clean.includes("mobile") || clean.includes("contact")) {
+    else if (
+      clean.includes("phone") ||
+      clean.includes("mobile") ||
+      clean.includes("contact")
+    ) {
       mapping[header] = "contactPhone";
     }
     // 11. Plan Name
-    else if (clean.includes("plan") || clean.includes("pack") || clean === "membership") {
+    else if (
+      clean.includes("plan") ||
+      clean.includes("pack") ||
+      clean === "membership"
+    ) {
       mapping[header] = "planName";
     }
     // 12. Address
@@ -260,14 +300,24 @@ export function autoDetectColumnMapping(headers: string[]): ColumnMappingState {
       mapping[header] = "address";
     }
     // 13. Notes
-    else if (clean.includes("note") || clean.includes("remark") || clean.includes("comment")) {
+    else if (
+      clean.includes("note") ||
+      clean.includes("remark") ||
+      clean.includes("comment")
+    ) {
       mapping[header] = "notes";
     }
     // 14. Photo URL
-    else if (clean.includes("photo") || clean.includes("avatar") || clean.includes("picture") || clean.includes("profilepic") || clean.includes("imageurl") || clean.includes("photourl")) {
+    else if (
+      clean.includes("photo") ||
+      clean.includes("avatar") ||
+      clean.includes("picture") ||
+      clean.includes("profilepic") ||
+      clean.includes("imageurl") ||
+      clean.includes("photourl")
+    ) {
       mapping[header] = "photoUrl";
-    }
-    else {
+    } else {
       mapping[header] = "ignore";
     }
   });
@@ -306,7 +356,10 @@ export function normalizeDate(dateStr: string): string | null {
   // MM/DD/YYYY
   const parsed = new Date(s);
   if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().split("T")[0];
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, "0");
+    const d = String(parsed.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   }
 
   return null;
@@ -315,7 +368,10 @@ export function normalizeDate(dateStr: string): string | null {
 /**
  * Helper to calculate duration in months between start and end dates.
  */
-export function calculateMonthsBetween(startDateStr: string, endDateStr: string): number {
+export function calculateMonthsBetween(
+  startDateStr: string,
+  endDateStr: string,
+): number {
   const start = new Date(startDateStr);
   const end = new Date(endDateStr);
   if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
@@ -371,7 +427,8 @@ export function validateImportRows(
     // Strip common currency symbols/spaces, then parse. Preserve the sign
     // so that negative values (e.g. "-500" or "₹-500") are detected and
     // rejected rather than silently becoming positive.
-    const rawAmount: string | undefined = (mappedData as any).__paymentAmountRaw;
+    const rawAmount: string | undefined = (mappedData as any)
+      .__paymentAmountRaw;
     if (rawAmount !== undefined) {
       delete (mappedData as any).__paymentAmountRaw;
 
@@ -387,7 +444,8 @@ export function validateImportRows(
             num < 0
               ? "Payment amount cannot be negative."
               : "Payment amount is not a valid number.",
-          suggestedAction: "Enter a valid non-negative number (e.g. 1500 or 1500.00).",
+          suggestedAction:
+            "Enter a valid non-negative number (e.g. 1500 or 1500.00).",
         });
       } else {
         mappedData.paymentAmount = num;
@@ -428,8 +486,12 @@ export function validateImportRows(
     }
 
     // Required Field 3 & 4: Start & End Dates
-    const normStartDate = mappedData.startDate ? normalizeDate(mappedData.startDate) : null;
-    const normEndDate = mappedData.endDate ? normalizeDate(mappedData.endDate) : null;
+    const normStartDate = mappedData.startDate
+      ? normalizeDate(mappedData.startDate)
+      : null;
+    const normEndDate = mappedData.endDate
+      ? normalizeDate(mappedData.endDate)
+      : null;
 
     if (!normStartDate) {
       issues.push({
@@ -481,7 +543,8 @@ export function validateImportRows(
           field: "Membership Plan",
           code: "UNKNOWN_PLAN",
           message: `"${planName}" could not be matched to an existing TrackVim plan.`,
-          suggestedAction: "Map Plan to an existing gym plan or create a new plan.",
+          suggestedAction:
+            "Map Plan to an existing gym plan or create a new plan.",
         });
       } else if (
         dateDurationMonths > 0 &&
@@ -502,12 +565,16 @@ export function validateImportRows(
       const cleanPhone = mappedData.contactPhone.replace(/[^0-9]/g, "");
 
       if (cleanPhone.length >= 7) {
-        if (existingGymPhoneNumbers.has(cleanPhone) || seenPhoneInBatch.has(cleanPhone)) {
+        if (
+          existingGymPhoneNumbers.has(cleanPhone) ||
+          seenPhoneInBatch.has(cleanPhone)
+        ) {
           issues.push({
             field: "Contact Phone",
             code: "DUPLICATE_PHONE_IN_GYM",
             message: `A member with phone ${mappedData.contactPhone} already exists in this gym.`,
-            suggestedAction: "Review member to avoid duplicate active gym memberships.",
+            suggestedAction:
+              "Review member to avoid duplicate active gym memberships.",
           });
         } else if (existingGlobalPhones.has(cleanPhone)) {
           isExistingGlobal = true;
@@ -515,7 +582,8 @@ export function validateImportRows(
             field: "Contact Phone",
             code: "EXISTING_GLOBAL_MEMBER",
             message: `This member already exists in TrackVim and will be linked to this gym.`,
-            suggestedAction: "Informational state — existing global member record will be reused.",
+            suggestedAction:
+              "Informational state — existing global member record will be reused.",
           });
         }
         seenPhoneInBatch.add(cleanPhone);
@@ -561,8 +629,11 @@ export function validateImportRows(
     readyRows: parsedRows.filter((r) => r.severity === "ready").length,
     warningRows: parsedRows.filter((r) => r.severity === "warning").length,
     errorRows: parsedRows.filter((r) => r.severity === "error").length,
-    duplicateRows: parsedRows.filter((r) => r.issues.some((i) => i.code === "DUPLICATE_PHONE_IN_GYM")).length,
-    existingGlobalMatches: parsedRows.filter((r) => r.existingGlobalMemberMatch).length,
+    duplicateRows: parsedRows.filter((r) =>
+      r.issues.some((i) => i.code === "DUPLICATE_PHONE_IN_GYM"),
+    ).length,
+    existingGlobalMatches: parsedRows.filter((r) => r.existingGlobalMemberMatch)
+      .length,
   };
 
   return { parsedRows, stats };

@@ -29,21 +29,24 @@ export function useImportGymPlans(gymIdParam?: string) {
   });
 }
 
-export function useImportExistingPhones(gymIdParam?: string) {
+export function useImportExistingPhones(
+  gymIdParam?: string,
+  candidatePhones: string[] = [],
+) {
   const { supabase } = useSupabaseClient();
   const storeGymId = useOwnerStore((state) => state.activeGymId);
   const gymId = gymIdParam || storeGymId;
 
   return useQuery({
-    queryKey: ["import-existing-phones", gymId],
+    queryKey: ["import-existing-phones", gymId, candidatePhones],
     queryFn: async () => {
-      const res = await getImportExistingPhones(supabase, gymId!);
+      const res = await getImportExistingPhones(supabase, gymId!, candidatePhones);
       if (!res.success) {
         throw new Error(res.error);
       }
       return res.data;
     },
-    enabled: !!gymId,
+    enabled: !!gymId && candidatePhones.length > 0,
     staleTime: SLOW,
   });
 }

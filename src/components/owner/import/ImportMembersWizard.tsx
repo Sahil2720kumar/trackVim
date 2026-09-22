@@ -79,9 +79,25 @@ export function ImportMembersWizard({ gymId }: ImportMembersWizardProps) {
   );
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
+  // Derive digits-only phone list from the loaded file for the RPC batch check.
+  // This must be computed before the query so it can be passed as candidatePhones.
+  const candidatePhones = useMemo(() => {
+    const phoneCol = Object.entries(mapping).find(
+      ([_, f]) => f === "contactPhone",
+    )?.[0];
+    if (!phoneCol) return [];
+    return Array.from(
+      new Set(
+        rawRows
+          .map((r) => r[phoneCol]?.replace(/[^0-9]/g, ""))
+          .filter((p): p is string => !!p && p.length >= 7),
+      ),
+    );
+  }, [rawRows, mapping]);
+
   // Queries using our React Query hooks
   const { data: availableGymPlans = [] } = useImportGymPlans(gymId);
-  const { data: existingPhoneData } = useImportExistingPhones(gymId);
+  const { data: existingPhoneData } = useImportExistingPhones(gymId, candidatePhones);
 
   const existingGymPhones = useMemo(
     () => existingPhoneData?.gymPhones || new Set<string>(),
