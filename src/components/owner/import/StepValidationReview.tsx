@@ -280,6 +280,19 @@ export function StepValidationReview({
     );
   }
 
+  const effectiveMemberStats: ImportSummaryStats = stats || {
+    totalRows: parsedRows.length,
+    readyRows: parsedRows.filter((r) => r.severity === "ready").length,
+    warningRows: parsedRows.filter((r) => r.severity === "warning").length,
+    errorRows: parsedRows.filter((r) => r.severity === "error").length,
+    duplicateRows: parsedRows.filter((r) =>
+      r.issues.some((i) => i.code === "DUPLICATE_PHONE_IN_GYM"),
+    ).length,
+    existingGlobalMatches: parsedRows.filter((r) =>
+      r.issues.some((i) => i.code === "EXISTING_GLOBAL_MEMBER"),
+    ).length,
+  };
+
   const filteredRows = parsedRows.filter((row) => {
     if (activeTab === "ready") return row.severity === "ready";
     if (activeTab === "warnings") return row.severity === "warning";
@@ -298,7 +311,7 @@ export function StepValidationReview({
             <div>
               <p className="text-xs text-muted-foreground font-medium">Total Rows</p>
               <h3 className="text-2xl font-bold text-foreground mt-1">
-                {stats.totalRows.toLocaleString()}
+                {effectiveMemberStats.totalRows.toLocaleString()}
               </h3>
             </div>
             <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
@@ -312,7 +325,7 @@ export function StepValidationReview({
             <div>
               <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Ready to Import</p>
               <h3 className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">
-                {stats.readyRows.toLocaleString()}
+                {effectiveMemberStats.readyRows.toLocaleString()}
               </h3>
             </div>
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
@@ -326,7 +339,7 @@ export function StepValidationReview({
             <div>
               <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">Warnings / Info</p>
               <h3 className="text-2xl font-bold text-amber-700 dark:text-amber-400 mt-1">
-                {stats.warningRows.toLocaleString()}
+                {effectiveMemberStats.warningRows.toLocaleString()}
               </h3>
             </div>
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400">
@@ -340,7 +353,7 @@ export function StepValidationReview({
             <div>
               <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">Errors</p>
               <h3 className="text-2xl font-bold text-rose-700 dark:text-rose-400 mt-1">
-                {stats.errorRows.toLocaleString()}
+                {effectiveMemberStats.errorRows.toLocaleString()}
               </h3>
             </div>
             <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-400">
@@ -365,19 +378,19 @@ export function StepValidationReview({
             <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)}>
               <TabsList className="bg-muted p-1">
                 <TabsTrigger value="all" className="text-xs">
-                  All ({stats.totalRows})
+                  All ({effectiveMemberStats.totalRows})
                 </TabsTrigger>
                 <TabsTrigger value="ready" className="text-xs text-emerald-600 dark:text-emerald-400">
-                  Ready ({stats.readyRows})
+                  Ready ({effectiveMemberStats.readyRows})
                 </TabsTrigger>
                 <TabsTrigger value="warnings" className="text-xs text-amber-600 dark:text-amber-400">
-                  Warnings ({stats.warningRows})
+                  Warnings ({effectiveMemberStats.warningRows})
                 </TabsTrigger>
                 <TabsTrigger value="errors" className="text-xs text-rose-600 dark:text-rose-400">
-                  Errors ({stats.errorRows})
+                  Errors ({effectiveMemberStats.errorRows})
                 </TabsTrigger>
                 <TabsTrigger value="duplicates" className="text-xs">
-                  Duplicates ({stats.duplicateRows})
+                  Duplicates ({effectiveMemberStats.duplicateRows})
                 </TabsTrigger>
               </TabsList>
             </Tabs>

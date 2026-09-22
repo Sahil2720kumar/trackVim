@@ -219,7 +219,7 @@ export function StepConfirmation({
                 Payments
               </div>
               <div className="text-xl font-bold text-foreground">
-                {settings.importCurrentPayment ? paymentCount.toLocaleString() : "0"}
+                {settings?.importCurrentPayment ? paymentCount.toLocaleString() : "0"}
               </div>
             </div>
 
@@ -229,7 +229,7 @@ export function StepConfirmation({
                 QR Cards
               </div>
               <div className="text-xl font-bold text-foreground">
-                {settings.generateQrCards ? validRowCount.toLocaleString() : "0"}
+                {settings?.generateQrCards ? validRowCount.toLocaleString() : "0"}
               </div>
             </div>
 
@@ -239,7 +239,7 @@ export function StepConfirmation({
                 Invitations
               </div>
               <div className="text-xl font-bold text-foreground">
-                {settings.sendInvitations ? validRowCount.toLocaleString() : "0"}
+                {settings?.sendInvitations ? validRowCount.toLocaleString() : "0"}
               </div>
             </div>
           </div>

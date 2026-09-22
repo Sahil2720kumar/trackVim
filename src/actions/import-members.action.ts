@@ -60,6 +60,41 @@ function mergeBatchResults(
   };
 }
 
+// Row-level conflict type returned by the batched conflict-check RPC.
+// Only blocking conflicts are ever returned; an existing member is not
+// a conflict, so it never appears here.
+type MemberEmailConflictRow = {
+  email: string;
+  conflict_type: "owner" | "trainer";
+};
+
+function buildConflictErrorRow(
+  item: ImportBatchPayloadItem,
+  conflictType: "owner" | "trainer",
+): ImportBatchResult["errorRows"][number] {
+  switch (conflictType) {
+    case "owner":
+      return {
+        rowNumber: item.rowNumber,
+        fullName: item.fullName,
+        errorCode: "EMAIL_BELONGS_TO_OWNER",
+        error:
+          "This email address already belongs to an owner account and cannot be imported as a member.",
+        suggestedAction: "Use a different email address for this member.",
+      };
+
+    case "trainer":
+      return {
+        rowNumber: item.rowNumber,
+        fullName: item.fullName,
+        errorCode: "EMAIL_BELONGS_TO_TRAINER",
+        error:
+          "This email address already belongs to a trainer account and cannot be imported as a member.",
+        suggestedAction: "Use a different email address for this member.",
+      };
+  }
+}
+
 /**
  * Import existing gym members in batches.
  *
@@ -119,37 +154,51 @@ export async function importMembersBatchAction(
   const supabase = await createServerClient();
 
   // ============================================================
-  // 4. EARLY EMAIL CONFLICT CHECK
+  // 4. BATCH EMAIL CONFLICT CHECK
   //
   // This is for friendly client-side import feedback.
   //
   // The SECURITY DEFINER RPC performs the authoritative check
   // again, protecting against race conditions.
+  //
+  // Rows without an email skip the check entirely. All emails
+  // are checked in a single round trip instead of one RPC call
+  // per row.
   // ============================================================
 
   const validItems: ImportBatchPayloadItem[] = [];
 
   const emailConflictRows: ImportBatchResult["errorRows"] = [];
 
-  for (const item of payloadItems) {
-    const normalizedEmail = item.contactEmail?.trim().toLowerCase() || null;
+  const normalizedPayloadItems = payloadItems.map((item) => ({
+    ...item,
+    contactEmail: item.contactEmail?.trim().toLowerCase() || null,
+  }));
 
-    // No email -> nothing to check.
-    if (!normalizedEmail) {
-      validItems.push(item);
-      continue;
-    }
+  const itemsWithEmail = normalizedPayloadItems.filter(
+    (item) => item.contactEmail,
+  );
+  const itemsWithoutEmail = normalizedPayloadItems.filter(
+    (item) => !item.contactEmail,
+  );
 
-    const { data: emailConflict, error: emailConflictError } =
-      await supabase.rpc("check_member_email_conflict", {
-        p_email: normalizedEmail,
-      });
+  // No email -> nothing to check.
+  validItems.push(...itemsWithoutEmail);
 
-    if (emailConflictError) {
-      console.error(
-        "Failed to check member email conflict:",
-        emailConflictError,
-      );
+  if (itemsWithEmail.length) {
+    const emails = Array.from(
+      new Set(itemsWithEmail.map((item) => item.contactEmail as string)),
+    );
+
+    const { data: conflictData, error: conflictError } = await supabase.rpc(
+      "check_member_email_conflicts_batch",
+      {
+        p_emails: emails,
+      },
+    );
+
+    if (conflictError) {
+      console.error("Failed to check member email conflicts:", conflictError);
 
       return {
         success: false,
@@ -157,62 +206,32 @@ export async function importMembersBatchAction(
       };
     }
 
-    const conflict = emailConflict?.[0];
+    const conflictByEmail = new Map<string, "owner" | "trainer">(
+      ((conflictData ?? []) as MemberEmailConflictRow[]).map((row) => [
+        row.email,
+        row.conflict_type,
+      ]),
+    );
 
-    if (!conflict) {
-      return {
-        success: false,
-        error: "Could not verify email availability. Please try again.",
-      };
+    for (const item of itemsWithEmail) {
+      const email = item.contactEmail as string;
+      const conflictType = conflictByEmail.get(email);
+
+      // ----------------------------------------------------------
+      // No blocking conflict.
+      //
+      // This includes an existing member email, which is NOT a
+      // conflict: the RPC will reuse the global member if they
+      // belong to another gym.
+      // ----------------------------------------------------------
+
+      if (!conflictType) {
+        validItems.push(item);
+        continue;
+      }
+
+      emailConflictRows.push(buildConflictErrorRow(item, conflictType));
     }
-
-    // ----------------------------------------------------------
-    // OWNER
-    // ----------------------------------------------------------
-
-    if (conflict.conflict_type === "owner") {
-      emailConflictRows.push({
-        rowNumber: item.rowNumber,
-        fullName: item.fullName,
-        errorCode: "EMAIL_BELONGS_TO_OWNER",
-        error:
-          "This email address already belongs to an owner account and cannot be imported as a member.",
-        suggestedAction: "Use a different email address for this member.",
-      });
-
-      continue;
-    }
-
-    // ----------------------------------------------------------
-    // TRAINER
-    // ----------------------------------------------------------
-
-    if (conflict.conflict_type === "trainer") {
-      emailConflictRows.push({
-        rowNumber: item.rowNumber,
-        fullName: item.fullName,
-        errorCode: "EMAIL_BELONGS_TO_TRAINER",
-        error:
-          "This email address already belongs to a trainer account and cannot be imported as a member.",
-        suggestedAction: "Use a different email address for this member.",
-      });
-
-      continue;
-    }
-
-    // ----------------------------------------------------------
-    // EXISTING MEMBER
-    //
-    // This is NOT a conflict.
-    //
-    // The RPC will reuse the global member if they belong
-    // to another gym.
-    // ----------------------------------------------------------
-
-    validItems.push({
-      ...item,
-      contactEmail: normalizedEmail,
-    });
   }
 
   // ============================================================
@@ -250,8 +269,6 @@ export async function importMembersBatchAction(
       p_items: batch,
       p_settings: settings,
     });
-
-    console.log("Batch Import Data:", data);
 
     if (error || !data) {
       console.error("Batch Import Error:", error);

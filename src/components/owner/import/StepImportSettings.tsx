@@ -161,9 +161,9 @@ export function StepImportSettings({
             <div className="flex items-start space-x-3 p-4 rounded-xl border border-border bg-card/50 hover:bg-muted/30 transition-colors">
               <Checkbox
                 id="createActiveMemberships"
-                checked={settings.createActiveMemberships}
+                checked={settings?.createActiveMemberships}
                 onCheckedChange={(c) =>
-                  onSettingsChange("createActiveMemberships", !!c)
+                  onSettingsChange?.("createActiveMemberships", !!c)
                 }
                 className="mt-1"
               />
@@ -185,9 +185,9 @@ export function StepImportSettings({
             <div className="flex items-start space-x-3 p-4 rounded-xl border border-border bg-card/50 hover:bg-muted/30 transition-colors">
               <Checkbox
                 id="importCurrentPayment"
-                checked={settings.importCurrentPayment}
+                checked={settings?.importCurrentPayment}
                 onCheckedChange={(c) =>
-                  onSettingsChange("importCurrentPayment", !!c)
+                  onSettingsChange?.("importCurrentPayment", !!c)
                 }
                 className="mt-1"
               />
@@ -210,9 +210,9 @@ export function StepImportSettings({
             <div className="flex items-start space-x-3 p-4 rounded-xl border border-border bg-card/50 hover:bg-muted/30 transition-colors">
               <Checkbox
                 id="generateQrCards"
-                checked={settings.generateQrCards}
+                checked={settings?.generateQrCards}
                 onCheckedChange={(c) =>
-                  onSettingsChange("generateQrCards", !!c)
+                  onSettingsChange?.("generateQrCards", !!c)
                 }
                 className="mt-1"
               />
@@ -234,9 +234,9 @@ export function StepImportSettings({
             <div className="flex items-start space-x-3 p-4 rounded-xl border border-border bg-card/50 hover:bg-muted/30 transition-colors">
               <Checkbox
                 id="sendInvitations"
-                checked={settings.sendInvitations}
+                checked={settings?.sendInvitations}
                 onCheckedChange={(c) =>
-                  onSettingsChange("sendInvitations", !!c)
+                  onSettingsChange?.("sendInvitations", !!c)
                 }
                 className="mt-1"
               />
@@ -357,7 +357,7 @@ export function StepImportSettings({
                       <Select
                         value={selectedGymPlanId}
                         onValueChange={(val) =>
-                          onPlanMappingChange(importedPlan, val)
+                          onPlanMappingChange?.(importedPlan, val)
                         }
                       >
                         <SelectTrigger className="w-full sm:w-[320px] bg-background border-border">

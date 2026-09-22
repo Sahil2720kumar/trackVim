@@ -27,6 +27,58 @@ function chunk<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
+// Row-level conflict type returned by the batched conflict-check RPC.
+type TrainerEmailConflictRow = {
+  email: string;
+  conflict_type: "owner" | "member" | "trainer" | null;
+};
+
+function buildConflictErrorRow(
+  item: ImportTrainerPayloadItem,
+  conflictType: "owner" | "member" | "trainer",
+): ImportTrainerErrorRow {
+  switch (conflictType) {
+    case "owner":
+      return {
+        rowNumber: item.rowNumber,
+        fullName: item.fullName,
+
+        errorCode: "EMAIL_BELONGS_TO_OWNER",
+
+        error:
+          "This email address already belongs to an owner account and cannot be imported as a trainer.",
+
+        suggestedAction: "Use a different email address for this trainer.",
+      };
+
+    case "member":
+      return {
+        rowNumber: item.rowNumber,
+        fullName: item.fullName,
+
+        errorCode: "EMAIL_BELONGS_TO_MEMBER",
+
+        error:
+          "This email address already belongs to a member account and cannot be imported as a trainer.",
+
+        suggestedAction: "Use a different email address for this trainer.",
+      };
+
+    case "trainer":
+      return {
+        rowNumber: item.rowNumber,
+        fullName: item.fullName,
+
+        errorCode: "TRAINER_ALREADY_EXISTS_IN_GYM",
+
+        error: "A trainer with this email address already exists in this gym.",
+
+        suggestedAction:
+          "Use the existing trainer record instead of importing another one.",
+      };
+  }
+}
+
 export async function importTrainersBatchAction(
   gymId: string,
   payloadItems: ImportTrainerPayloadItem[],
@@ -90,35 +142,44 @@ export async function importTrainersBatchAction(
   }));
 
   // ============================================================
-  // 5. EARLY EMAIL CONFLICT CHECK
+  // 5. BATCH EMAIL CONFLICT CHECK
   //
   // This provides friendly feedback.
   //
   // The RPC checks again authoritatively.
+  //
+  // Rows without an email skip the check entirely and are valid.
+  // All emails are checked in a single round trip instead of one
+  // RPC call per row.
   // ============================================================
 
   const validItems: ImportTrainerPayloadItem[] = [];
 
   const emailConflictRows: ImportTrainerErrorRow[] = [];
 
-  for (const item of normalizedItems) {
-    const email = item.contactEmail;
+  const itemsWithEmail = normalizedItems.filter((item) => item.contactEmail);
+  const itemsWithoutEmail = normalizedItems.filter(
+    (item) => !item.contactEmail,
+  );
 
-    if (!email) {
-      validItems.push(item);
-      continue;
-    }
+  // Emailless rows have nothing to conflict-check.
+  validItems.push(...itemsWithoutEmail);
+
+  if (itemsWithEmail.length) {
+    const emails = Array.from(
+      new Set(itemsWithEmail.map((item) => item.contactEmail as string)),
+    );
 
     const { data: conflictData, error: conflictError } = await supabase.rpc(
-      "check_trainer_email_conflict",
+      "check_trainer_email_conflicts_batch",
       {
         p_gym_id: gymId,
-        p_email: email,
+        p_emails: emails,
       },
     );
 
     if (conflictError) {
-      console.error("Failed to check trainer email conflict:", conflictError);
+      console.error("Failed to check trainer email conflicts:", conflictError);
 
       return {
         success: false,
@@ -126,80 +187,27 @@ export async function importTrainersBatchAction(
       };
     }
 
-    const conflict = conflictData?.[0];
+    const conflictByEmail = new Map<
+      string,
+      TrainerEmailConflictRow["conflict_type"]
+    >(
+      ((conflictData ?? []) as TrainerEmailConflictRow[]).map((row) => [
+        row.email,
+        row.conflict_type,
+      ]),
+    );
 
-    if (!conflict) {
-      return {
-        success: false,
-        error: "Could not verify trainer email availability. Please try again.",
-      };
+    for (const item of itemsWithEmail) {
+      const email = item.contactEmail as string;
+      const conflictType = conflictByEmail.get(email) ?? null;
+
+      if (!conflictType) {
+        validItems.push(item);
+        continue;
+      }
+
+      emailConflictRows.push(buildConflictErrorRow(item, conflictType));
     }
-
-    // ==========================================================
-    // OWNER
-    // ==========================================================
-
-    if (conflict.conflict_type === "owner") {
-      emailConflictRows.push({
-        rowNumber: item.rowNumber,
-        fullName: item.fullName,
-
-        errorCode: "EMAIL_BELONGS_TO_OWNER",
-
-        error:
-          "This email address already belongs to an owner account and cannot be imported as a trainer.",
-
-        suggestedAction: "Use a different email address for this trainer.",
-      });
-
-      continue;
-    }
-
-    // ==========================================================
-    // MEMBER
-    // ==========================================================
-
-    if (conflict.conflict_type === "member") {
-      emailConflictRows.push({
-        rowNumber: item.rowNumber,
-        fullName: item.fullName,
-
-        errorCode: "EMAIL_BELONGS_TO_MEMBER",
-
-        error:
-          "This email address already belongs to a member account and cannot be imported as a trainer.",
-
-        suggestedAction: "Use a different email address for this trainer.",
-      });
-
-      continue;
-    }
-
-    // ==========================================================
-    // TRAINER ALREADY IN THIS GYM
-    // ==========================================================
-
-    if (conflict.conflict_type === "trainer") {
-      emailConflictRows.push({
-        rowNumber: item.rowNumber,
-        fullName: item.fullName,
-
-        errorCode: "TRAINER_ALREADY_EXISTS_IN_GYM",
-
-        error: "A trainer with this email address already exists in this gym.",
-
-        suggestedAction:
-          "Use the existing trainer record instead of importing another one.",
-      });
-
-      continue;
-    }
-
-    // ==========================================================
-    // AVAILABLE / TRAINER FROM ANOTHER GYM
-    // ==========================================================
-
-    validItems.push(item);
   }
 
   // ============================================================
@@ -261,9 +269,6 @@ export async function importTrainersBatchAction(
       p_settings: settings,
     });
 
-    console.log("Trainer import batch result:", data);
-    console.log("Trainer import batch error:", error);
-
     if (error || !data) {
       console.error("Trainer import batch error:", error);
 
@@ -318,8 +323,13 @@ export async function importTrainersBatchAction(
 
     const client = await clerkClient();
 
+    // Invitation failures are non-blocking: the trainer is already
+    // imported. We collect them as warnings so the caller can surface
+    // them without treating them as hard errors.
+    const invitationWarnings: ImportTrainerErrorRow[] = [];
+
     for (const successfulRow of successfulRows) {
-      // Existing global account.
+      // Existing global account — already has credentials, skip.
       if (successfulRow.hasExistingProfile) {
         continue;
       }
@@ -329,6 +339,8 @@ export async function importTrainersBatchAction(
       if (!email) {
         continue;
       }
+
+      let invitationId: string | undefined;
 
       try {
         const invitation = await client.invitations.createInvitation({
@@ -351,31 +363,69 @@ export async function importTrainersBatchAction(
           ignoreExisting: true,
         });
 
-        const { error: invitationUpdateError } = await supabase
-          .from("trainers")
-          .update({
-            invited_email: email,
-
-            clerk_invitation_id: invitation.id,
-
-            invitation_sent_at: new Date().toISOString(),
-          })
-          .eq("id", successfulRow.trainerId);
-
-        if (invitationUpdateError) {
-          console.error(
-            "Failed to save trainer invitation:",
-            invitationUpdateError,
-          );
-        }
+        invitationId = invitation.id;
       } catch (err) {
         /*
-         * Invitation failure must NOT
-         * rollback the imported trainer.
+         * Clerk invitation failure must NOT rollback the imported trainer.
+         * Surface as a row-level warning instead of only logging.
          */
-
         console.error("Failed to send trainer invitation:", err);
+
+        invitationWarnings.push({
+          rowNumber: successfulRow.rowNumber,
+          fullName: successfulRow.fullName,
+          errorCode: "INVITATION_SEND_FAILED",
+          stage: "invitation",
+          error:
+            err instanceof Error
+              ? err.message
+              : "Failed to send Clerk invitation email.",
+          suggestedAction:
+            "Re-send the invitation manually from the trainer profile.",
+          extra: { trainerId: successfulRow.trainerId, email },
+        });
+
+        continue;
       }
+
+      const { error: invitationUpdateError } = await supabase
+        .from("trainers")
+        .update({
+          invited_email: email,
+
+          clerk_invitation_id: invitationId,
+
+          invitation_sent_at: new Date().toISOString(),
+        })
+        .eq("id", successfulRow.trainerId);
+
+      if (invitationUpdateError) {
+        console.error(
+          "Failed to save trainer invitation:",
+          invitationUpdateError,
+        );
+
+        invitationWarnings.push({
+          rowNumber: successfulRow.rowNumber,
+          fullName: successfulRow.fullName,
+          errorCode: "INVITATION_PERSISTENCE_FAILED",
+          stage: "invitation",
+          error:
+            invitationUpdateError.message ||
+            "Invitation was sent but could not be saved to the database.",
+          detail: invitationUpdateError.details ?? null,
+          hint: invitationUpdateError.hint ?? null,
+          suggestedAction:
+            "The invitation email was delivered. Update the trainer record manually if needed.",
+          extra: { trainerId: successfulRow.trainerId, invitationId, email },
+        });
+      }
+    }
+
+    // Merge invitation warnings after hard import errors so the
+    // summary ordering stays: conflict errors → import errors → warnings.
+    if (invitationWarnings.length) {
+      result.errorRows = [...result.errorRows, ...invitationWarnings];
     }
   }
 

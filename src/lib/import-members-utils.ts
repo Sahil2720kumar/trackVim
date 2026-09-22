@@ -283,7 +283,18 @@ export function normalizeDate(dateStr: string): string | null {
   const s = dateStr.trim();
 
   // YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, d] = s.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    if (
+      dt.getFullYear() === y &&
+      dt.getMonth() === m - 1 &&
+      dt.getDate() === d
+    ) {
+      return s;
+    }
+    return null;
+  }
 
   // DD/MM/YYYY or DD-MM-YYYY
   const dmyMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
@@ -344,8 +355,9 @@ export function validateImportRows(
       if (!rawVal) return;
 
       if (trackvimField === "paymentAmount") {
-        const num = parseFloat(rawVal.replace(/[^0-9.]/g, ""));
-        if (!isNaN(num)) mappedData.paymentAmount = num;
+        // Store the raw string; validation and parsing happen in the
+        // post-loop block so we can emit issues into the issues array.
+        (mappedData as any).__paymentAmountRaw = rawVal;
       } else {
         (mappedData as any)[trackvimField] = rawVal;
       }
@@ -353,6 +365,57 @@ export function validateImportRows(
 
     const issues: RowValidationError[] = [];
     let isExistingGlobal = false;
+
+    // Payment Amount Validation
+    //
+    // Strip common currency symbols/spaces, then parse. Preserve the sign
+    // so that negative values (e.g. "-500" or "₹-500") are detected and
+    // rejected rather than silently becoming positive.
+    const rawAmount: string | undefined = (mappedData as any).__paymentAmountRaw;
+    if (rawAmount !== undefined) {
+      delete (mappedData as any).__paymentAmountRaw;
+
+      // Remove currency symbols and whitespace but NOT digits, dots, or minus.
+      const sanitized = rawAmount.replace(/[^0-9.\-]/g, "");
+      const num = parseFloat(sanitized);
+
+      if (isNaN(num) || num < 0) {
+        issues.push({
+          field: "Payment Amount",
+          code: "INVALID_AMOUNT",
+          message:
+            num < 0
+              ? "Payment amount cannot be negative."
+              : "Payment amount is not a valid number.",
+          suggestedAction: "Enter a valid non-negative number (e.g. 1500 or 1500.00).",
+        });
+      } else {
+        mappedData.paymentAmount = num;
+      }
+    }
+
+    // Email Validation
+    //
+    // Empty contactEmail is fine (optional field) — already handled by the
+    // `if (!rawVal) return;` guard above.
+    // Non-empty values must contain "@"; anything else is rejected so the
+    // server never receives a malformed address.
+    if (mappedData.contactEmail) {
+      const cleanEmail = mappedData.contactEmail.trim().toLowerCase();
+
+      if (!cleanEmail.includes("@")) {
+        issues.push({
+          field: "Contact Email",
+          code: "INVALID_EMAIL",
+          message: "Contact Email format is invalid.",
+          suggestedAction: "Provide a valid email address.",
+        });
+        // Clear so the invalid value is never forwarded to the server.
+        delete mappedData.contactEmail;
+      } else {
+        mappedData.contactEmail = cleanEmail;
+      }
+    }
 
     // Required Field 1: Full Name
     if (!mappedData.fullName || mappedData.fullName.trim().length === 0) {
@@ -462,7 +525,14 @@ export function validateImportRows(
     // Determine severity
     let severity: RowValidationSeverity = "ready";
     const hasError = issues.some(
-      (i) => i.code === "REQUIRED_FIELD_MISSING" || i.code === "UNKNOWN_PLAN" || i.code === "INVALID_DATE" || i.code === "END_BEFORE_START" || i.code === "DUPLICATE_PHONE_IN_GYM",
+      (i) =>
+        i.code === "REQUIRED_FIELD_MISSING" ||
+        i.code === "UNKNOWN_PLAN" ||
+        i.code === "INVALID_DATE" ||
+        i.code === "END_BEFORE_START" ||
+        i.code === "DUPLICATE_PHONE_IN_GYM" ||
+        i.code === "INVALID_EMAIL" ||
+        i.code === "INVALID_AMOUNT",
     );
     const hasWarning = issues.some((i) => i.code === "EXISTING_GLOBAL_MEMBER");
 

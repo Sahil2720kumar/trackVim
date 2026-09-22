@@ -33,7 +33,7 @@ export function StepUploadFile({
   rowCount,
   onResetFile,
   title = "Upload member data",
-  description = "Upload a CSV or Excel file containing your existing gym members.",
+  description = "Upload a CSV file containing your existing gym members.",
   templateFilename = "TrackVim_Member_Import_Template.csv",
   onDownloadTemplate,
 }: StepUploadFileProps) {
@@ -48,8 +48,8 @@ export function StepUploadFile({
       }
 
       const fileName = file.name.toLowerCase();
-      if (!fileName.endsWith(".csv") && !fileName.endsWith(".xlsx") && !fileName.endsWith(".txt")) {
-        setErrorMsg("Please upload a supported file type (.csv or .xlsx).");
+      if (!fileName.endsWith(".csv") && !fileName.endsWith(".txt")) {
+        setErrorMsg("Please upload a supported file type (.csv or .txt).");
         return;
       }
 
@@ -89,7 +89,6 @@ export function StepUploadFile({
     maxFiles: 1,
     accept: {
       "text/csv": [".csv"],
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
       "text/plain": [".csv", ".txt"],
     },
   });
@@ -160,9 +159,6 @@ export function StepUploadFile({
                 <div className="flex items-center gap-2 mb-4">
                   <Badge variant="secondary" className="font-mono text-xs">
                     CSV
-                  </Badge>
-                  <Badge variant="secondary" className="font-mono text-xs">
-                    XLSX
                   </Badge>
                 </div>
 

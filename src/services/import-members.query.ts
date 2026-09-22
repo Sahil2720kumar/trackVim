@@ -53,40 +53,23 @@ export async function getImportGymPlans(
 export async function getImportExistingPhones(
   supabase: TypedSupabaseClient,
   gymId: string,
+  candidatePhones: string[], // normalized digits-only, from the import file
 ) {
-  const [gymRes, globalRes] = await Promise.all([
-    supabase
-      .from("gym_memberships")
-      .select("member:members(contact_phone)")
-      .eq("gym_id", gymId)
-      .eq("status", "Active"),
+  const { data, error } = await supabase.rpc("check_import_phone_conflicts", {
+    p_gym_id: gymId,
+    p_phones: candidatePhones,
+  });
 
-    supabase
-      .from("members")
-      .select("contact_phone")
-      .not("contact_phone", "is", null),
-  ]);
-
-  if (gymRes.error) {
-    return { success: false as const, error: gymRes.error.message };
-  }
-
-  if (globalRes.error) {
-    return { success: false as const, error: globalRes.error.message };
+  if (error) {
+    return { success: false as const, error: error.message };
   }
 
   const gymPhones = new Set<string>();
-  (gymRes.data || []).forEach((gm: any) => {
-    if (gm.member?.contact_phone) {
-      gymPhones.add(gm.member.contact_phone.replace(/[^0-9]/g, ""));
-    }
-  });
-
   const globalPhones = new Set<string>();
-  (globalRes.data || []).forEach((m) => {
-    if (m.contact_phone) {
-      globalPhones.add(m.contact_phone.replace(/[^0-9]/g, ""));
-    }
+
+  (data || []).forEach((row) => {
+    if (row.exists_in_gym) gymPhones.add(row.phone);
+    if (row.exists_globally) globalPhones.add(row.phone);
   });
 
   return {
