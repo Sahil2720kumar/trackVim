@@ -192,6 +192,13 @@ export const gymMembershipStatusEnum = pgEnum("gym_membership_status", [
   "Scheduled",
 ]);
 
+export const membershipSourceEnum = pgEnum("membership_source", [
+  "Application",
+  "Imported",
+  "WalkIn",
+  "Renewal",
+]);
+
 export const paymentMethodEnum = pgEnum("payment_method", [
   "Cash",
   "UPI",
@@ -210,6 +217,12 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "Overdue",
   "Refunded",
   "Cancelled",
+]);
+
+export const paymentSourceEnum = pgEnum("payment_source", [
+  "Application",
+  "Imported",
+  "Manual",
 ]);
 
 export const qrCodeTypeEnum = pgEnum("qr_code_type", ["Static", "Rotating"]);
@@ -711,13 +724,15 @@ export const membershipQrCodes = pgTable(
         onDelete: "cascade",
       }),
 
+    // Always points to the member's current membership.
+    // The physical QR/token remains the same across renewals.
     gymMembershipId: uuid("gym_membership_id")
       .notNull()
       .references(() => gymMemberships.id, {
         onDelete: "cascade",
       }),
 
-    // Random opaque token encoded into the physical membership-card QR.
+    // Stable opaque token encoded into the physical membership-card QR.
     token: uuid("token").notNull().defaultRandom().unique(),
 
     isActive: boolean("is_active").notNull().default(true),
@@ -741,8 +756,9 @@ export const membershipQrCodes = pgTable(
 
     index("membership_qr_codes_membership_idx").on(t.gymMembershipId),
 
-    uniqueIndex("membership_qr_codes_one_active_per_membership_idx")
-      .on(t.gymMembershipId)
+    // One physical membership QR card per member in a gym.
+    uniqueIndex("membership_qr_codes_one_active_per_member_gym_idx")
+      .on(t.gymId, t.memberId)
       .where(sql`${t.isActive} = true`),
 
     pgPolicy("Gym staff can view membership QR codes", {
@@ -1202,6 +1218,7 @@ export const gymMemberships = pgTable(
     status: gymMembershipStatusEnum("status")
       .notNull()
       .default("PaymentPending"),
+    source: membershipSourceEnum("source").notNull().default("Application"),
 
     paymentVerificationRequired: boolean("payment_verification_required")
       .notNull()
@@ -1225,6 +1242,11 @@ export const gymMemberships = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
+    importedAt: timestamp("imported_at", {
+      withTimezone: true,
+    }),
+
+    importedBy: uuid("imported_by").references(() => users.id),
   },
   (t) => [
     // REMOVED gym_memberships_gym_idx on (gymId) — redundant. Both
@@ -1364,6 +1386,7 @@ export const payments = pgTable(
     status: paymentStatusEnum("status")
       .notNull()
       .default("PendingVerification"),
+    source: paymentSourceEnum("source").notNull().default("Application"),
 
     gatewayProvider: text("gateway_provider"),
     gatewayPaymentId: text("gateway_payment_id"),

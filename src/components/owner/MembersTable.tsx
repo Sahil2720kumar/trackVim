@@ -28,6 +28,7 @@ import {
   Clock,
   QrCodeIcon,
   CircleX,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -929,6 +930,16 @@ export function MembersTable() {
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">Export</span>
             </button>
+
+            <Button
+              variant="outline"
+              onClick={() => router.push("/owner/members/import")}
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-border rounded-lg text-sm hover:bg-muted transition-colors font-medium cursor-pointer"
+            >
+              <Upload className="w-4 h-4 text-primary" />
+              <span className="hidden sm:inline">Import Members</span>
+              <span className="sm:hidden">Import</span>
+            </Button>
 
             <button
               onClick={handleAddMember}
