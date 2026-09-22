@@ -223,7 +223,7 @@ export function generateMemberCode(): string {
 
 export function generateTrainerCode(): string {
   const random = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `TRA-${random}`;
+  return `TRN-${random}`;
 }
 
 //trainer session

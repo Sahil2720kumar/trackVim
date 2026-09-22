@@ -349,6 +349,8 @@ export type Database = {
           freeze_start_date: string | null
           gym_id: string
           id: string
+          imported_at: string | null
+          imported_by: string | null
           is_frozen: boolean | null
           joining_fee: number | null
           member_id: string
@@ -356,6 +358,7 @@ export type Database = {
           payment_verification_required: boolean
           plan_id: string
           plan_price: number
+          source: Database["public"]["Enums"]["membership_source"]
           start_date: string
           status: Database["public"]["Enums"]["gym_membership_status"]
           total_freeze_days: number | null
@@ -376,6 +379,8 @@ export type Database = {
           freeze_start_date?: string | null
           gym_id: string
           id?: string
+          imported_at?: string | null
+          imported_by?: string | null
           is_frozen?: boolean | null
           joining_fee?: number | null
           member_id: string
@@ -383,6 +388,7 @@ export type Database = {
           payment_verification_required?: boolean
           plan_id: string
           plan_price: number
+          source?: Database["public"]["Enums"]["membership_source"]
           start_date: string
           status?: Database["public"]["Enums"]["gym_membership_status"]
           total_freeze_days?: number | null
@@ -403,6 +409,8 @@ export type Database = {
           freeze_start_date?: string | null
           gym_id?: string
           id?: string
+          imported_at?: string | null
+          imported_by?: string | null
           is_frozen?: boolean | null
           joining_fee?: number | null
           member_id?: string
@@ -410,6 +418,7 @@ export type Database = {
           payment_verification_required?: boolean
           plan_id?: string
           plan_price?: number
+          source?: Database["public"]["Enums"]["membership_source"]
           start_date?: string
           status?: Database["public"]["Enums"]["gym_membership_status"]
           total_freeze_days?: number | null
@@ -435,6 +444,13 @@ export type Database = {
             columns: ["gym_id"]
             isOneToOne: false
             referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_memberships_imported_by_users_id_fk"
+            columns: ["imported_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -1382,6 +1398,7 @@ export type Database = {
           payment_date: string | null
           receipt_id: string | null
           rejection_reason: string | null
+          source: Database["public"]["Enums"]["payment_source"]
           status: Database["public"]["Enums"]["payment_status"]
           transaction_ref: string | null
           updated_at: string
@@ -1405,6 +1422,7 @@ export type Database = {
           payment_date?: string | null
           receipt_id?: string | null
           rejection_reason?: string | null
+          source?: Database["public"]["Enums"]["payment_source"]
           status?: Database["public"]["Enums"]["payment_status"]
           transaction_ref?: string | null
           updated_at?: string
@@ -1428,6 +1446,7 @@ export type Database = {
           payment_date?: string | null
           receipt_id?: string | null
           rejection_reason?: string | null
+          source?: Database["public"]["Enums"]["payment_source"]
           status?: Database["public"]["Enums"]["payment_status"]
           transaction_ref?: string | null
           updated_at?: string
@@ -2625,6 +2644,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      import_members_batch: {
+        Args: { p_gym_id: string; p_items: Json; p_settings: Json }
+        Returns: Json
+      }
+      import_trainers_batch: {
+        Args: { p_gym_id: string; p_items: Json; p_settings: Json }
+        Returns: Json
+      }
       is_gym_owner: { Args: { target_gym_id: string }; Returns: boolean }
       manual_check_in_out: {
         Args: {
@@ -2794,6 +2821,7 @@ export type Database = {
         | "Cancelled"
         | "Frozen"
         | "Scheduled"
+      membership_source: "Application" | "Imported" | "WalkIn" | "Renewal"
       muscle_group:
         | "Back"
         | "Biceps"
@@ -2814,6 +2842,7 @@ export type Database = {
         | "Bank Transfer"
         | "Net Banking"
         | "Razorpay"
+      payment_source: "Application" | "Imported" | "Manual"
       payment_status:
         | "Pending"
         | "PendingVerification"
@@ -3041,6 +3070,7 @@ export const Constants = {
         "Frozen",
         "Scheduled",
       ],
+      membership_source: ["Application", "Imported", "WalkIn", "Renewal"],
       muscle_group: [
         "Back",
         "Biceps",
@@ -3063,6 +3093,7 @@ export const Constants = {
         "Net Banking",
         "Razorpay",
       ],
+      payment_source: ["Application", "Imported", "Manual"],
       payment_status: [
         "Pending",
         "PendingVerification",

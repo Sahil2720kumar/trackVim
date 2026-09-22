@@ -41,6 +41,14 @@ export const ownerBreadcrumbRoutes: BreadcrumbRoute[] = [
     ],
   },
   {
+    pattern: "/owner/members/import",
+    items: [
+      { label: "Home", href: "/owner/dashboard" },
+      { label: "Members", href: "/owner/members" },
+      { label: "Import Members", href: "/owner/members/import", isActive: true },
+    ],
+  },
+  {
     pattern: "/owner/members/:id/attendance",
     items: [
       { label: "Home", href: "/owner/dashboard" },
