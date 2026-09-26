@@ -250,11 +250,16 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
         toast.error("Couldn't verify payment — try again");
         return;
       }
+      queryClient.invalidateQueries({
+        queryKey: ["applications", gymId],
+      });
       queryClient.invalidateQueries({ queryKey: ["gym-payments"] });
       queryClient.invalidateQueries({ queryKey: ["gym-payments-overview"] });
       queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
       queryClient.invalidateQueries({ queryKey: ["gym-members"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-active-members"] });
       queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-member-stats"] });
       queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
       router.refresh();
     });

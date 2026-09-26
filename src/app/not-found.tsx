@@ -64,7 +64,10 @@ export default function NotFound() {
             asChild
             className="h-10 w-full gap-2 px-5 text-xs font-semibold shadow-sm sm:w-auto"
           >
-            <Link href="/">
+            <Link
+              className="flex flex-row items-center justify-center gap-2"
+              href="/"
+            >
               <Home className="h-4 w-4" aria-hidden="true" />
               <span>Go to Home</span>
             </Link>
@@ -88,7 +91,10 @@ export default function NotFound() {
               href="/contact"
               className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <HelpCircle className="h-3 w-3 inline shrink-0" aria-hidden="true" />
+              <HelpCircle
+                className="h-3 w-3 inline shrink-0"
+                aria-hidden="true"
+              />
               <span>Contact TrackVim</span>
             </Link>
           </p>

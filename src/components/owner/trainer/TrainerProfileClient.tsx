@@ -157,6 +157,8 @@ export function TrainerProfileClient({
         queryClient.invalidateQueries({ queryKey: ["trainer"] });
         queryClient.invalidateQueries({ queryKey: ["all-trainers"] });
         queryClient.invalidateQueries({ queryKey: ["trainer-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["trainers-and-plans"] });
+        queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
         router.refresh();
       } catch (error) {
         console.error("Error deactivating trainer:", error);

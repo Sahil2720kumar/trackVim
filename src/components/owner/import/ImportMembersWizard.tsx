@@ -336,6 +336,10 @@ export function ImportMembersWizard({ gymId }: ImportMembersWizardProps) {
       queryClient.invalidateQueries({ queryKey: ["gym-member-stats"] });
       queryClient.invalidateQueries({ queryKey: ["members-and-plans"] });
       queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
+      if (settings.importCurrentPayment && res.data.paymentsImported > 0) {
+        queryClient.invalidateQueries({ queryKey: ["gym-payments"] });
+        queryClient.invalidateQueries({ queryKey: ["gym-payments-overview"] });
+      }
       queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
       if (res.data.skippedCount > 0 || res.data.errorRows.length > 0) {
         toast.warning(

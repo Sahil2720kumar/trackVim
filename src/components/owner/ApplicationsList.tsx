@@ -118,6 +118,8 @@ export function ApplicationsList() {
           queryKey: ["applications", activeGymId, approveTarget],
         });
         queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
+        queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
+        queryClient.invalidateQueries({ queryKey: ["gym-member-stats"] });
         queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
       } catch (err) {
         console.error(err);
