@@ -41,6 +41,7 @@ import { useSingleUpload } from "@/components/ImageUpload";
 import LanguagePicker from "../LanguagePicker";
 import SpecializationPicker from "../SpecializationPicker";
 import { completeTrainerProfileAction } from "@/actions/trainer.action";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useClerk } from "@clerk/nextjs";
 
@@ -107,6 +108,7 @@ export default function TrainerProfileForm({
   initialData?: Record<string, unknown>;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const { session } = useClerk();
 
@@ -175,6 +177,8 @@ export default function TrainerProfileForm({
 
         await session?.reload();
         toast.success("Profile saved successfully");
+        queryClient.invalidateQueries({ queryKey: ["trainerProfile"] });
+        queryClient.invalidateQueries({ queryKey: ["trainerDashboard"] });
         router.replace("/trainer/dashboard");
       } catch (err) {
         console.error(err);

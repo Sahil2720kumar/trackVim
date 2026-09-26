@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Users,
@@ -137,6 +138,7 @@ export function TrainerProfileClient({
   assignedMembers,
 }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const trainer = initialTrainer;
 
@@ -152,6 +154,9 @@ export function TrainerProfileClient({
           return;
         }
         toast.success("Trainer deactivated");
+        queryClient.invalidateQueries({ queryKey: ["trainer"] });
+        queryClient.invalidateQueries({ queryKey: ["all-trainers"] });
+        queryClient.invalidateQueries({ queryKey: ["trainer-stats"] });
         router.refresh();
       } catch (error) {
         console.error("Error deactivating trainer:", error);
@@ -168,6 +173,11 @@ export function TrainerProfileClient({
       throw new Error(result.error ?? "Failed to delete trainer.");
     }
     toast.success(`${trainer.full_name ?? "Trainer"} deleted successfully.`);
+    queryClient.invalidateQueries({ queryKey: ["trainer"] });
+    queryClient.invalidateQueries({ queryKey: ["all-trainers"] });
+    queryClient.invalidateQueries({ queryKey: ["trainer-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["trainers-and-plans"] });
+    queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
     router.push("/owner/trainers");
   };
 

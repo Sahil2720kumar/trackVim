@@ -45,6 +45,7 @@ import {
   toggleSessionExerciseCompletionAction,
   markAllSessionExercisesCompletedAction,
 } from "@/actions/member.action";
+import { useQueryClient } from "@tanstack/react-query";
 import { string } from "zod";
 import { getDisplayStatus, RawSessionStatus } from "./SessionsPanel";
 
@@ -127,6 +128,7 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function SessionDetailClient({ session }) {
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const [dismissedAlert, setDismissedAlert] = useState(false);
 
@@ -192,6 +194,15 @@ export function SessionDetailClient({ session }) {
           );
           return;
         }
+        queryClient.invalidateQueries({
+          queryKey: ["training-session"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["my-training-sessions"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["my-upcoming-sessions"],
+        });
       } catch (error) {
         console.error("Error updating exercise:", error);
         toast.error("Error updating exercise. Please try again.");
@@ -231,6 +242,15 @@ export function SessionDetailClient({ session }) {
           setExercises(previous);
           return;
         }
+        queryClient.invalidateQueries({
+          queryKey: ["training-session"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["my-training-sessions"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["my-upcoming-sessions"],
+        });
         toast.success("All exercises marked complete");
       } catch (error) {
         console.error("Error marking all exercises complete:", error);

@@ -35,6 +35,7 @@ import {
 import { Membership } from "@/services/owner.query";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
 
 type AttendanceScanState =
   | { type: "ready" }
@@ -102,6 +103,7 @@ export function AttendanceQrScanner({
   gymId,
   memberships,
 }: AttendanceQrScannerProps) {
+  const queryClient = useQueryClient();
   const [state, setState] = useState<AttendanceScanState>({ type: "ready" });
   const [isPending, startTransition] = useTransition();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -232,6 +234,8 @@ export function AttendanceQrScanner({
               },
             });
             toast.success(`${member.fullName} checked out`);
+            queryClient.invalidateQueries({ queryKey: ["gym-attendance"] });
+            queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
             return;
           }
 
@@ -245,6 +249,8 @@ export function AttendanceQrScanner({
             },
           });
           toast.success(`${member.fullName} checked in`);
+          queryClient.invalidateQueries({ queryKey: ["gym-attendance"] });
+          queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
         } catch {
           setState({
             type: "invalid_qr",
@@ -319,6 +325,8 @@ export function AttendanceQrScanner({
           ? `${member.full_name} checked out`
           : `${member.full_name} checked in`,
       );
+      queryClient.invalidateQueries({ queryKey: ["gym-attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
     } catch {
       toast.error("Error marking manual attendance");
       resetToScan();

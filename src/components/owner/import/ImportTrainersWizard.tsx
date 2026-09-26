@@ -3,6 +3,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   FileSpreadsheet,
   CheckCircle2,
@@ -57,6 +58,7 @@ interface ImportTrainersWizardProps {
 }
 
 export function ImportTrainersWizard({ gymId }: ImportTrainersWizardProps) {
+  const queryClient = useQueryClient();
   // Wizard active step (1 to 5)
   const [currentStep, setCurrentStep] = useState<number>(1);
 
@@ -260,6 +262,10 @@ export function ImportTrainersWizard({ gymId }: ImportTrainersWizardProps) {
         actionResult.data.skippedCount + actionResult.data.errorRows.length;
 
       if (importedCount > 0) {
+        queryClient.invalidateQueries({ queryKey: ["all-trainers"] });
+        queryClient.invalidateQueries({ queryKey: ["trainer-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["trainers-and-plans"] });
+        queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
         if (skippedOrErrorCount > 0) {
           toast.warning(
             `Imported ${importedCount} trainers. ${skippedOrErrorCount} rows were skipped or had issues.`,

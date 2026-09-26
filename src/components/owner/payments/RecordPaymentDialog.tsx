@@ -21,6 +21,7 @@ import {
 import { recordWalkinPaymentAction } from "@/actions/owner.action";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { PaymentMethodList } from "@/constants/profile-options";
 import type { PaymentMethod } from "@/actions/staff.action";
@@ -42,6 +43,7 @@ export function RecordPaymentDialog({
   onOpenChange: (open: boolean) => void;
   onRecorded: (paymentId: string, method: Method) => void;
 }) {
+  const queryClient = useQueryClient();
   const [method, setMethod] = useState<Method | "">("");
   const [transactionRef, setTransactionRef] = useState("");
   const [pending, startTransition] = useTransition();
@@ -71,6 +73,10 @@ export function RecordPaymentDialog({
         toast.error(result.error ?? "Couldn't record payment");
         return;
       }
+      queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-payments-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["payment", gymId, paymentId] });
       onRecorded(paymentId, method);
       onOpenChange(false);
       reset();

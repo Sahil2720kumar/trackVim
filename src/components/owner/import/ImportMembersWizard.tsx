@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { StepUploadFile } from "./StepUploadFile";
 import { StepColumnMapping } from "./StepColumnMapping";
@@ -52,6 +53,7 @@ interface ImportMembersWizardProps {
 
 export function ImportMembersWizard({ gymId }: ImportMembersWizardProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -97,7 +99,10 @@ export function ImportMembersWizard({ gymId }: ImportMembersWizardProps) {
 
   // Queries using our React Query hooks
   const { data: availableGymPlans = [] } = useImportGymPlans(gymId);
-  const { data: existingPhoneData } = useImportExistingPhones(gymId, candidatePhones);
+  const { data: existingPhoneData } = useImportExistingPhones(
+    gymId,
+    candidatePhones,
+  );
 
   const existingGymPhones = useMemo(
     () => existingPhoneData?.gymPhones || new Set<string>(),
@@ -325,6 +330,13 @@ export function ImportMembersWizard({ gymId }: ImportMembersWizardProps) {
 
     setImportResult(res.data);
     if (res.data.membershipsCreated > 0) {
+      queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-members"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-active-members"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-member-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["members-and-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
       if (res.data.skippedCount > 0 || res.data.errorRows.length > 0) {
         toast.warning(
           `Imported ${res.data.membershipsCreated} members. ${res.data.skippedCount + res.data.errorRows.length} rows were skipped or had issues.`,

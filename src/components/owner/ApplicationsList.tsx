@@ -117,6 +117,8 @@ export function ApplicationsList() {
         queryClient.invalidateQueries({
           queryKey: ["applications", activeGymId, approveTarget],
         });
+        queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
+        queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");
@@ -147,6 +149,7 @@ export function ApplicationsList() {
         queryClient.invalidateQueries({
           queryKey: ["applications", activeGymId, rejectTarget],
         });
+        queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");

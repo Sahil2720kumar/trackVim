@@ -36,9 +36,11 @@ import {
 } from "@/constants/profile-options";
 import { inviteTrainerAction } from "@/actions/owner.action";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function TrainerInviteForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const photo = useSingleUpload(undefined, undefined, 2 * 1024 * 1024);
 
@@ -96,6 +98,10 @@ export default function TrainerInviteForm() {
         }
 
         toast.success("Trainer invited successfully.");
+        queryClient.invalidateQueries({ queryKey: ["all-trainers"] });
+        queryClient.invalidateQueries({ queryKey: ["trainer-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["trainers-and-plans"] });
+        queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
         router.push("/owner/trainers");
       } catch (err) {
         console.error(err);

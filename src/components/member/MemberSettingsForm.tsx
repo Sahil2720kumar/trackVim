@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -502,6 +503,7 @@ export default function MemberSettingsForm({
   membership: MembershipSnapshot;
   clerkEmail: string;
 }) {
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -575,6 +577,15 @@ export default function MemberSettingsForm({
           toast.error(result.error);
           return;
         }
+        queryClient.invalidateQueries({
+          queryKey: ["my-profile"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["my-memberships"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["my-membership-status"],
+        });
         toast.success("Profile updated successfully");
         reset(data);
         setPhotoFile(null);

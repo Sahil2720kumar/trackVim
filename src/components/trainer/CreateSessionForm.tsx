@@ -672,7 +672,13 @@ export default function CreateSessionForm({
           });
         }
         queryClient.invalidateQueries({
-          queryKey: ["allSessions", activeGymId, activeTrainerId],
+          queryKey: ["allSessions"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["upcomingSessions"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["trainerDashboard"],
         });
 
         router.push(

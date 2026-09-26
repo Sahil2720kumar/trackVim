@@ -1,4 +1,8 @@
+"use client";
+
+import { useEffect } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   CalendarDays,
   CircleAlert,
@@ -268,7 +272,22 @@ function AttendanceDetails({
 }
 
 export function ScanResultView({ result }: { result: AttendanceResult }) {
+  const queryClient = useQueryClient();
   const config = resultConfigFor(result);
+
+  useEffect(() => {
+    if (result.success) {
+      queryClient.invalidateQueries({
+        queryKey: ["my-attendance"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["today-attendance-status"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["member-attendance-overview"],
+      });
+    }
+  }, [result, queryClient]);
 
   return (
     <main className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 sm:py-8">

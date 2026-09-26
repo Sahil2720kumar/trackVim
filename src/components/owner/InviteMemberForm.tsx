@@ -234,9 +234,29 @@ export default function InviteMemberForm({
         queryClient.invalidateQueries({
           queryKey: ["members-with-attendance"],
         });
-
+        queryClient.invalidateQueries({
+          queryKey: ["gym-members"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["gym-active-members"],
+        });
         queryClient.invalidateQueries({
           queryKey: ["gym-member-stats"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["members-and-plans"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["pending-payments"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["gym-payments"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["gym-payments-overview"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["owner-dashboard"],
         });
 
         router.push("/owner/members");

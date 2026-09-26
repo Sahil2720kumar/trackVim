@@ -47,6 +47,7 @@ import {
 } from "@/constants/profile-options";
 import { CreateTrainerInput, createTrainerSchema } from "@/db/validators";
 import { updateMyTrainerProfile } from "@/actions/trainer.action";
+import { useQueryClient } from "@tanstack/react-query";
 import ProfileImageUpload from "../ProfileImageUpload";
 import LanguagePicker from "../LanguagePicker";
 import SpecializationPicker from "../SpecializationPicker";
@@ -222,6 +223,7 @@ export default function TrainerSettingsForm({
   trainerId?: string;
   initialData?: Record<string, unknown>;
 }) {
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = React.useTransition();
   const [existingPhotoUrl, setExistingPhotoUrl] = React.useState<string | null>(
     (initialData?.photo_url as string) || null,
@@ -315,6 +317,8 @@ export default function TrainerSettingsForm({
           return;
         }
         toast.success("Profile updated successfully");
+        queryClient.invalidateQueries({ queryKey: ["trainerProfile"] });
+        queryClient.invalidateQueries({ queryKey: ["trainerDashboard"] });
         reset(data);
       } catch (err) {
         console.error(err);

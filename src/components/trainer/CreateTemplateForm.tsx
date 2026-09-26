@@ -764,10 +764,10 @@ export default function CreateTemplateForm({
         );
         router.push("/trainer/templates");
         queryClient.invalidateQueries({
-          queryKey: ["workoutTemplates", activeGymId],
+          queryKey: ["workoutTemplates"],
         });
         queryClient.invalidateQueries({
-          queryKey: ["workoutTemplateById", meta?.id ?? ""],
+          queryKey: ["workoutTemplateById"],
         });
       } catch (error) {
         console.error("Error saving template:", error);

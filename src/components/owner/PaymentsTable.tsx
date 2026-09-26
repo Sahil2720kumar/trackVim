@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ColumnDef,
   flexRender,
@@ -108,6 +109,7 @@ type PaymentsTableProps = {
 
 export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [payments, setPayments] = useState<PaymentRow[]>(initialPayments);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
@@ -248,6 +250,12 @@ export function PaymentsTable({ gymId, initialPayments }: PaymentsTableProps) {
         toast.error("Couldn't verify payment — try again");
         return;
       }
+      queryClient.invalidateQueries({ queryKey: ["gym-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-payments-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-members"] });
+      queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
       router.refresh();
     });
   };

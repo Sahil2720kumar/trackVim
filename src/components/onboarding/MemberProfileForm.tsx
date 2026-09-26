@@ -37,6 +37,7 @@ import { createMemberProfileAction } from "@/actions/member.action";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Row shape from Supabase is snake_case; the form/schema is camelCase.
 // Same merge boundary as TrainerProfileForm: this only maps fields the
@@ -83,6 +84,7 @@ export default function MemberProfileForm({
   initialData?: Record<string, unknown>;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const photo = useSingleUpload(undefined, undefined, 2 * 1024 * 1024);
   const { session } = useClerk();
@@ -115,6 +117,15 @@ export default function MemberProfileForm({
           toast.error(result.error);
           return;
         }
+        queryClient.invalidateQueries({
+          queryKey: ["my-profile"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["my-memberships"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["my-membership-status"],
+        });
         toast.success("Profile saved successfully");
         await session?.reload();
         router.replace("/member/home");

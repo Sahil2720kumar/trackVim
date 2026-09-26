@@ -760,6 +760,12 @@ export default function SessionDetailsPage({ params }: PageProps) {
     queryClient.invalidateQueries({
       queryKey: ["sessionWithExercises", sessionId],
     });
+    queryClient.invalidateQueries({
+      queryKey: ["allSessions"],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["upcomingSessions"],
+    });
 
     if (!result.success) {
       // Roll back on failure.

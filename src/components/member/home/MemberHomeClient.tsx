@@ -1601,14 +1601,21 @@ export default function MemberHomeClient({
 
         setScanStatus("success");
 
+        queryClient.invalidateQueries({
+          queryKey: ["my-attendance"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["today-attendance-status"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["member-attendance-overview"],
+        });
+
         // Let the success state register on screen before closing.
         window.setTimeout(() => {
           setScanOpen(false);
           setScanStatus("idle");
           refetch();
-          // queryClient.invalidateQueries({
-          //   queryKey: ["member-home-state"],
-          // });
         }, 1400);
       } catch (err) {
         setScanStatus("error");

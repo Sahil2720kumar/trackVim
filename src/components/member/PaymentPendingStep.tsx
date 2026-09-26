@@ -8,6 +8,7 @@ import { z } from "zod";
 import { BadgeIndianRupee, QrCode, Maximize2, Download } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -68,6 +69,7 @@ export default function PaymentPendingStep({
   gymMembershipId,
 }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const receipt = useSingleUpload();
 
@@ -136,6 +138,25 @@ export default function PaymentPendingStep({
           toast.error(result.error);
           return;
         }
+
+        queryClient.invalidateQueries({
+          queryKey: ["my-payments"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["payment-for-membership"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["my-membership-status"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["my-membership-details"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["my-applications"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["my-memberships"],
+        });
 
         toast.success("Payment submitted — awaiting verification.");
         router.refresh(); // re-run ApplyPage so status flips to PendingVerification view

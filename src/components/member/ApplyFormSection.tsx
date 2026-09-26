@@ -27,6 +27,7 @@ import {
 } from "@/components/GymFormFields";
 import { submitMembershipApplicationAction } from "@/actions/member.action"; // adjust to wherever you put it
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface Member {
   name: string | null;
@@ -115,6 +116,7 @@ export default function ApplyFormSection({
   planId,
   gymName,
 }: ApplyFormSectionProps) {
+  const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -161,6 +163,16 @@ export default function ApplyFormSection({
         setSubmitError(result.error);
         return;
       }
+
+      queryClient.invalidateQueries({
+        queryKey: ["my-applications"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["my-application"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["my-membership-status"],
+      });
 
       setIsSuccess(true);
       toast.success("Application submitted successfully");

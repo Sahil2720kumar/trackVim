@@ -38,11 +38,23 @@ export function PaymentActionsCard({
       queryClient.invalidateQueries({
         queryKey: ["payment", gymId, paymentId],
       });
+      queryClient.invalidateQueries({ queryKey: ["gym-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-payments-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-members"] });
+      queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
     });
   };
 
   const handleRecorded = () => {
     setRecordDialogOpen(false);
+    queryClient.invalidateQueries({
+      queryKey: ["payment", gymId, paymentId],
+    });
+    queryClient.invalidateQueries({ queryKey: ["gym-payments"] });
+    queryClient.invalidateQueries({ queryKey: ["gym-payments-overview"] });
+    queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
     router.refresh();
   };
 

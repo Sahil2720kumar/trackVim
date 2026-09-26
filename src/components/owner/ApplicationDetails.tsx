@@ -1422,6 +1422,8 @@ export function ApplicationDetails({
         queryClient.invalidateQueries({
           queryKey: ["applications", application.gym_id],
         });
+        queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
+        queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
         toast.success("Application approved.");
       } catch (err) {
         console.error(err);
@@ -1451,6 +1453,7 @@ export function ApplicationDetails({
         queryClient.invalidateQueries({
           queryKey: ["applications", application.gym_id],
         });
+        queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");
@@ -1482,6 +1485,14 @@ export function ApplicationDetails({
         queryClient.invalidateQueries({
           queryKey: ["applications", application.gym_id],
         });
+        queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
+        queryClient.invalidateQueries({ queryKey: ["gym-payments"] });
+        queryClient.invalidateQueries({ queryKey: ["gym-payments-overview"] });
+        queryClient.invalidateQueries({ queryKey: ["gym-members"] });
+        queryClient.invalidateQueries({ queryKey: ["gym-active-members"] });
+        queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
+        queryClient.invalidateQueries({ queryKey: ["gym-member-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");
@@ -1510,6 +1521,7 @@ export function ApplicationDetails({
         queryClient.invalidateQueries({
           queryKey: ["applications", application.gym_id],
         });
+        queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
       } catch (err) {
         console.error(err);
         toast.error("Something went wrong. Please try again.");

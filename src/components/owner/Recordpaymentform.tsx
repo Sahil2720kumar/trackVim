@@ -3,6 +3,7 @@
 
 import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -96,6 +97,7 @@ export default function RenewMembershipForm({
   const [newMembershipId, setNewMembershipId] = useState<string | null>(null);
 
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
 
   const {
@@ -209,6 +211,14 @@ export default function RenewMembershipForm({
 
       toast.success("Membership renewed successfully.");
       setNewMembershipId(result.data.membershipId);
+      queryClient.invalidateQueries({ queryKey: ["gym-members"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-active-members"] });
+      queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-member-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-payments-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["pending-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
       router.refresh();
       setShowDialog(true);
     });

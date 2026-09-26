@@ -28,6 +28,7 @@ import { AppStatus } from "@/types";
 import { SingleImageUpload, useSingleUpload } from "@/components/ImageUpload";
 import { submitPaymentAction } from "@/actions/member.action";
 import { FormInput, FormTextarea } from "@/components/GymFormFields";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface ReceiptInfo {
   url: string;
@@ -158,6 +159,7 @@ export function PaymentSection({
   joiningFee = 0,
   receipt,
 }: PaymentSectionProps) {
+  const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -240,6 +242,24 @@ export function PaymentSection({
         setError(result.error);
         return;
       }
+      queryClient.invalidateQueries({
+        queryKey: ["my-payments"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["payment-for-membership"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["my-membership-status"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["my-membership-details"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["my-applications"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["my-memberships"],
+      });
       setSuccess(true);
     });
   };

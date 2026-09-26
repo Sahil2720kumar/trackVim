@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -162,6 +163,7 @@ export default function MembershipPlanForm({
   mode = "create",
 }: MembershipPlanFormProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const [customFeatureInput, setCustomFeatureInput] = useState("");
 
@@ -309,6 +311,11 @@ export default function MembershipPlanForm({
           }
 
           toast.success("Membership plan updated successfully.");
+          queryClient.invalidateQueries({ queryKey: ["membership-plans"] });
+          queryClient.invalidateQueries({ queryKey: ["plan"] });
+          queryClient.invalidateQueries({ queryKey: ["top-performing-plans"] });
+          queryClient.invalidateQueries({ queryKey: ["trainers-and-plans"] });
+          queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
           router.push("/owner/plans");
         } else {
           const result = await createMembershipPlanAction(data);
@@ -319,6 +326,10 @@ export default function MembershipPlanForm({
           }
 
           toast.success("Membership plan created successfully.");
+          queryClient.invalidateQueries({ queryKey: ["membership-plans"] });
+          queryClient.invalidateQueries({ queryKey: ["top-performing-plans"] });
+          queryClient.invalidateQueries({ queryKey: ["trainers-and-plans"] });
+          queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
           router.push("/owner/plans");
         }
       } catch (err) {

@@ -55,6 +55,7 @@ import { useAllTrainers, useTrainerStats } from "@/hooks/queries/owner.query";
 import { deleteTrainerAction } from "@/actions/owner.action";
 import { ConfirmDialog, useConfirmDialog } from "../Confirmdialog";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { getInitials } from "@/lib/utils";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -127,6 +128,7 @@ function TrainersError({
 
 export function TrainersTable() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const {
     data: trainersResponse,
@@ -269,6 +271,10 @@ export function TrainersTable() {
     );
     setRowSelection({});
     refetchAll();
+    queryClient.invalidateQueries({ queryKey: ["all-trainers"] });
+    queryClient.invalidateQueries({ queryKey: ["trainer-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["trainers-and-plans"] });
+    queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
   };
 
   const columns = useMemo<ColumnDef<TrainerRow>[]>(

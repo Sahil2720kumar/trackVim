@@ -507,6 +507,9 @@ export default function TemplateDetailPage({ params }: PageProps) {
     queryClient.invalidateQueries({
       queryKey: ["workoutTemplateById", templateId],
     });
+    queryClient.invalidateQueries({
+      queryKey: ["workoutTemplates"],
+    });
   };
 
   // No server actions exist yet for these — placeholder toast so it's

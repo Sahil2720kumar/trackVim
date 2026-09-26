@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -222,6 +223,8 @@ export default function SettingsForm({
     gallery.clear();
   };
 
+  const queryClient = useQueryClient();
+
   const onSubmit = async (data: CreateGymInput) => {
     if (isSubmitting) return;
     try {
@@ -236,6 +239,8 @@ export default function SettingsForm({
         return;
       }
       toast.success("Gym settings updated");
+      queryClient.invalidateQueries({ queryKey: ["gym-with-details"] });
+      queryClient.invalidateQueries({ queryKey: ["gym-owner-info"] });
       reset(data);
       logo.clear();
       paymentQr.clear();

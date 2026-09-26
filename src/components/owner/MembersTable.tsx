@@ -323,7 +323,11 @@ export function MembersTable() {
     setRowSelection({});
     refetchAll();
     queryClient.invalidateQueries({ queryKey: ["gym-members"] });
+    queryClient.invalidateQueries({ queryKey: ["gym-active-members"] });
     queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
+    queryClient.invalidateQueries({ queryKey: ["gym-member-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["members-and-plans"] });
+    queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
   };
 
   const handleCancelRenewal = async (member: MemberRow) => {
@@ -340,7 +344,11 @@ export function MembersTable() {
     setRowSelection({});
     refetchAll();
     queryClient.invalidateQueries({ queryKey: ["gym-members"] });
+    queryClient.invalidateQueries({ queryKey: ["gym-active-members"] });
     queryClient.invalidateQueries({ queryKey: ["members-with-attendance"] });
+    queryClient.invalidateQueries({ queryKey: ["gym-member-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["members-and-plans"] });
+    queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
   };
 
   const handleDownloadCard = useCallback(

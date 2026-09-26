@@ -103,7 +103,13 @@ export function TrainerManagerDialog({
           queryKey: ["member-with-attendance"],
         });
         queryClient.invalidateQueries({
+          queryKey: ["members-with-attendance"],
+        });
+        queryClient.invalidateQueries({
           queryKey: ["all-trainers"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["trainers-and-plans"],
         });
       } catch (error) {
         console.error("Error assigning trainer:", error);
@@ -132,7 +138,13 @@ export function TrainerManagerDialog({
           queryKey: ["member-with-attendance"],
         });
         queryClient.invalidateQueries({
+          queryKey: ["members-with-attendance"],
+        });
+        queryClient.invalidateQueries({
           queryKey: ["all-trainers"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["trainers-and-plans"],
         });
       } catch (error) {
         console.error("Error removing trainer:", error);
@@ -162,7 +174,13 @@ export function TrainerManagerDialog({
           queryKey: ["member-with-attendance"],
         });
         queryClient.invalidateQueries({
+          queryKey: ["members-with-attendance"],
+        });
+        queryClient.invalidateQueries({
           queryKey: ["all-trainers"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["trainers-and-plans"],
         });
       } catch (error) {
         console.error("Error setting primary trainer:", error);
