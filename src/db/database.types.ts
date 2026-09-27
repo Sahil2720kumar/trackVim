@@ -2245,12 +2245,31 @@ export type Database = {
         Args: { p_gym_id: string; p_new_plan_id: string }
         Returns: undefined
       }
+      check_import_phone_conflicts: {
+        Args: { p_gym_id: string; p_phones: string[] }
+        Returns: {
+          exists_globally: boolean
+          exists_in_gym: boolean
+          phone: string
+        }[]
+      }
       check_in_or_out: { Args: { p_token: string }; Returns: Json }
+      check_in_or_out_public: {
+        Args: { p_email?: string; p_phone?: string; p_token: string }
+        Returns: Json
+      }
       check_member_email_conflict: {
         Args: { p_email: string }
         Returns: {
           conflict_type: string
           member_id: string
+        }[]
+      }
+      check_member_email_conflicts_batch: {
+        Args: { p_emails: string[] }
+        Returns: {
+          conflict_type: string
+          email: string
         }[]
       }
       check_trainer_email_conflict: {
@@ -2259,6 +2278,13 @@ export type Database = {
           conflict_type: string
           trainer_id: string
           user_id: string
+        }[]
+      }
+      check_trainer_email_conflicts_batch: {
+        Args: { p_emails: string[]; p_gym_id: string }
+        Returns: {
+          conflict_type: string
+          email: string
         }[]
       }
       create_gym: {
@@ -2437,7 +2463,14 @@ export type Database = {
         Args: { p_period_end: string; p_period_start: string }
         Returns: number
       }
+      generate_trainer_code_value: { Args: never; Returns: string }
       get_gym_billing_overview: { Args: never; Returns: Json }
+      get_gym_details_by_qr_token: {
+        Args: { p_token: string }
+        Returns: {
+          gym_name: string
+        }[]
+      }
       get_gym_monthly_revenue: {
         Args: { p_as_of?: string; p_gym_id: string; p_months?: number }
         Returns: {
@@ -2674,6 +2707,10 @@ export type Database = {
       recalculate_gym_invoice: {
         Args: { p_gym_subscription_id: string; p_new_plan_id: string }
         Returns: undefined
+      }
+      record_attendance_core: {
+        Args: { p_member_id: string; p_token: string }
+        Returns: Json
       }
       record_subscription_payment_captured: {
         Args: {
