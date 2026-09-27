@@ -59,7 +59,10 @@ export function QrCodesClient({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const scanUrl = `${process.env.NEXT_PUBLIC_APP_URL}/member/scan?token=${encodeURIComponent(qrCode.token)}`;
+  // const scanUrl = `${process.env.NEXT_PUBLIC_APP_URL}/member/scan?token=${encodeURIComponent(qrCode.token)}`;
+  const scanUrl = `${process.env.NEXT_PUBLIC_APP_URL}/attendance?token=${encodeURIComponent(
+    qrCode.token,
+  )}`;
   useEffect(() => {
     QRCode.toDataURL(scanUrl, {
       width: 560,

@@ -16,9 +16,7 @@ export default async function ScanPage({
   }
 
   if (!userId) {
-    redirect(
-      `/sign-in?redirect_url=${encodeURIComponent(`/member/scan?token=${token}`)}`,
-    );
+    redirect(`/attendance?token=${encodeURIComponent(token)}`);
   }
   const result = await processAttendance(token);
 
