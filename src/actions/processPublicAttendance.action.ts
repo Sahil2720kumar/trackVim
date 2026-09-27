@@ -133,14 +133,6 @@ export async function processPublicAttendance(
     p_phone: cleanPhone,
   });
 
-  console.log("[processPublicAttendance - public]", {
-    token,
-    cleanEmail,
-    cleanPhone,
-    data,
-    error,
-  });
-
   if (error) {
     console.error("[processPublicAttendance - public]", error);
     return {
