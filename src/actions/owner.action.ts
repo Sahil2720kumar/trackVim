@@ -27,6 +27,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { PaymentMethod } from "./staff.action";
 import { logAndSanitizeError } from "@/lib/error-handler";
+import { normalizeEmail, normalizePhone } from "@/lib/contact-normalization";
 
 // ============================================================================
 // Types
@@ -1554,7 +1555,10 @@ export async function addMemberAction(
   // 3. NORMALIZE EMAIL
   // ============================================================
 
-  const normalizedEmail = memberData.invitedEmail?.trim().toLowerCase() || null;
+  const normalizedEmail = normalizeEmail(
+    memberData.contactEmail ?? memberData.invitedEmail,
+  );
+  const normalizedPhone = normalizePhone(memberData.contactPhone);
 
   // Existing global member ID, if found.
   let existingMemberId: string | null = null;
@@ -1664,7 +1668,7 @@ export async function addMemberAction(
       if (existingGymMembership) {
         return {
           success: false,
-          error: "Member already in the gym.",
+          error: "This member is already registered with this gym.",
         };
       }
     }
@@ -1697,8 +1701,8 @@ export async function addMemberAction(
         ...(normalizedEmail && {
           p_email: normalizedEmail,
         }),
-        ...(memberData.contactPhone && {
-          p_phone: memberData.contactPhone,
+        ...(normalizedPhone && {
+          p_phone: normalizedPhone,
         }),
         p_member_code: generateMemberCode(),
       },
@@ -1707,9 +1711,15 @@ export async function addMemberAction(
     if (memberError || !createdMember) {
       console.error("Failed to create member:", memberError);
 
+      const safeError = logAndSanitizeError(
+        memberError,
+        "addMemberAction.createMember",
+        "Failed to create member. Please try again.",
+      );
+
       return {
         success: false,
-        error: memberError?.message ?? "Failed to create member.",
+        error: safeError,
       };
     }
 
