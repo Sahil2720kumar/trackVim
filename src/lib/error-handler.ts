@@ -227,7 +227,7 @@ export function getUserFriendlyErrorDetails(
     ) {
       return {
         message:
-          "A trainer with this email address already exists use different email address.",
+          "A trainer with this email address already exists. Please use a different email address.",
         code: "DUPLICATE_ENTRY",
         rawError: error,
       };
