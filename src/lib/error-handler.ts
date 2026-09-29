@@ -1,12 +1,10 @@
 /**
  * Centralized Error Handling & Mapping Utility
  *
- * Ensures internal database details (PostgreSQL errors, SQLSTATEs, table/constraint names,
- * PostgREST codes, permission failures like "permission denied for function") are NEVER
- * exposed directly to users in the UI.
+ * Keeps internal database details (PostgreSQL errors, SQLSTATEs,
+ * table/constraint names, PostgREST codes, etc.) out of the UI.
  *
- * Preserves clean business/application errors while translating technical DB errors into safe,
- * friendly user-facing messages.
+ * Maps known database/business errors to safe, user-friendly messages.
  */
 
 export type ErrorCode =
@@ -25,37 +23,84 @@ export interface AppErrorDetails {
   rawError?: unknown;
 }
 
-const DEFAULT_FALLBACK = "Something went wrong while processing your request. Please try again.";
+const DEFAULT_FALLBACK =
+  "Something went wrong while processing your request. Please try again.";
 
 /**
- * Returns structured error details including a safe user-facing message and code.
+ * Extract common PostgreSQL / Supabase error fields safely.
+ */
+function extractErrorFields(error: unknown) {
+  if (!error) {
+    return {
+      message: "",
+      code: "",
+      details: "",
+      hint: "",
+      constraint: "",
+    };
+  }
+
+  if (typeof error === "string") {
+    return {
+      message: error,
+      code: "",
+      details: "",
+      hint: "",
+      constraint: "",
+    };
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const errObj = error as Record<string, unknown>;
+
+    return {
+      message: String(
+        errObj.message || errObj.error_description || errObj.error || "",
+      ),
+      code: String(errObj.code || errObj.status || ""),
+      details: String(errObj.details || ""),
+      hint: String(errObj.hint || ""),
+      constraint: String(errObj.constraint_name || errObj.constraint || ""),
+    };
+  }
+
+  return {
+    message: "",
+    code: "",
+    details: "",
+    hint: "",
+    constraint: "",
+  };
+}
+
+/**
+ * Returns structured error details including a safe user-facing message.
  */
 export function getUserFriendlyErrorDetails(
   error: unknown,
-  fallbackMessage: string = DEFAULT_FALLBACK
+  fallbackMessage: string = DEFAULT_FALLBACK,
 ): AppErrorDetails {
   if (!error) {
-    return { message: fallbackMessage, code: "INTERNAL_ERROR" };
+    return {
+      message: fallbackMessage,
+      code: "INTERNAL_ERROR",
+    };
   }
 
-  let rawMessage = "";
-  let rawCode = "";
-  let rawDetails = "";
-  let rawHint = "";
+  const {
+    message: rawMessage,
+    code: rawCode,
+    details: rawDetails,
+    hint: rawHint,
+    constraint,
+  } = extractErrorFields(error);
 
-  if (typeof error === "string") {
-    rawMessage = error;
-  } else if (typeof error === "object" && error !== null) {
-    const errObj = error as Record<string, unknown>;
-    rawMessage = String(errObj.message || errObj.error_description || errObj.error || "");
-    rawCode = String(errObj.code || errObj.status || "");
-    rawDetails = String(errObj.details || "");
-    rawHint = String(errObj.hint || "");
-  }
+  const combinedText = `${rawCode} ${rawMessage} ${rawDetails} ${rawHint} ${constraint}`;
 
-  const combinedText = `${rawCode} ${rawMessage} ${rawDetails} ${rawHint}`;
+  // ============================================================
+  // 1. AUTHORIZATION / PERMISSION
+  // ============================================================
 
-  // 1. Permission / Authorization Denied (SQLSTATE 42501, 'permission denied for function', etc.)
   if (
     rawCode === "42501" ||
     /permission denied/i.test(combinedText) ||
@@ -69,12 +114,153 @@ export function getUserFriendlyErrorDetails(
     };
   }
 
-  // 2. Unique Constraint Violation (SQLSTATE 23505)
+  // ============================================================
+  // 2. UNIQUE CONSTRAINT VIOLATION
+  //
+  // Handle known TrackVim constraints specifically.
+  // ============================================================
+
   if (
     rawCode === "23505" ||
     /unique constraint/i.test(combinedText) ||
     /duplicate key/i.test(combinedText)
   ) {
+    // ----------------------------------------------------------
+    // MEMBERS
+    // ----------------------------------------------------------
+
+    if (
+      constraint === "members_contact_phone_unique_idx" ||
+      /members_contact_phone_unique_idx/i.test(combinedText)
+    ) {
+      return {
+        message:
+          "A member with this phone number already exists use different phone number.",
+        code: "DUPLICATE_ENTRY",
+        rawError: error,
+      };
+    }
+
+    if (
+      constraint === "members_contact_email_unique_idx" ||
+      /members_contact_email_unique_idx/i.test(combinedText)
+    ) {
+      return {
+        message:
+          "A member with this email address already exists use different email address.",
+        code: "DUPLICATE_ENTRY",
+        rawError: error,
+      };
+    }
+
+    if (
+      constraint === "members_member_code_unique" ||
+      /members_member_code_unique/i.test(combinedText)
+    ) {
+      return {
+        message:
+          "The generated member code already exists. Please try again with different code.",
+        code: "DUPLICATE_ENTRY",
+        rawError: error,
+      };
+    }
+
+    // ----------------------------------------------------------
+    // USERS
+    // ----------------------------------------------------------
+
+    if (
+      constraint === "users_phone_unique_idx" ||
+      /users_phone_unique_idx/i.test(combinedText)
+    ) {
+      return {
+        message:
+          "A user with this phone number already exists use different phone number.",
+        code: "DUPLICATE_ENTRY",
+        rawError: error,
+      };
+    }
+
+    if (
+      constraint === "users_email_unique_idx" ||
+      /users_email_unique_idx/i.test(combinedText)
+    ) {
+      return {
+        message:
+          "A user with this email address already exists use different email address.",
+        code: "DUPLICATE_ENTRY",
+        rawError: error,
+      };
+    }
+
+    if (
+      constraint === "users_username_unique_idx" ||
+      /users_username_unique_idx/i.test(combinedText)
+    ) {
+      return {
+        message:
+          "This username is already in use.Please try with different username.",
+        code: "DUPLICATE_ENTRY",
+        rawError: error,
+      };
+    }
+
+    if (
+      constraint === "users_clerk_id_unique_idx" ||
+      /users_clerk_id_unique_idx/i.test(combinedText)
+    ) {
+      return {
+        message:
+          "This account is already linked to another user.Please try with different account.",
+        code: "DUPLICATE_ENTRY",
+        rawError: error,
+      };
+    }
+
+    // ----------------------------------------------------------
+    // TRAINERS
+    // ----------------------------------------------------------
+
+    if (
+      constraint === "trainers_contact_email_unique_idx" ||
+      /trainers_contact_email_unique_idx/i.test(combinedText)
+    ) {
+      return {
+        message:
+          "A trainer with this email address already exists. Please use a different email address.",
+        code: "DUPLICATE_ENTRY",
+        rawError: error,
+      };
+    }
+
+    if (
+      constraint === "trainers_employee_id_gym_idx" ||
+      /trainers_employee_id_gym_idx/i.test(combinedText)
+    ) {
+      return {
+        message:
+          "A trainer with this employee ID already exists in this gym.Please try with different employee ID.",
+        code: "DUPLICATE_ENTRY",
+        rawError: error,
+      };
+    }
+
+    if (
+      constraint === "trainers_profile_gym_idx" ||
+      /trainers_profile_gym_idx/i.test(combinedText)
+    ) {
+      return {
+        message:
+          "This trainer is already registered with this gym.Please try with different trainer.",
+        code: "DUPLICATE_ENTRY",
+        rawError: error,
+      };
+    }
+
+    // ----------------------------------------------------------
+    // FALLBACK FOR OTHER UNIQUE CONSTRAINTS
+    // ----------------------------------------------------------
+
     return {
       message: "This record already exists.",
       code: "DUPLICATE_ENTRY",
@@ -82,20 +268,27 @@ export function getUserFriendlyErrorDetails(
     };
   }
 
-  // 3. Foreign Key Violation (SQLSTATE 23503)
+  // ============================================================
+  // 3. FOREIGN KEY VIOLATION
+  // ============================================================
+
   if (
     rawCode === "23503" ||
     /foreign key constraint/i.test(combinedText) ||
     /referenced in table/i.test(combinedText)
   ) {
     return {
-      message: "This record cannot be removed or updated because it is being used elsewhere.",
+      message:
+        "This record cannot be removed or updated because it is being used elsewhere.",
       code: "FOREIGN_KEY_VIOLATION",
       rawError: error,
     };
   }
 
-  // 4. Not Null Violation (SQLSTATE 23502)
+  // ============================================================
+  // 4. NOT NULL VIOLATION
+  // ============================================================
+
   if (
     rawCode === "23502" ||
     /not-null constraint/i.test(combinedText) ||
@@ -108,11 +301,11 @@ export function getUserFriendlyErrorDetails(
     };
   }
 
-  // 5. Check Constraint Violation (SQLSTATE 23514)
-  if (
-    rawCode === "23514" ||
-    /check constraint/i.test(combinedText)
-  ) {
+  // ============================================================
+  // 5. CHECK CONSTRAINT VIOLATION
+  // ============================================================
+
+  if (rawCode === "23514" || /check constraint/i.test(combinedText)) {
     return {
       message: "The provided information is invalid.",
       code: "INVALID_INPUT",
@@ -120,7 +313,10 @@ export function getUserFriendlyErrorDetails(
     };
   }
 
-  // 6. Function or Relation Does Not Exist (SQLSTATE 42883 / 42P01)
+  // ============================================================
+  // 6. FUNCTION / RELATION DOES NOT EXIST
+  // ============================================================
+
   if (
     rawCode === "42883" ||
     rawCode === "42P01" ||
@@ -128,13 +324,17 @@ export function getUserFriendlyErrorDetails(
     /relation .* does not exist/i.test(combinedText)
   ) {
     return {
-      message: "This feature or service is currently unavailable. Please try again later.",
+      message:
+        "This feature or service is currently unavailable. Please try again later.",
       code: "SERVICE_UNAVAILABLE",
       rawError: error,
     };
   }
 
-  // 7. PostgREST & Database Internals / Raw Technical Dumps
+  // ============================================================
+  // 7. OTHER DATABASE / POSTGREST INTERNAL ERRORS
+  // ============================================================
+
   if (
     /PGRST/i.test(combinedText) ||
     /Postgres/i.test(combinedText) ||
@@ -154,8 +354,12 @@ export function getUserFriendlyErrorDetails(
     };
   }
 
-  // 8. Legitimate Business / Application Errors (e.g., "Only the gym owner can change the subscription plan.")
+  // ============================================================
+  // 8. LEGITIMATE BUSINESS / APPLICATION ERRORS
+  // ============================================================
+
   const trimmed = rawMessage.trim();
+
   if (trimmed) {
     return {
       message: trimmed,
@@ -176,22 +380,23 @@ export function getUserFriendlyErrorDetails(
  */
 export function getUserFriendlyError(
   error: unknown,
-  fallbackMessage: string = DEFAULT_FALLBACK
+  fallbackMessage: string = DEFAULT_FALLBACK,
 ): string {
   return getUserFriendlyErrorDetails(error, fallbackMessage).message;
 }
 
 /**
- * Logs the full technical error to server/console for developer debugging
- * and returns the sanitized user-friendly error message.
+ * Logs the full technical error on the server and returns
+ * a sanitized user-friendly message.
  */
 export function logAndSanitizeError(
   error: unknown,
   contextName: string = "Action",
-  fallbackMessage: string = DEFAULT_FALLBACK
+  fallbackMessage: string = DEFAULT_FALLBACK,
 ): string {
   if (error) {
     console.error(`[${contextName}] Error:`, error);
   }
+
   return getUserFriendlyError(error, fallbackMessage);
 }

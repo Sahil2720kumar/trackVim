@@ -146,6 +146,7 @@ import {
   genderEnum,
   bloodGroupEnum,
 } from "./schema";
+import { normalizePhone } from "@/lib/contact-normalization";
 
 // ============================================================================
 // Shared field-level primitives
@@ -188,7 +189,10 @@ const optionalEmail = z.preprocess(
 const phoneRegex = /^\+?[0-9]{7,15}$/;
 const phone = z.string().trim();
 const optionalPhone = z.preprocess(
-  (v) => (v === "" ? undefined : v),
+  (v) => {
+    if (v === "" || v === null || v === undefined) return null;
+    return normalizePhone(String(v));
+  },
   phone.regex(phoneRegex, "Invalid phone number").optional().nullable(),
 );
 
@@ -705,6 +709,7 @@ export type UpdateTrainerInput = z.infer<typeof updateTrainerSchema>;
 
 const memberRefinements = {
   fullName: z.string().trim().min(1).max(200),
+  contactEmail: optionalEmail,
   contactPhone: optionalPhone,
   dateOfBirth: optionalDate,
   gender: z.enum(genderEnum.enumValues),
@@ -756,7 +761,6 @@ export const createMemberSchema = createInsertSchema(
 ).omit({
   id: true,
   memberCode: true, // server-generated
-  contactEmail: true,
   clerkInvitationId: true,
   invitationSentAt: true,
   invitationAcceptedAt: true,
@@ -775,7 +779,6 @@ export const updateMemberSchema = createUpdateSchema(
   profileId: true,
   memberCode: true,
   activeGymMembershipId: true,
-  contactEmail: true,
   // Suspending/reinstating a member is a moderation action, not a generic
   // profile field — same pattern as verifyPaymentSchema /
   // reviewMembershipApplicationSchema below. Previously this WASN'T

@@ -358,7 +358,7 @@ export const users = pgTable(
   "users",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    clerkId: varchar("clerk_id", { length: 255 }).unique(),
+    clerkId: varchar("clerk_id", { length: 255 }),
     fullName: text("full_name"),
     email: varchar("email", { length: 320 }),
     username: varchar("username", { length: 100 }),
@@ -378,12 +378,11 @@ export const users = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [
-    // clerkId / email already unique-indexed — no bare .unique() column
-    // ever needs a second plain index; Postgres backs UNIQUE with a btree
-    // automatically.
-    uniqueIndex("users_email_idx").on(t.email),
-    uniqueIndex("users_username_idx").on(t.username), // add this
-    uniqueIndex("users_clerk_id_idx").on(t.clerkId),
+    // Identity/contact fields must be unique.
+    uniqueIndex("users_clerk_id_unique_idx").on(t.clerkId),
+    uniqueIndex("users_email_unique_idx").on(t.email),
+    uniqueIndex("users_phone_unique_idx").on(t.phone),
+    uniqueIndex("users_username_unique_idx").on(t.username),
     pgPolicy("Users can view their own row", {
       for: "select",
       to: authenticatedRole,
@@ -1075,7 +1074,9 @@ export const members = pgTable(
   },
   (t) => [
     uniqueIndex("members_profile_idx").on(t.profileId),
-    index("members_contact_email_idx").on(t.contactEmail),
+
+    uniqueIndex("members_contact_email_unique_idx").on(t.contactEmail),
+    uniqueIndex("members_contact_phone_unique_idx").on(t.contactPhone),
 
     index("members_invited_email_idx").on(t.invitedEmail),
     pgPolicy("Members can view their own profile", {
